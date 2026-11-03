@@ -1,0 +1,27 @@
+[package]
+name = "dispatch"
+version = "0.1.0"
+description = "Dispatch by OneLifeStack: a local-first API client"
+edition = "2021"
+rust-version = "1.80"
+
+[lib]
+name = "dispatch_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "deflate", "http2", "charset"] }
+tokio = { version = "1", features = ["sync", "macros", "time"] }
+base64 = "0.22"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
