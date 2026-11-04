@@ -16,8 +16,8 @@ Order (each step: code + tests + typecheck + build, then commit and push):
        failure, results + export. Suite runner = run several collections/folders in order.
 6. [x] Performance/load testing: virtual users, duration/iterations, ramp-up, think time; p50/p90/p95/p99,
        throughput, error rate, latency-over-time chart; caps + confirmation.
-7. [ ] CLI runner (`dispatch-run`) for CI: runs a backup/collection file with the same core in Node.
-8. [ ] Auth: Digest, OAuth 2 (client credentials, password, auth code + PKCE, refresh), JWT, AWS SigV4.
+7. [x] CLI runner (`dispatch-run`) for CI: runs a backup/collection file with the same core in Node.
+8. [x] Auth: Digest, OAuth 2 (client credentials, password, auth code + PKCE, refresh), JWT, AWS SigV4.
 9. [ ] Code generation (curl, JS fetch, Node axios, Python requests, Go, Java, C#, PHP, Ruby, Rust, HTTPie, PowerShell).
 10. [ ] Import OpenAPI 3 / Swagger 2 and HAR.
 11. [ ] Response: HTML preview (sandboxed), JSON filter, save to file, timing breakdown, cookies; cookie jar.
@@ -44,3 +44,12 @@ Progress notes go under each step as it lands.
   scripts/tests, data rows, thresholds → pass/fail), latency + throughput charts (palette validated with the dataviz
   checks in both themes), tiles, per-request/status tables, per-second table, JSON/CSV export, permission checkbox.
   Browser-checked in light and dark with a real 8 s run.
+- Step 7: `npm run build:cli` → dist-cli/dispatch-run.mjs (esbuild, one file). Runs Dispatch or Postman files,
+  folders/suites, environments, --env-var, data files, bail, reporters cli/json/junit; `load` subcommand with
+  thresholds and --i-have-permission. Exit 0/1/2. Scripts compile in a separate vm context. Tested against
+  examples/demo-server.mjs + examples/demo-shop.postman_collection.json + examples/users.csv.
+  Found and fixed: runs now keep collection order (requests and folders interleaved, `sort` field).
+- Step 8: core/auth.ts — JWT HS256/384/512 (matches jwt.io sample), AWS SigV4 (matches AWS test suite vectors),
+  Digest MD5/MD5-sess/SHA-256 (matches RFC 2617 example; MD5 implemented), OAuth 2 client credentials / password /
+  auth code + PKCE / refresh. Desktop: system browser + one-shot 127.0.0.1 listener for the redirect; web: paste
+  the landing URL. Expired tokens with a refresh token refresh per send (not saved back yet).

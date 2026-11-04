@@ -116,6 +116,8 @@ export interface RequestDef {
   ws: WsConfig
   mqtt: MqttConfig
   grpc: GrpcConfig
+  /** Position among its siblings (requests and folders share one order); ties sort by name. */
+  sort: number
   updatedAt: number
 }
 
@@ -127,6 +129,8 @@ export interface Folder {
   auth: Auth
   scripts: Scripts
   docs: string
+  /** Position among its siblings; see RequestDef.sort. */
+  sort: number
   updatedAt: number
 }
 
@@ -225,14 +229,14 @@ export const emptyScripts = (): Scripts => ({ pre: '', post: '' })
 export const emptySettings = (): RequestSettings => ({ timeoutMs: null, followRedirects: null, insecureTls: null })
 
 export function newRequest(partial: Partial<RequestDef> = {}): RequestDef {
-  return normalizeRequest({ id: uid(), name: 'New request', updatedAt: Date.now(), ...partial })
+  return normalizeRequest({ id: uid(), name: 'New request', updatedAt: Date.now(), sort: Date.now(), ...partial })
 }
 
 /** Fills every field, so records saved by older versions (and imports) have the current shape. */
 export function normalizeRequest(r: Partial<RequestDef> & { id: string }): RequestDef {
   return {
     name: 'New request', protocol: 'http', method: 'GET', url: '', params: [], pathVars: [], headers: [],
-    docs: '', examples: [], collectionId: null, folderId: null, updatedAt: Date.now(),
+    docs: '', examples: [], collectionId: null, folderId: null, sort: 0, updatedAt: Date.now(),
     ...r,
     body: { ...emptyBody(), ...r.body },
     auth: { ...emptyAuth(), ...r.auth },
@@ -252,10 +256,10 @@ export function normalizeCollection(c: Partial<Collection> & { id: string }): Co
 }
 
 export function newFolder(collectionId: string, name = 'New folder', parentId: string | null = null): Folder {
-  return normalizeFolder({ id: uid(), name, collectionId, parentId })
+  return normalizeFolder({ id: uid(), name, collectionId, parentId, sort: Date.now() })
 }
 export function normalizeFolder(f: Partial<Folder> & { id: string; collectionId: string }): Folder {
-  return { name: 'Folder', parentId: null, docs: '', updatedAt: Date.now(), ...f, auth: { ...emptyAuth('inherit'), ...f.auth }, scripts: { ...emptyScripts(), ...f.scripts } }
+  return { name: 'Folder', parentId: null, docs: '', sort: 0, updatedAt: Date.now(), ...f, auth: { ...emptyAuth('inherit'), ...f.auth }, scripts: { ...emptyScripts(), ...f.scripts } }
 }
 
 export function newEnvironment(name = 'New environment'): Environment {
@@ -264,3 +268,6 @@ export function newEnvironment(name = 'New environment'): Environment {
 
 /** The id under which global variables are stored (as an environment that's always active). */
 export const GLOBALS_ID = '__globals'
+
+/** Sibling order: by position, then name. */
+export const bySort = <T extends { sort: number; name: string }>(a: T, b: T) => a.sort - b.sort || a.name.localeCompare(b.name)

@@ -9,6 +9,7 @@ import type { Workspace } from '../core/backup'
 import { type Execution, type Pipeline, type RunContext, execute, folderChain, prepareContext, sendOptions } from '../core/runtime'
 import { type ScriptEngine, scriptPipeline } from '../core/scriptPipeline'
 import { WorkerEngine } from '../core/workerEngine'
+import { authPipeline } from '../core/auth'
 
 export type View =
   | { kind: 'request' }
@@ -67,10 +68,8 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   const [logs, setLogs] = useState<LogLine[]>([])
   const aborts = useRef(new Map<string, AbortController>())
   const [pipeline] = useState<Pipeline>(() => {
-    const base = scriptPipeline({
-      engine: opts.engine ?? new WorkerEngine(), transport,
-      sendOptions: () => ({ timeoutMs: settingsRef.current.timeoutMs, followRedirects: settingsRef.current.followRedirects, insecureTls: settingsRef.current.insecureTls }),
-    })
+    const sendOpts = () => ({ timeoutMs: settingsRef.current.timeoutMs, followRedirects: settingsRef.current.followRedirects, insecureTls: settingsRef.current.insecureTls })
+    const base = authPipeline(scriptPipeline({ engine: opts.engine ?? new WorkerEngine(), transport, sendOptions: sendOpts }), transport, sendOpts)
     return opts.extend ? opts.extend(base, transport) : base
   })
   const pipelineRef = useRef(pipeline)

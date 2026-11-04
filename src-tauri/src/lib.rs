@@ -176,12 +176,49 @@ async fn save_base64_file(app: tauri::AppHandle, file_name: String, base64: Stri
     Ok(true)
 }
 
+/// Opens a URL in the system browser (OAuth login pages).
+#[tauri::command]
+fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("Only http(s) links can be opened.".into());
+    }
+    use tauri_plugin_opener::OpenerExt;
+    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
+/// Waits once for the OAuth redirect on 127.0.0.1:<port><path>, answers with a short page and returns the URL
+/// the browser was sent to (with ?code=…&state=…). Gives up after `timeout_secs`.
+#[tauri::command]
+async fn oauth_listen(port: u16, path: String, timeout_secs: u64) -> Result<String, String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| format!("Couldn’t listen on port {port}: {e}"))?;
+    let wait = async {
+        loop {
+            let (mut sock, _) = listener.accept().await.map_err(|e| e.to_string())?;
+            let mut buf = vec![0u8; 8192];
+            let n = sock.read(&mut buf).await.map_err(|e| e.to_string())?;
+            let head = String::from_utf8_lossy(&buf[..n]).to_string();
+            let target = head.lines().next().and_then(|l| l.split_whitespace().nth(1)).unwrap_or("/").to_string();
+            if !target.starts_with(&path) || !target.contains('?') {
+                let _ = sock.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
+                continue;
+            }
+            let body = "<!doctype html><meta charset=utf-8><title>Dispatch</title><body style=\"font:16px system-ui;padding:3rem\"><h1>You’re signed in</h1><p>You can close this tab and go back to Dispatch.</p>";
+            let resp = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+            let _ = sock.write_all(resp.as_bytes()).await;
+            return Ok::<String, String>(format!("http://127.0.0.1:{port}{target}"));
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(timeout_secs), wait).await.map_err(|_| "Timed out waiting for the login to finish.".to_string())?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(InFlight::default())
-        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file])
+        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen])
         .run(tauri::generate_context!())
         .expect("error while running Dispatch");
 }

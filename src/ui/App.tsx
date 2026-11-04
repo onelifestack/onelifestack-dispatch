@@ -12,6 +12,8 @@ import type { Transport } from '../core/transport'
 import { saveAnyFile, saveTextFile } from './files'
 import { RunnerView } from './RunnerView'
 import { LoadView } from './LoadView'
+import { getOAuthToken } from './oauth'
+import type { Auth } from '../core/types'
 import type { Collection } from '../core/types'
 import type { Pipeline } from '../core/runtime'
 import type { ScriptEngine } from '../core/scriptPipeline'
@@ -87,6 +89,16 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const fileInput = useRef<HTMLInputElement>(null)
   const [consoleOpen, setConsoleOpen] = useState(false)
+  const [gettingToken, setGettingToken] = useState(false)
+  const authActions = {
+    gettingToken,
+    getToken: async (auth: Auth, apply: (a: Auth) => void) => {
+      setGettingToken(true)
+      try { const next = await getOAuthToken(ws, auth, ask); if (next) { apply(next); notify('Got a new token.') } }
+      catch (e) { notify(e instanceof Error ? e.message : String(e)) }
+      finally { setGettingToken(false) }
+    },
+  }
 
   const notify = useCallback((msg: string) => {
     setToast(msg); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(null), msg.length > 80 ? 8000 : 3500)
@@ -206,8 +218,8 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
       </header>
       <Sidebar ws={ws} dialogs={dialogs} onExportCollection={(c) => void onExportCollection(c)} />
       <main className="work">
-        {col ? <CollectionEditor key={col.id} ws={ws} confirm={confirm} collection={col} />
-          : folder ? <FolderEditor key={folder.id} ws={ws} confirm={confirm} folder={folder} />
+        {col ? <CollectionEditor key={col.id} ws={ws} confirm={confirm} collection={col} authActions={authActions} />
+          : folder ? <FolderEditor key={folder.id} ws={ws} confirm={confirm} folder={folder} authActions={authActions} />
           : env ? <EnvironmentEditor key={env.id} ws={ws} confirm={confirm} environment={env} />
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
           : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
@@ -216,7 +228,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           : <>
               <TabBar ws={ws} onClose={(id) => void closeTab(id)} />
               <div className="split">
-                <RequestPane ws={ws} onSave={save} notify={notify} />
+                <RequestPane ws={ws} onSave={save} notify={notify} authActions={authActions} />
                 <ResponsePane ws={ws} notify={notify} saveFile={saveAnyFile} />
               </div>
             </>}

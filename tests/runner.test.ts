@@ -32,17 +32,22 @@ describe('csv and data files', () => {
 
 describe('runner', () => {
   const col = { ...newCollection('Shop'), variables: [kv('base', 'https://shop.test')] }
-  const f1 = newFolder(col.id, 'Orders'); const f2 = newFolder(col.id, 'Admin', f1.id)
+  // Positions: a-login (1), then folder Orders (2) holding b-list (1) and subfolder Admin (2) holding purge.
+  const f1 = { ...newFolder(col.id, 'Orders'), sort: 2 }; const f2 = { ...newFolder(col.id, 'Admin', f1.id), sort: 2 }
   const reqs = [
-    newRequest({ name: 'b-list', url: '{{base}}/orders', collectionId: col.id, folderId: f1.id }),
-    newRequest({ name: 'a-login', url: '{{base}}/login', collectionId: col.id }),
-    newRequest({ name: 'purge', url: '{{base}}/purge', collectionId: col.id, folderId: f2.id }),
+    newRequest({ name: 'b-list', url: '{{base}}/orders', collectionId: col.id, folderId: f1.id, sort: 1 }),
+    newRequest({ name: 'a-login', url: '{{base}}/login', collectionId: col.id, sort: 1 }),
+    newRequest({ name: 'purge', url: '{{base}}/purge', collectionId: col.id, folderId: f2.id, sort: 1 }),
   ]
   const base = (over: Partial<RunConfig> = {}): RunConfig => ({
     items: collectItems(col, null, [f1, f2], reqs), iterations: 1, data: null, delayMs: 0, stopOnFailure: false,
     environment: null, collections: [col], folders: [f1, f2], globals: [], settings: defaultSettings, ...over,
   })
 
+  it('collects in collection order, folders interleaved with requests', () => {
+    const late = newRequest({ name: 'z-first', url: 'x', collectionId: col.id, sort: 0 })
+    expect(collectItems(col, null, [f1, f2], [...reqs, late]).map((i) => i.request.name)).toEqual(['z-first', 'a-login', 'b-list', 'purge'])
+  })
   it('collects requests depth first with paths', () => {
     expect(collectItems(col, null, [f1, f2], reqs).map((i) => [i.request.name, i.path])).toEqual([
       ['a-login', 'Shop'], ['b-list', 'Shop / Orders'], ['purge', 'Shop / Orders / Admin']])

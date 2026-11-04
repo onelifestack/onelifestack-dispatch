@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Collection, Folder, RequestDef } from '../core/types'
+import { bySort } from '../core/types'
 import { statusTone, timeAgo } from '../core/format'
 import type { WorkspaceApi } from './useWorkspace'
 
@@ -58,9 +59,11 @@ export function Sidebar({ ws, dialogs, onExportCollection }: Props) {
 
   /** Requests and subfolders under a collection (folderId null) or a folder. Returns null when the filter hides everything. */
   const children = (c: Collection, parent: string | null): JSX.Element[] => {
-    const subs = ws.folders.filter((x) => x.collectionId === c.id && x.parentId === parent).sort(byName)
-    const reqs = ws.requests.filter((r) => r.collectionId === c.id && (r.folderId ?? null) === parent && match(r)).sort(byName)
-    return [...subs.map((sub) => folderNode(c, sub)).filter((x): x is JSX.Element => x !== null), ...reqs.map(reqRow)]
+    const subs = ws.folders.filter((x) => x.collectionId === c.id && x.parentId === parent)
+      .map((sub) => ({ sort: sub.sort, name: sub.name, node: () => folderNode(c, sub) }))
+    const reqs = ws.requests.filter((r) => r.collectionId === c.id && (r.folderId ?? null) === parent && match(r))
+      .map((r) => ({ sort: r.sort, name: r.name, node: () => reqRow(r) }))
+    return [...subs, ...reqs].sort(bySort).map((x) => x.node()).filter((x): x is JSX.Element => x !== null)
   }
 
   const folderNode = (c: Collection, fo: Folder): JSX.Element | null => {

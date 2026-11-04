@@ -1,4 +1,5 @@
 import type { Collection, Environment, Folder, KV, RequestDef, Settings, TestResult } from './types'
+import { bySort } from './types'
 import type { Transport } from './transport'
 import { type Execution, type Pipeline, type RunContext, execute, sendOptions } from './runtime'
 
@@ -8,16 +9,15 @@ export interface RunItem {
   path: string
 }
 
-const byName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(b.name)
-
-/** Requests under a collection or folder, depth first: a level's requests (by name), then its subfolders. */
+/** Requests under a collection or folder, depth first, in collection order (requests and folders interleaved). */
 export function collectItems(collection: Collection, folderId: string | null, folders: Folder[], requests: RequestDef[]): RunItem[] {
   const out: RunItem[] = []
   const walk = (parent: string | null, path: string) => {
-    requests.filter((r) => r.collectionId === collection.id && (r.folderId ?? null) === parent && r.protocol === 'http').sort(byName)
-      .forEach((request) => out.push({ request, path }))
-    folders.filter((f) => f.collectionId === collection.id && f.parentId === parent).sort(byName)
-      .forEach((f) => walk(f.id, `${path} / ${f.name}`))
+    const reqs = requests.filter((r) => r.collectionId === collection.id && (r.folderId ?? null) === parent && r.protocol === 'http')
+      .map((r) => ({ sort: r.sort, name: r.name, run: () => out.push({ request: r, path }) }))
+    const subs = folders.filter((f) => f.collectionId === collection.id && f.parentId === parent)
+      .map((f) => ({ sort: f.sort, name: f.name, run: () => walk(f.id, `${path} / ${f.name}`) }))
+    ;[...reqs, ...subs].sort(bySort).forEach((x) => x.run())
   }
   const start = folderId ? folders.find((f) => f.id === folderId) : null
   const startPath = [collection.name, ...pathTo(folders, folderId)].join(' / ')

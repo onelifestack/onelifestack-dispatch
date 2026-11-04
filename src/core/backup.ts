@@ -142,10 +142,13 @@ function importPostmanCollection(d: any): ImportResult {
   const folders: Folder[] = []
   const requests: RequestDef[] = []
 
+  let position = 0
   const walk = (items: any[], parent: Folder | null) => {
     for (const it of items ?? []) {
+      position++
       if (Array.isArray(it.item)) {
         const f = newFolder(col.id, str(it.name) || 'Folder', parent?.id ?? null)
+        f.sort = position
         if (it.auth) f.auth = postmanAuth(it.auth, warnings, f.name)
         f.scripts = postmanScripts(it.event)
         f.docs = desc(it.description)
@@ -159,7 +162,7 @@ function importPostmanCollection(d: any): ImportResult {
       const method = str(typeof r === 'string' ? 'GET' : r.method || 'GET').toUpperCase() as Method
       if (!METHODS.includes(method)) { warnings.push(`${name}: method ${method} isn’t supported; skipped.`); continue }
       const url = postmanUrl(typeof r === 'string' ? r : r.url)
-      const req = newRequest({ name, method, url, collectionId: col.id, folderId: parent?.id ?? null })
+      const req = newRequest({ name, method, url, collectionId: col.id, folderId: parent?.id ?? null, sort: position })
       req.params = paramsFromUrl(url, [])
       req.params.push(...(r.url?.query ?? []).filter((q: any) => q.disabled).map((q: any) => kv(str(q.key), str(q.value), false)))
       req.pathVars = toKv(r.url?.variable)
