@@ -43,6 +43,30 @@ const exec = async (args: string[]) => {
 }
 
 describe('dispatch-run', () => {
+  it('runs a flow from an export, following the failed branch', async () => {
+    const { exportWorkspace } = await import('../src/core/backup')
+    const { newFlow, newNode } = await import('../src/core/flows')
+    const { newCollection, newRequest } = await import('../src/core/types')
+    const c = newCollection('Flowy')
+    const ok = newRequest({ name: 'ok', url: `http://127.0.0.1:${port}/ok`, collectionId: c.id })
+    const bad = newRequest({ name: 'fail', url: `http://127.0.0.1:${port}/fail`, collectionId: c.id })
+    const f = newFlow('Smoke')
+    const a = { ...newNode('request', 0, 0), label: 'ok', config: { requestId: ok.id } }
+    const b = { ...newNode('request', 0, 0), label: 'fail', config: { requestId: bad.id } }
+    const end = { ...newNode('end', 0, 0), label: 'Recovered', config: { outcome: 'pass' } }
+    f.nodes.push(a, b, end)
+    f.edges.push({ id: 'e1', from: f.nodes[0].id, port: 'next', to: a.id }, { id: 'e2', from: a.id, port: 'ok', to: b.id }, { id: 'e3', from: b.id, port: 'failed', to: end.id })
+    writeFileSync(join(dir, 'flow.json'), exportWorkspace({ collections: [c], folders: [], requests: [ok, bad], environments: [], flows: [f] }))
+    const r = await exec(['flow', join(dir, 'flow.json'), '--flow', 'Smoke', '--json', join(dir, 'flow-report.json')])
+    expect(r.out).toContain('Flow: Smoke')
+    expect(r.out).toMatch(/✓ ok 200 → ok/)
+    expect(r.out).toMatch(/✗ fail 500 → failed/)
+    expect(r.out).toContain('Passed')
+    expect(r.code).toBe(0)
+    expect(JSON.parse(readFileSync(join(dir, 'flow-report.json'), 'utf8')).steps).toHaveLength(4)
+    expect((await exec(['flow', join(dir, 'flow.json'), '--flow', 'Nope'])).code).toBe(2)
+  })
+
   it('runs a collection folder', async () => {
     const { mkdirSync } = await import('node:fs')
     const d = join(dir, 'folder-col'); mkdirSync(join(d, 'sub'), { recursive: true })

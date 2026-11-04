@@ -4,7 +4,7 @@ import { bySort } from '../core/types'
 import { statusTone, timeAgo } from '../core/format'
 import type { WorkspaceApi } from './useWorkspace'
 
-type Tab = 'collections' | 'history' | 'environments'
+type Tab = 'collections' | 'flows' | 'history' | 'environments'
 
 export interface SidebarDialogs {
   ask: (title: string, initial?: string) => Promise<string | null>
@@ -126,9 +126,9 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
   return (
     <aside className="side" aria-label="Library">
       <div className="tabs side-tabs" role="tablist">
-        {(['collections', 'history', 'environments'] as Tab[]).map((t) => (
+        {(['collections', 'flows', 'history', 'environments'] as Tab[]).map((t) => (
           <button key={t} type="button" role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-            {t === 'collections' ? 'Collections' : t === 'history' ? 'History' : 'Environments'}
+            {t === 'collections' ? 'Collections' : t === 'flows' ? 'Flows' : t === 'history' ? 'History' : 'Environments'}
           </button>
         ))}
       </div>
@@ -208,6 +208,31 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
             </li>
           ))}
           {!ws.history.length && <li className="muted small pad">Requests you send are listed here.</li>}
+        </ul>
+      </>}
+
+      {tab === 'flows' && <>
+        <div className="sideTools">
+          <span className="muted small grow">Chain requests with conditions and loops</span>
+          <button type="button" className="btn small" onClick={async () => {
+            const n = await ask('New flow', 'New flow'); if (n) { const f = await ws.addFlow(n); ws.setView({ kind: 'flow', id: f.id }) }
+          }}>+ New</button>
+        </div>
+        <ul className="tree">
+          {ws.flows.slice().sort((a, b) => a.name.localeCompare(b.name)).map((f) => (
+            <li key={f.id} className={`row ${ws.view.kind === 'flow' && ws.view.id === f.id ? 'on' : ''}`}>
+              <button type="button" className="rowMain" onClick={() => ws.setView({ kind: 'flow', id: f.id })}>
+                <span className="rowName">{f.name}</span><span className="muted tiny">{f.nodes.length} block{f.nodes.length === 1 ? '' : 's'}</span>
+              </button>
+              <Menu label={`More for ${f.name}`} items={[
+                ['Rename', async () => { const n = await ask('Rename flow', f.name); if (n) await ws.updateFlow({ ...f, name: n }) }],
+                ['Duplicate', async () => { const c = await ws.duplicateFlow(f); ws.setView({ kind: 'flow', id: c.id }) }],
+                ...ws.spaces.filter((x) => x.id !== ws.activeSpaceId).map((x) => [`Move to “${x.name}”`, () => void ws.updateFlow({ ...f, workspaceId: x.id })] as [string, () => void]),
+                ['Delete', async () => { if (await confirm(`Delete flow “${f.name}”? You can undo this right after.`)) await ws.removeFlow(f.id) }, 'danger'],
+              ]} />
+            </li>
+          ))}
+          {!ws.flows.length && <li className="muted small pad">A flow wires saved requests together, like log in → keep the token → if admin, list orders → for each order, check it. Make one with + New.</li>}
         </ul>
       </>}
 

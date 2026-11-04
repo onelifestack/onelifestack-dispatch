@@ -9,7 +9,7 @@ and an import format; never copy its name, branding, icons or UI.
 ## Layout
 
 - `src/core/` — logic with no React, shared by the app and the CLI:
-  - model and storage: `types.ts`, `db.ts` (IndexedDB v2; records normalized on read), `backup.ts` (Dispatch backup,
+  - model and storage: `types.ts`, `db.ts` (IndexedDB v4; records normalized on read), `backup.ts` (Dispatch backup,
     Postman), `openapi.ts` (OpenAPI/Swagger/HAR)
   - building and sending: `vars.ts` + `fake.ts` ({{variables}}), `url.ts`, `prepare.ts` (variables + auth + body),
     `runtime.ts` (`execute`: the one pipeline everything uses), `auth.ts` (JWT, AWS SigV4, Digest, OAuth 2),
@@ -20,11 +20,18 @@ and an import format; never copy its name, branding, icons or UI.
   - other: `codegen.ts` (12 languages), `curl.ts`, `docs.ts`, `mock.ts`, `graphql.ts`, `jsonpath.ts`, `format.ts`
   - v0.3: `vault.ts` (secrets at rest), `interop.ts` (Postman export, Insomnia/Bruno import), `fileFormat.ts`
     (collections as files), `schedules.ts`, `sse.ts`, `diff.ts`, `scriptLibs.ts` (require'able libraries)
+  - browser logins: `cdp.ts` (minimal DevTools-protocol client), `browser.ts` (steps, launcher interface),
+    `browserPipeline.ts` (the `Pipeline.browser` hook); launchers in `src/node/browserLauncher.ts` (CLI) and
+    `src/ui/desktopBrowser.ts` (Tauri `browser_launch`)
+  - `flows.ts`: flow graph (nodes, wires from output ports) and `runFlow`; straight chains run in a loop, recursion
+    only for branches and For each (deep recursion overflowed the stack). Stored in IndexedDB v4 `flows`.
 - `src/ui/` — `useWorkspace.ts` holds all state and actions; one component per view (RequestPane, ResponsePane,
   RunnerView, LoadView, DocsView, MockView, RealtimePane for WebSocket/MQTT/SSE/Socket.IO, GrpcPane, Editors,
   SettingsView/CookiesView, BackupsView, Schedules, ResponseHistory…). `editor/codemirror.ts` is the lazy editor;
   `CodeArea` falls back to a textarea in jsdom. `linkedDirs.ts` syncs collections to folders.
-- `src/cli/main.ts` — `dispatch-run` (run, `load`, `mock`); bundled by `scripts/build-cli.mjs`.
+- `src/ui/FlowView.tsx` — the flow canvas (absolutely placed blocks, SVG wires, pointer drag; every wire can also
+  be set from the side panel's “Then go to” selects, which is what keyboard users and tests use).
+- `src/cli/main.ts` — `dispatch-run` (run, `load`, `mock`, `mcp`, `flow`); bundled by `scripts/build-cli.mjs`.
 - `src-tauri/src/lib.rs` — send/cancel (proxy, mTLS, CA certs), save files, open URL, OAuth loopback, mock server
   sockets, SSE streams, notifications, collection folders (pick/read/write);
   `grpc.rs` — gRPC (tonic + prost-reflect + protox).
@@ -79,8 +86,14 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 - CodeMirror and React: never push a value the editor itself emitted back into it (CodeArea tracks emitted values).
 - Port 4321 is taken on this machine by another app; use other ports for test servers.
 - Tauri commands can't also be `pub` at the crate root; expose a separate pub function for tests.
+- Browser-login tests use Playwright's Chromium with `DISPATCH_BROWSER_ARGS=--no-sandbox` (AppArmor blocks its
+  sandbox here). Never add `--no-sandbox` by default.
+- A `<select>` inside a `<label>` gets its options in its accessible name; give it an `aria-label`.
 
 ## Where we left off
+
+2026-11-04: inbox item 5 (browser automation) built on `feature/flows` (based on `feature/inbox`, PR #4): browser
+login requests and visual flows. PR open, not merged.
 
 v0.3 built autonomously 2026-11-04 on `feature/v0.3` (PR to main; not merged). Plan and notes:
 `docs/PLAN-v0.3.md`. Desktop app still hasn't been opened on a real display; that's the owner's next step.

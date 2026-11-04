@@ -17,6 +17,7 @@ import { importBruno, toPostmanCollection } from '../core/interop'
 import { pickFolder, readCollectionDir, useLinkedDirSync } from './linkedDirs'
 import { SchedulesView, useScheduler } from './Schedules'
 import { layeredVars, selectLayer } from '../core/layers'
+import { FlowView } from './FlowView'
 import { SpacesView } from './SpacesView'
 import { McpPane } from './McpPane'
 import { BrowserPane } from './BrowserPane'
@@ -184,7 +185,7 @@ export function App({ transport, engine, browserLauncher, extras = {} }: { trans
   }
 
   // Backups and exports cover every workspace.
-  const workspace = () => ({ collections: ws.allCollections, folders: ws.folders, requests: ws.requests, environments: ws.allEnvironments, globals: ws.globals })
+  const workspace = () => ({ collections: ws.allCollections, folders: ws.folders, requests: ws.requests, environments: ws.allEnvironments, globals: ws.globals, flows: ws.allFlows })
   const onExport = async () => {
     try {
       if (await saveTextFile(`dispatch-backup-${new Date().toISOString().slice(0, 10)}.json`, exportWorkspace(workspace())))
@@ -283,6 +284,7 @@ export function App({ transport, engine, browserLauncher, extras = {} }: { trans
           : env ? <EnvironmentEditor key={env.id} ws={ws} confirm={confirm} environment={env} />
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
           : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
+          : viewed.kind === 'flow' ? <FlowView key={viewed.id} ws={ws} flowId={viewed.id} notify={notify} confirm={confirm} />
           : viewed.kind === 'spaces' ? <SpacesView ws={ws} ask={ask} notify={notify} />
           : viewed.kind === 'schedules' ? <SchedulesView ws={ws} sched={sched} notify={notify} />
           : viewed.kind === 'settings' ? <SettingsView ws={ws} notify={notify} />

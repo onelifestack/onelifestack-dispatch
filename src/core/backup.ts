@@ -1,10 +1,11 @@
 import type { Auth, Collection, Environment, Example, Folder, KV, Method, RequestDef, Scripts } from './types'
 import { METHODS, emptyAuth, emptyBody, kv, newCollection, newEnvironment, newFolder, newRequest, normalizeCollection, normalizeFolder, normalizeRequest, uid } from './types'
 import { paramsFromUrl } from './url'
+import type { Flow } from './flows'
 import { importHar, importOpenApi, isHar, isOpenApi } from './openapi'
 import { importInsomnia, isInsomnia } from './interop'
 
-export interface Workspace { collections: Collection[]; folders: Folder[]; requests: RequestDef[]; environments: Environment[]; globals?: KV[] }
+export interface Workspace { collections: Collection[]; folders: Folder[]; requests: RequestDef[]; environments: Environment[]; globals?: KV[]; flows?: Flow[] }
 
 export const FORMAT = 'onelifestack-dispatch'
 
@@ -20,6 +21,7 @@ export function exportWorkspace(w: Workspace): string {
     requests: w.requests,
     environments: w.environments.map((e) => ({ ...e, variables: blankSecrets(e.variables) })),
     globals: blankSecrets(w.globals ?? []),
+    flows: w.flows ?? [],
   }, null, 2)
 }
 
@@ -84,10 +86,15 @@ function importDispatch(d: any): ImportResult {
     .filter((f) => ids.has(f.collectionId))
     .map((f) => normalizeFolder({ ...f, id: ids.get(f.id)!, collectionId: ids.get(f.collectionId)!, parentId: remap(f.parentId), updatedAt: now }))
   const requests: RequestDef[] = (d.requests ?? []).map((r: RequestDef) => normalizeRequest({
-    ...r, id: uid(), collectionId: remap(r.collectionId), folderId: remap(r.folderId), updatedAt: now,
+    ...r, id: fresh(r.id), collectionId: remap(r.collectionId), folderId: remap(r.folderId), updatedAt: now,
+  }))
+  // Flows keep pointing at the same requests (now with fresh ids).
+  const flows: Flow[] = (d.flows ?? []).map((f: Flow) => ({
+    ...f, id: uid(), updatedAt: now,
+    nodes: f.nodes.map((n) => (n.type === 'request' && n.config.requestId ? { ...n, config: { ...n.config, requestId: ids.get(n.config.requestId) ?? n.config.requestId } } : n)),
   }))
   const environments: Environment[] = (d.environments ?? []).map((e: Environment) => ({ ...e, id: uid(), updatedAt: now }))
-  return { source: 'dispatch', collections, folders, requests, environments, globals: d.globals ?? [], warnings: [] }
+  return { source: 'dispatch', collections, folders, requests, environments, globals: d.globals ?? [], flows, warnings: [] }
 }
 
 const str = (v: unknown) => (v == null ? '' : String(v))

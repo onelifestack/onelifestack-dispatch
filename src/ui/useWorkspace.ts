@@ -12,6 +12,7 @@ import type { Workspace } from '../core/backup'
 import { type Execution, type Pipeline, type RunContext, execute, folderChain, prepareContext, sendOptions } from '../core/runtime'
 import { type ScriptEngine, scriptPipeline } from '../core/scriptPipeline'
 import { WorkerEngine } from '../core/workerEngine'
+import { type Flow, type FlowRun, type FlowStep, newFlow, runFlow } from '../core/flows'
 import { FAKE } from '../core/fake'
 import { authPipeline } from '../core/auth'
 
@@ -30,6 +31,7 @@ export type View =
   | { kind: 'cookies' }
   | { kind: 'schedules' }
   | { kind: 'spaces' }
+  | { kind: 'flow'; id: string }
 
 export interface Result {
   sent: PreparedRequest
@@ -84,10 +86,12 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   const [trash, setTrash] = useState<{ label: string; data: Workspace }[]>([])
   const [backups, setBackups] = useState<db.BackupInfo[]>([])
   const [spaces, setSpacesState] = useState<Space[]>([DEFAULT_SPACE])
+  const [flows, setFlows] = useState<Flow[]>([])
   const aborts = useRef(new Map<string, AbortController>())
+  const [engine] = useState<ScriptEngine>(() => opts.engine ?? new WorkerEngine())
   const [pipeline] = useState<Pipeline>(() => {
     const sendOpts = () => ({ timeoutMs: settingsRef.current.timeoutMs, followRedirects: settingsRef.current.followRedirects, insecureTls: settingsRef.current.insecureTls })
-    const scripted = authPipeline(scriptPipeline({ engine: opts.engine ?? new WorkerEngine(), transport, sendOptions: sendOpts }), transport, sendOpts)
+    const scripted = authPipeline(scriptPipeline({ engine, transport, sendOptions: sendOpts }), transport, sendOpts)
     // Browser login steps need a browser the app can start: the desktop app (or a launcher passed in, for tests).
     const launcher = opts.browserLauncher ?? (isDesktop() ? desktopLauncher : null)
     const base: Pipeline = launcher ? { ...scripted, browser: browserHook(launcher, () => (transport instanceof CookieTransport ? transport.jar : null)) } : scripted
@@ -106,6 +110,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
       setCollections(c.sort(byName)); setFolders(f); setRequests(r); setEnvironments(e.sort(byName)); setGlobalsState(g)
       setHistory(h); setSettingsState(s)
       setSpacesState(await db.getSpaces())
+      setFlows(await db.listFlows())
       if (transport instanceof CookieTransport) {
         transport.jar.load(await db.getCookies() as never[])
         let timer: ReturnType<typeof setTimeout> | undefined
@@ -391,21 +396,53 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
       ...w0,
       collections: w0.collections.map((c) => (known(c.workspaceId) && c.workspaceId !== DEFAULT_SPACE.id ? c : { ...c, workspaceId: here })),
       environments: w0.environments.map((e) => (known(e.workspaceId) && e.workspaceId !== DEFAULT_SPACE.id ? e : { ...e, workspaceId: here })),
+      flows: w0.flows?.map((x) => (known(x.workspaceId) && x.workspaceId !== DEFAULT_SPACE.id ? x : { ...x, workspaceId: here })),
     }
     await db.putMany(w)
     setCollections((cs) => [...cs, ...w.collections].sort(byName))
     setFolders((fs) => [...fs, ...w.folders])
     setRequests((rs) => [...rs, ...w.requests])
     setEnvironments((es) => [...es, ...w.environments].sort(byName))
+    if (w.flows?.length) setFlows((fs) => [...fs.filter((f) => !w.flows!.some((x) => x.id === f.id)), ...w.flows!])
     if (w.globals?.length) {
       const merged = [...globals, ...w.globals.filter((g) => !globals.some((x) => x.key === g.key))]
       await setGlobals(merged)
     }
   }, [globals, setGlobals, spaces])
 
+  // ---------- flows ----------
+  const addFlow = useCallback(async (name: string) => {
+    const f = { ...newFlow(name), workspaceId: settingsRef.current.activeSpaceId }
+    await db.putFlow(f); setFlows((fs) => [...fs, f]); return f
+  }, [])
+  const updateFlow = useCallback(async (f: Flow) => {
+    const next = { ...f, updatedAt: Date.now() }
+    setFlows((fs) => fs.map((x) => (x.id === f.id ? next : x))); await db.putFlow(next)
+  }, [])
+  const duplicateFlow = useCallback(async (f: Flow) => {
+    const c: Flow = { ...structuredClone(f), id: uid(), name: `${f.name} copy`, updatedAt: Date.now() }
+    await db.putFlow(c); setFlows((fs) => [...fs, c]); return c
+  }, [])
+  const removeFlow = useCallback(async (id: string) => {
+    const f = flows.find((x) => x.id === id)
+    await db.deleteFlow(id); setFlows((fs) => fs.filter((x) => x.id !== id))
+    setView((v) => (v.kind === 'flow' && v.id === id ? { kind: 'request' } : v))
+    if (f) toTrash(`“${f.name}”`, { flows: [f] })
+  }, [flows, toTrash])
+  /** Runs a flow with the active environment; keeps the variables it changes. */
+  const runFlowNow = useCallback(async (f: Flow, onStep: (s: FlowStep) => void, signal?: AbortSignal): Promise<FlowRun> => {
+    const env = environments.find((e) => e.id === settingsRef.current.activeEnvId) ?? null
+    const r = await runFlow(f, { collections, folders, requests, environment: env, globals, settings: settingsRef.current }, transport, pipelineRef.current, engine, { onStep, signal })
+    if (r.environment && env && JSON.stringify(r.environment) !== JSON.stringify(env.variables)) await updateEnvironment({ ...env, variables: r.environment })
+    if (JSON.stringify(r.globals) !== JSON.stringify(globals)) await setGlobals(r.globals)
+    log([...r.logs, { level: r.ok ? 'info' : 'error', at: Date.now(), source: 'flow', text: `${f.name}: ${r.ok ? 'passed' : `failed — ${r.error}`} (${r.steps.length} steps, ${r.durationMs} ms)` }])
+    return r
+  }, [environments, collections, folders, requests, globals, transport, engine, updateEnvironment, setGlobals, log])
+
   // ---------- workspaces ----------
   const activeSpaceId = spaces.some((x) => x.id === settings.activeSpaceId) ? settings.activeSpaceId : DEFAULT_SPACE.id
   const visibleCollections = useMemo(() => collections.filter((c) => spaceOf(c) === activeSpaceId), [collections, activeSpaceId])
+  const visibleFlows = useMemo(() => flows.filter((f) => spaceOf(f) === activeSpaceId), [flows, activeSpaceId])
   const visibleEnvironments = useMemo(() => environments.filter((e) => spaceOf(e) === activeSpaceId), [environments, activeSpaceId])
   const saveSpaces = useCallback(async (next: Space[]) => { setSpacesState(next); await db.putSpaces(next) }, [])
   /** Shows another workspace, and picks up the environment last used there. */
@@ -513,7 +550,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     return last.label
   }, [trash, importWorkspace])
 
-  const snapshot = useCallback((): db.BackupData => ({ collections, folders, requests, environments, globals }), [collections, folders, requests, environments, globals])
+  const snapshot = useCallback((): db.BackupData => ({ collections, folders, requests, environments, globals, flows }), [collections, folders, requests, environments, globals, flows])
   const backupNow = useCallback(async (reason: db.BackupInfo['reason'] = 'manual') => {
     await db.addBackup(snapshot(), reason); setBackups(await db.listBackups())
   }, [snapshot])
@@ -524,13 +561,14 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     await db.addBackup(snapshot(), 'before-restore')
     await db.replaceAll(data)
     setCollections(data.collections.sort(byName)); setFolders(data.folders); setRequests(data.requests)
-    setEnvironments(data.environments.sort(byName)); setGlobalsState(data.globals)
+    setEnvironments(data.environments.sort(byName)); setGlobalsState(data.globals); if (data.flows) setFlows(data.flows)
     setBackups(await db.listBackups()); setView({ kind: 'request' })
     return true
   }, [snapshot])
 
   return {
     trash, undoDelete, backups, backupNow, restoreBackup, placeItems, removeRequests, replaceCollection,
+    flows: visibleFlows, allFlows: flows, addFlow, updateFlow, duplicateFlow, removeFlow, runFlowNow,
     spaces, activeSpaceId, switchSpace, addSpace, renameSpace, removeSpace, moveToSpace,
     /** Everything, across workspaces (exports, backups, file sync). The plain lists below are this workspace's. */
     allCollections: collections, allEnvironments: environments,

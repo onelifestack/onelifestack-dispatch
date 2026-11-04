@@ -1,6 +1,6 @@
 # Browser steps and flows (design, for discussion)
 
-Status: decided 2026-11-04 (answers below); being built on `feature/flows`. From inbox item 5: "UI testing, like user name and password, fetching of cookies,
+Status: decided 2026-11-04 (answers below); built on `feature/flows` (browser login requests and visual flows). From inbox item 5: "UI testing, like user name and password, fetching of cookies,
 or auth token from browser cookies and then using it as token for the rest of the pipeline for REST calls. More like
 n8n for testing."
 
