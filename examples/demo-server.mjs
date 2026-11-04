@@ -20,6 +20,7 @@ createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Credentials', 'true')
   res.setHeader('Access-Control-Allow-Headers', '*')
   res.setHeader('Access-Control-Allow-Methods', '*')
+  res.setHeader('Access-Control-Expose-Headers', 'WWW-Authenticate, Set-Cookie')
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end() }
   let raw = ''
   for await (const chunk of req) raw += chunk

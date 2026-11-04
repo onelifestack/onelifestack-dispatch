@@ -23,7 +23,7 @@ Order (each step: code + tests + typecheck + build, then commit and push):
 11. [x] Response: HTML preview (sandboxed), JSON filter, save to file, timing breakdown, cookies; cookie jar.
 12. [x] Docs (Markdown) on collections/folders/requests; saved examples; local mock server (desktop).
 13. [x] GraphQL (schema introspection, autocomplete), WebSocket (live log), MQTT (over WebSocket), gRPC (desktop).
-14. [ ] Desktop build + Playwright visual pass; README/CLAUDE.md; PR.
+14. [x] Desktop build + Playwright visual pass; README/CLAUDE.md; PR.
 
 Progress notes go under each step as it lands.
 
@@ -69,3 +69,7 @@ Progress notes go under each step as it lands.
   v1alpha fallback or a pasted .proto; unary, server, client and bidi streaming; metadata; status codes. Reflection
   servers that omit imports or rename well-known-type files are handled (found with the grpc-js reflection server).
   Live test: src-tauri/tests/grpc_live.rs against examples/grpc (passes, both reflection and .proto).
+- Step 14: browser tour (import → tabs → runner with data, 18/18 tests incl. Digest → docs → MQTT round trip against
+  a real broker → phone layout). Found and fixed: MQTT import shape in the browser bundle (and errors now show
+  instead of hanging), phone layout overflow (request/response grid), demo server now exposes WWW-Authenticate.
+  Version 0.2.0; desktop .deb/AppImage rebuilt.

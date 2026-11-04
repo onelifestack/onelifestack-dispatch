@@ -384,3 +384,16 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 .savedMsgs .linkBtn { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mqttPub { display: grid; grid-template-columns: 1fr auto auto; gap: .5rem; align-items: end; }
 .grpcOpts { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin: .6rem 0; }
+
+/* Narrow screens: the request/response grid must not grow to its content's width. */
+.split { grid-template-columns: minmax(0, 1fr); }
+.request, .response, .tabBody { min-width: 0; }
+.tabs { overflow-x: auto; scrollbar-width: none; }
+@media (max-width: 760px) {
+  .titleRow { flex-wrap: wrap; row-gap: .3rem; }
+  .titleRow .grow { display: none; }
+  .resHead { gap: .4rem .8rem; }
+  .jsonFilter { width: 100%; margin: .3rem 0 0; order: 10; }
+  .runGrid, .rtGrid, .detailGrid { grid-template-columns: minmax(0, 1fr); }
+  .editor { padding: 1rem 16px 3rem; }
+}

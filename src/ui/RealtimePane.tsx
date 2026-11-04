@@ -84,9 +84,15 @@ export function RealtimePane({ ws, notify, createWebSocket }: { ws: WorkspaceApi
       sess.send = (text) => { sock.send(text); push(sess, { dir: 'out', at: Date.now(), text }) }
       sess.close = () => { try { sock.close(1000) } catch { /* already closed */ } }
     } else {
-      const mqtt = await import('mqtt')
+      // The browser bundle puts connect on the default export; Node's has it at the top level.
+      const mod = await import('mqtt') as unknown as { connect?: typeof import('mqtt').connect; default?: { connect: typeof import('mqtt').connect } }
+      const mqttConnect = mod.connect ?? mod.default?.connect
+      if (!mqttConnect) { sess.state = 'closed'; push(sess, { dir: 'error', at: Date.now(), text: 'The MQTT client didn’t load.' }); return }
       const auth = d.auth.kind === 'basic' ? { username: fill(d.auth.username), password: fill(d.auth.password) } : {}
-      const client = mqtt.connect(url, { clientId: fill(d.mqtt.clientId) || `dispatch-${Math.random().toString(16).slice(2, 10)}`, reconnectPeriod: 0, connectTimeout: 10_000, ...auth })
+      let client: ReturnType<typeof mqttConnect>
+      try {
+        client = mqttConnect(url, { clientId: fill(d.mqtt.clientId) || `dispatch-${Math.random().toString(16).slice(2, 10)}`, reconnectPeriod: 0, connectTimeout: 10_000, ...auth })
+      } catch (e) { sess.state = 'closed'; push(sess, { dir: 'error', at: Date.now(), text: e instanceof Error ? e.message : String(e) }); return }
       client.on('connect', () => {
         sess.state = 'open'
         push(sess, { dir: 'info', at: Date.now(), text: 'Connected' })
