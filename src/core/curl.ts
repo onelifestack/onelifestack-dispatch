@@ -33,7 +33,8 @@ export function shellWords(input: string): string[] {
         if (s[i] === '\\' && i + 1 < s.length && '"\\$`'.includes(s[i + 1])) { cur += s[i + 1]; i += 2 } else cur += s[i++]
       }
       i++
-    } else if (c === '\\' && i + 1 < s.length) {
+    } else if (c === '\\' && i + 1 < s.length && /[\s'"\\$`;&|<>()*?!#{}[\]]/.test(s[i + 1])) {
+      // A bash escape. Before an ordinary character (C:\Users\me) a backslash stays: it's a Windows path.
       cur += s[i + 1]; i += 2
     } else {
       cur += c; i++
