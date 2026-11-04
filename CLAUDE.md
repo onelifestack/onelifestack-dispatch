@@ -92,12 +92,52 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 - Browser-login tests use Playwright's Chromium with `DISPATCH_BROWSER_ARGS=--no-sandbox` (AppArmor blocks its
   sandbox here). Never add `--no-sandbox` by default.
 - A `<select>` inside a `<label>` gets its options in its accessible name; give it an `aria-label`.
+- Never push to `main` without `npm run typecheck`: vitest passes code that the CI typecheck rejects (this happened
+  once with a readonly tuple in a test).
+- Desktop webview ↔ Chrome DevTools: Chrome refuses WebSocket connections that send an `Origin` header unless that
+  origin is allowed with `--remote-allow-origins`. The desktop launcher passes exactly `location.origin`.
+- Windows: Rust's `Command::new` only looks for `.exe` (use `resolve_command` for `npx`/`npm`), and child processes
+  need `CREATE_NO_WINDOW` (`no_console`). `shellWords` keeps a backslash before an ordinary character, for Windows
+  paths.
+- Don't `npx` remote packages from tool calls; that's blocked here. Local examples (`examples/*.mjs`) cover MCP.
+- MCP sign-in redirects to `http://127.0.0.1:33418/callback`, which a registered client is bound to; tests use 33419.
 
 ## Where we left off
 
-2026-11-04: inbox item 5 (browser automation) built on `feature/flows` (based on `feature/inbox`, PR #4): browser
-login requests and visual flows. Merged to main (PRs #4 and #5). v0.4.0 and v0.4.1 (Windows fixes, PR #7) tagged as draft releases. Windows test plan: docs/TESTING-WINDOWS.md, issue #8 (the test agent reports there).
+Updated 2026-11-04 (evening). Everything is on `main`; the latest tag is **v0.4.3**.
 
-v0.3 built autonomously 2026-11-04 on `feature/v0.3` (PR to main; not merged). Plan and notes:
-`docs/PLAN-v0.3.md`. Desktop app still hasn't been opened on a real display; that's the owner's next step.
-Waiting on the owner: code-signing certificates and the updater key (docs/RELEASING.md), sync design.
+**Releases.** Every release is a *draft*: the owner publishes. Tags in order:
+- v0.2.0
+- v0.4.0: workspaces, MCP, flows, browser login
+- v0.4.1: Windows process fixes
+- v0.4.2: browser-login origin fix, #9
+- v0.4.3: MCP sign-in, #11 / PR #13
+
+Releases since 0.4.1 have no macOS `.dmg`: GitHub's macOS arm64 runners weren't available ("The job was not acquired
+by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for the tag's run.
+
+**Windows test (issue #8).**
+- An agent on the owner's Windows machine follows `docs/TESTING-WINDOWS.md`, which is copied into the issue body,
+  and posts reports as comments on #8.
+- Round 1 (on 0.4.1, built from source): 29 of 35 checks passed and it found #9 (fixed in 0.4.2).
+- Round 2 has been requested on the **installed 0.4.3**, including 6.4c (MCP over HTTP) and 6.4d (MCP sign-in,
+  never run on a real machine).
+- **Next step:** read the newest comment on #8 and any `[Windows] …` issues or `test/windows-*` branches the agent
+  opened. Then fix in a PR, bump the version (package.json, tauri.conf.json, Cargo.toml + lock, `VERSION` in
+  `src/cli/main.ts`, `clientVersion` in `src/core/mcp.ts`, the version in `docs/TESTING-WINDOWS.md`), tag, add
+  release notes, and refresh #8's body from the guide.
+
+**Open on GitHub.**
+- PR #12 (`site/v0.4-copy`, from another session): site copy for v0.4. Not merged.
+- Issue #8: the Windows test.
+
+**Waiting on the owner.**
+- Publishing the draft releases.
+- Code-signing certificates and the updater key (`docs/RELEASING.md`).
+- Sync design.
+- The site's DNS (see `site/README.md`).
+
+**Ideas not started.**
+- UI assertions and screenshots in browser steps (deferred by the owner).
+- An interactive MCP sign-in in the CLI (today the CLI takes a pasted token).
+- A Windows-friendly cURL snippet (2.9 in the report; minor).
