@@ -7,6 +7,7 @@ import { effectiveAuth, jsonProblem, pathVarsFromUrl } from '../core/prepare'
 import { FilePick, KVTable } from './KVTable'
 import { AuthEditor, authLabel } from './AuthEditor'
 import { CodeArea } from './CodeArea'
+import { VarsHelp } from './VarsHelp'
 import type { WorkspaceApi } from './useWorkspace'
 
 type Tab = 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'docs' | 'settings'
@@ -87,6 +88,7 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp }: Pro
         <input className="reqName" value={draft.name} aria-label="Request name" onChange={(e) => set({ name: e.target.value })} />
         {ws.dirty && <span className="dot" title="Unsaved changes" aria-label="Unsaved changes" />}
         <span className="grow" />
+        <VarsHelp ws={ws} notify={notify} />
         <button type="button" className="btn ghost" onClick={onSave}>Save <kbd>Ctrl S</kbd></button>
       </div>
       <form className="urlBar" onSubmit={(e) => { e.preventDefault(); void ws.send() }}>

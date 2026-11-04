@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { emptyAuth, emptyBody, kv, newCollection, newEnvironment, newFolder, newRequest } from '../src/core/types'
 import { interpolate, namesIn, scopeOf } from '../src/core/vars'
+import { FAKE } from '../src/core/fake'
 import { paramsFromUrl, parseQuery, splitUrl, urlWithParams, withScheme } from '../src/core/url'
 import { effectiveAuth, jsonProblem, pathVarNames, pathVarsFromUrl, prepare } from '../src/core/prepare'
 import { folderChain } from '../src/core/runtime'
@@ -29,6 +30,17 @@ describe('variables', () => {
     expect(interpolate('{{$guid}}', new Map())).toMatch(/^[0-9a-f-]{20,}$/)
   })
   it('lists names', () => expect(namesIn('{{a}} {{b}} {{a}}')).toEqual(['a', 'b']))
+  it('generates fake data', () => {
+    const s = new Map<string, string>()
+    expect(interpolate('{{$randomEmail}}', s)).toMatch(/^[a-z]+\.[a-z]+\d+@example\.(com|org|net)$/)
+    expect(interpolate('{{$randomInt}}', s)).toMatch(/^\d+$/)
+    expect(interpolate('{{$randomIP}}', s)).toMatch(/^\d+\.\d+\.\d+\.\d+$/)
+    expect(interpolate('{{$randomHexColor}}', s)).toMatch(/^#[0-9a-f]{6}$/)
+    expect(new Date(interpolate('{{$randomDateFuture}}', s)).getTime()).toBeGreaterThan(Date.now())
+    for (const [name, fn] of Object.entries(FAKE)) expect(typeof fn(), name).toBe('string')
+    // a user variable with the same name wins
+    expect(interpolate('{{$randomInt}}', new Map([['$randomInt', 'mine']]))).toBe('mine')
+  })
 })
 
 describe('url', () => {

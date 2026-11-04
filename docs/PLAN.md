@@ -11,7 +11,7 @@ Order (each step: code + tests + typecheck + build, then commit and push):
 2. [x] Request tabs (several open requests, restored on reload) + nested folders in the sidebar.
 3. [x] Scripts + tests: sandboxed pre-request/post-response JS in a Web Worker with a pm-style API
        (variables, request, response, test/expect, sendRequest, console), test results tab, console panel.
-4. [ ] Dynamic fake-data variables ({{$randomEmail}} etc.).
+4. [x] Dynamic fake-data variables ({{$randomEmail}} etc.).
 5. [ ] Collection runner: folder/collection, iterations, CSV/JSON data files (data-driven), delay, stop on
        failure, results + export. Suite runner = run several collections/folders in order.
 6. [ ] Performance/load testing: virtual users, duration/iterations, ramp-up, think time; p50/p90/p95/p99,
@@ -36,3 +36,4 @@ Progress notes go under each step as it lands.
   skipRequest, setNextRequest, legacy tests[]), collection → folders → request order, tests tab, console drawer,
   snippets. Browser-checked: sendRequest works, direct fetch blocked. Also pulled in from step 11: HTML/image
   preview (sandboxed iframe), JSONPath filter, cookies tab, save response to file, save as example, timings.
+- Step 4: 70 {{$random…}} generators (Postman names, built-in word lists), "{{ }}" panel listing scope + generators.

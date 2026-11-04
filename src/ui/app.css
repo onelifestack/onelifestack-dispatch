@@ -268,3 +268,9 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 @media (max-width: 760px) { .app { grid-template: "top" auto "side" minmax(0, 34vh) "work" 1fr "con" auto "bar" auto / minmax(0, 1fr); } }
 .infoLine { color: var(--info); background: var(--info-soft); border-radius: 8px; padding: .3rem .6rem; margin: .5rem 0 0; }
 .infoLine code { background: transparent; }
+.varsList { width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; gap: .1rem; }
+.varsList input { margin-bottom: .3rem; }
+.varsList .eyebrow { margin: .5rem .3rem .2rem; }
+.varRow { display: grid; grid-template-columns: auto 1fr auto; gap: .5rem; align-items: center; border: 0; background: none; color: inherit; text-align: left; padding: .3rem .4rem; border-radius: 6px; cursor: pointer; font: inherit; }
+.varRow:hover { background: var(--primary-soft); }
+.varRow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
