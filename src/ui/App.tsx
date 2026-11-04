@@ -5,7 +5,7 @@ import { Sidebar } from './Sidebar'
 import { RequestPane } from './RequestPane'
 import { ResponsePane } from './ResponsePane'
 import { CollectionEditor, EnvironmentEditor, FolderEditor, GlobalsEditor } from './Editors'
-import { exportCollection, exportWorkspace, importFile, type ImportResult } from '../core/backup'
+import { exportCollection, exportWorkspace, importFileAsync, type ImportResult } from '../core/backup'
 import { nameFromUrl } from '../core/curl'
 import { withScheme } from '../core/url'
 import { CookieTransport, type Transport } from '../core/transport'
@@ -16,6 +16,8 @@ import { getOAuthToken } from './oauth'
 import { DocsView } from './DocsView'
 import { MockView } from './MockView'
 import { Markdown } from './Markdown'
+import { ProtocolPicker, RealtimePane } from './RealtimePane'
+import { GrpcPane } from './GrpcPane'
 import type { Auth } from '../core/types'
 import type { Collection } from '../core/types'
 import type { Pipeline } from '../core/runtime'
@@ -65,7 +67,7 @@ function TabBar({ ws, onClose }: { ws: WorkspaceApi; onClose: (id: string) => vo
           <div key={t.id} className={`reqTab ${on ? 'on' : ''}`}>
             <button type="button" role="tab" aria-selected={on} className="reqTabMain" onClick={() => ws.selectTab(t.id)} title={t.draft.url || t.draft.name}
               onAuxClick={(e) => { if (e.button === 1) onClose(t.id) }}>
-              <span className={`mtag m-${t.draft.method}`}>{t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>
+              <span className={`mtag m-${t.draft.protocol === 'http' ? t.draft.method : 'proto'}`}>{t.draft.protocol !== 'http' ? ({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC' } as Record<string, string>)[t.draft.protocol] : t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>
               <span className="reqTabName">{t.draft.name}</span>
               {t.sending && <span className="spin" aria-label="sending" />}
             </button>
@@ -148,7 +150,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
       const text = await readText(file)
       let r: ImportResult | null = null
       for (const imp of extras.importers ?? []) { r = imp(text, file.name); if (r) break }
-      r ??= importFile(text)
+      r ??= await importFileAsync(text)
       await ws.importWorkspace(r)
       const n = (x: number, w: string) => x && `${x} ${w}${x > 1 ? 's' : ''}`
       const what = [n(r.collections.length, 'collection'), n(r.folders.length, 'folder'), n(r.requests.length, 'request'), n(r.environments.length, 'environment')].filter(Boolean).join(', ')
@@ -242,10 +244,23 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           : extraView ? extraView(ws, notify)
           : <>
               <TabBar ws={ws} onClose={(id) => void closeTab(id)} />
-              <div className="split">
-                <RequestPane ws={ws} onSave={save} notify={notify} authActions={authActions} renderDocs={renderDocs} />
-                <ResponsePane ws={ws} notify={notify} saveFile={saveAnyFile} />
-              </div>
+              {ws.draft.protocol === 'http' ? (
+                <div className="split">
+                  <RequestPane ws={ws} onSave={save} notify={notify} authActions={authActions} renderDocs={renderDocs} />
+                  <ResponsePane ws={ws} notify={notify} saveFile={saveAnyFile} />
+                </div>
+              ) : (
+                <div className="nonHttp">
+                  <div className="titleRow request">
+                    <ProtocolPicker draft={ws.draft} onChange={(protocol, url) => ws.setDraft((d) => ({ ...d, protocol, url }))} />
+                    <input className="reqName" value={ws.draft.name} aria-label="Request name" onChange={(e) => ws.setDraft((d) => ({ ...d, name: e.target.value }))} />
+                    {ws.dirty && <span className="dot" title="Unsaved changes" aria-label="Unsaved changes" />}
+                    <span className="grow" />
+                    <button type="button" className="btn ghost" onClick={() => void save()}>Save <kbd>Ctrl S</kbd></button>
+                  </div>
+                  {ws.draft.protocol === 'grpc' ? <GrpcPane ws={ws} notify={notify} /> : <RealtimePane key={ws.draft.id} ws={ws} notify={notify} />}
+                </div>
+              )}
             </>}
       </main>
       {consoleOpen && <Console ws={ws} onClose={() => setConsoleOpen(false)} />}

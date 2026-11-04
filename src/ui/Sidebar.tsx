@@ -44,7 +44,7 @@ export function Sidebar({ ws, dialogs, onExportCollection }: Props) {
   const reqRow = (r: RequestDef) => (
     <li key={r.id} className={`row ${ws.draft.id === r.id && ws.view.kind === 'request' ? 'on' : ''}`}>
       <button type="button" className="rowMain" onClick={() => ws.openRequest(r)} title={r.url}>
-        <Method m={r.method} /><span className="rowName">{r.name}</span>
+        {r.protocol === 'http' ? <Method m={r.method} /> : <span className="mtag m-proto">{({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC' } as Record<string, string>)[r.protocol]}</span>}<span className="rowName">{r.name}</span>
         {openTabIds.has(r.id) && ws.draft.id !== r.id && <span className="openDot" aria-label="open in a tab" />}
       </button>
       <Menu label={`More for ${r.name}`} items={[

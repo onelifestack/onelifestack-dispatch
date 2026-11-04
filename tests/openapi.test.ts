@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { importFile } from '../src/core/backup'
+import { beforeAll } from 'vitest'
+import { importFile, importFileAsync, type ImportResult } from '../src/core/backup'
 import { sampleFromSchema } from '../src/core/openapi'
 import { prepare } from '../src/core/prepare'
 import { folderChain } from '../src/core/runtime'
@@ -56,8 +57,9 @@ paths:
 `
 
 describe('OpenAPI import', () => {
-  const r = importFile(yamlSpec)
-  const [get, add, upload] = r.requests
+  let r: ImportResult
+  let get: ImportResult['requests'][number], add: typeof get, upload: typeof get
+  beforeAll(async () => { r = await importFileAsync(yamlSpec); [get, add, upload] = r.requests })
   it('reads YAML, servers, tags and folders', () => {
     expect(r.source).toBe('openapi')
     expect(r.collections[0]).toMatchObject({ name: 'Pet Store', auth: { kind: 'bearer', token: '{{bearerToken}}' } })

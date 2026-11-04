@@ -1,6 +1,6 @@
 import type { Environment, Collection, KV, LogLine, Method, PreparedRequest, RequestDef } from './types'
 import { METHODS } from './types'
-import { type Compile, type PmRequestData, type PmResponseData, type ScriptHost, type ScriptInput, type ScriptOutput, type Vars, compileWithFunction, runScript } from './scripts'
+import type { Compile, PmRequestData, PmResponseData, ScriptHost, ScriptInput, ScriptOutput, Vars } from './scripts'
 import { SendError, type SendOptions, type Transport } from './transport'
 import { type Execution, type Pipeline, type RunContext, folderChain } from './runtime'
 import { paramsFromUrl, withScheme } from './url'
@@ -11,8 +11,10 @@ export const SCRIPT_TIMEOUT_MS = 10_000
 
 /** Runs scripts in this thread. Used by tests, the CLI (with a vm-based compile) and as a fallback. */
 export class InlineEngine implements ScriptEngine {
-  constructor(private readonly compile: Compile = compileWithFunction, private readonly timeoutMs = SCRIPT_TIMEOUT_MS) {}
+  constructor(private readonly compile?: Compile, private readonly timeoutMs = SCRIPT_TIMEOUT_MS) {}
   run(input: ScriptInput, host: ScriptHost): Promise<ScriptOutput> {
+    // The script runtime (with chai) loads on first use, keeping it out of the app's startup bundle.
+    const go = import('./scripts').then((m) => m.runScript(input, host, this.compile ?? m.compileWithFunction))
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeout = new Promise<ScriptOutput>((resolve) => {
       timer = setTimeout(() => resolve({
@@ -20,7 +22,7 @@ export class InlineEngine implements ScriptEngine {
         vars: input.vars, request: input.request, skip: false, error: `Script took longer than ${this.timeoutMs / 1000} s.`,
       }), this.timeoutMs)
     })
-    return Promise.race([runScript(input, host, this.compile), timeout]).finally(() => clearTimeout(timer))
+    return Promise.race([go, timeout]).finally(() => clearTimeout(timer))
   }
 }
 

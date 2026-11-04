@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import type { Auth, BodyKind, Method, RequestDef } from '../core/types'
 import { METHODS } from '../core/types'
 import { paramsFromUrl, urlWithParams } from '../core/url'
@@ -9,6 +9,7 @@ import { AuthEditor, authLabel } from './AuthEditor'
 import { CodeArea } from './CodeArea'
 import { VarsHelp } from './VarsHelp'
 import { CodePanel } from './CodePanel'
+import { ProtocolPicker } from './RealtimePane'
 import type { WorkspaceApi } from './useWorkspace'
 
 type Tab = 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'docs' | 'settings'
@@ -17,6 +18,8 @@ export interface AuthActions { getToken: (auth: Auth, apply: (a: Auth) => void) 
 interface Props { ws: WorkspaceApi; onSave: () => void; notify: (msg: string) => void; authActions?: AuthActions; scriptHelp?: React.ReactNode; renderDocs?: (md: string) => React.ReactNode }
 
 /** One-click examples for the script editor. */
+const GraphqlTools = lazy(() => import('./GraphqlTools').then((m) => ({ default: m.GraphqlTools })))
+
 const SNIPPETS: Record<'pre' | 'post', [string, string][]> = {
   pre: [
     ['Set an environment variable', 'pm.environment.set("key", "value")'],
@@ -86,6 +89,7 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp, rende
   return (
     <section className="request" aria-label="Request">
       <div className="titleRow">
+        <ProtocolPicker draft={draft} onChange={(protocol, url) => set({ protocol, url })} />
         <input className="reqName" value={draft.name} aria-label="Request name" onChange={(e) => set({ name: e.target.value })} />
         {ws.dirty && <span className="dot" title="Unsaved changes" aria-label="Unsaved changes" />}
         <span className="grow" />
@@ -158,6 +162,7 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp, rende
               <CodeArea label="GraphQL query" value={draft.body.text} rows={12} onChange={(text) => setBody({ text })} placeholder={'query Me {\n  me { id name }\n}'} />
               <CodeArea label="GraphQL variables" value={draft.body.graphqlVariables} rows={12} onChange={(graphqlVariables) => setBody({ graphqlVariables })} placeholder={'{\n  "id": "{{userId}}"\n}'} />
             </div>}
+            {draft.body.kind === 'graphql' && <Suspense fallback={<p className="muted small">Loading GraphQL tools…</p>}><GraphqlTools key={ws.prepared.url} ws={ws} notify={notify} /></Suspense>}
             {problem && <p className="warnLine small" role="status">JSON problem: {problem}</p>}
             {draft.body.kind === 'urlencoded' && (
               <KVTable label="Form fields" keyPlaceholder="Field" rows={draft.body.fields} onChange={(fields) => setBody({ fields })} />

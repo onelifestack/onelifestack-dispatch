@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { basename } from 'node:path'
 import vm from 'node:vm'
-import { importFile, type ImportResult } from '../core/backup'
+import { importFileAsync, type ImportResult } from '../core/backup'
 import { parseDataFile } from '../core/csv'
 import { type RunItem, collectItems, failed, runCollection, toJUnit, toJsonReport } from '../core/runner'
 import { runLoad, samplesCsv, verdict } from '../core/load'
@@ -105,15 +105,15 @@ const read = (path: string) => { try { return readFileSync(path, 'utf8') } catch
 /** Scripts compile in a separate V8 context (no require/process); collections are your own files. */
 const compileInVm: Compile = (code, params) => vm.compileFunction(code, params, { parsingContext: vm.createContext({ atob, btoa, URL, URLSearchParams, TextEncoder, TextDecoder, setTimeout, clearTimeout }) }) as (...args: unknown[]) => unknown
 
-function loadWorkspace(file: string): ImportResult {
-  try { return importFile(read(file)) } catch (e) { throw new Usage(`${file}: ${e instanceof Error ? e.message : String(e)}`) }
+async function loadWorkspace(file: string): Promise<ImportResult> {
+  try { return await importFileAsync(read(file)) } catch (e) { throw new Usage(`${file}: ${e instanceof Error ? e.message : String(e)}`) }
 }
 
-function pickEnvironment(ws: ImportResult, spec: string | undefined): Environment | null {
+async function pickEnvironment(ws: ImportResult, spec: string | undefined): Promise<Environment | null> {
   if (!spec) return ws.environments.length === 1 ? ws.environments[0] : null
   const named = ws.environments.find((e) => e.name === spec)
   if (named) return named
-  const r = loadWorkspace(spec)
+  const r = await loadWorkspace(spec)
   if (!r.environments.length) throw new Usage(`${spec} has no environment.`)
   return r.environments[0]
 }
@@ -141,7 +141,7 @@ async function main(argv: string[]): Promise<number> {
   const isMock = pos[0] === 'mock'
   const file = isLoad || isMock ? pos[1] : pos[0]
   if (!file) throw new Usage('Give a collection file.')
-  const ws = loadWorkspace(file)
+  const ws = await loadWorkspace(file)
   for (const w of ws.warnings) console.error(yellow(`note: ${w}`))
 
   if (isMock) {
@@ -172,9 +172,9 @@ async function main(argv: string[]): Promise<number> {
     await new Promise(() => {}) // until Ctrl+C
   }
 
-  let environment = pickEnvironment(ws, one(opts, 'environment'))
+  let environment = await pickEnvironment(ws, one(opts, 'environment'))
   let globals: KV[] = ws.globals ?? []
-  if (one(opts, 'globals')) { const g = loadWorkspace(one(opts, 'globals')!); globals = g.globals?.length ? g.globals : g.environments[0]?.variables ?? [] }
+  if (one(opts, 'globals')) { const g = await loadWorkspace(one(opts, 'globals')!); globals = g.globals?.length ? g.globals : g.environments[0]?.variables ?? [] }
   const overrides = (opts['env-var'] ?? []).map((p) => { const i = p.indexOf('='); if (i < 1) throw new Usage(`--env-var ${p}: use key=value.`); return kv(p.slice(0, i), p.slice(i + 1)) })
   if (overrides.length) environment = { ...(environment ?? { id: 'cli', name: 'command line', updatedAt: 0, variables: [] }), variables: [...(environment?.variables ?? []).filter((v) => !overrides.some((o) => o.key === v.key)), ...overrides] }
   const data = one(opts, 'data') ? parseDataFile(read(one(opts, 'data')!), one(opts, 'data')) : null

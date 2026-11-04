@@ -1,7 +1,6 @@
 import type { Auth, Collection, Environment, Example, Folder, KV, Method, RequestDef, Scripts } from './types'
 import { METHODS, emptyAuth, emptyBody, kv, newCollection, newEnvironment, newFolder, newRequest, normalizeCollection, normalizeFolder, normalizeRequest, uid } from './types'
 import { paramsFromUrl } from './url'
-import { parse as parseYaml } from 'yaml'
 import { importHar, importOpenApi, isHar, isOpenApi } from './openapi'
 
 export interface Workspace { collections: Collection[]; folders: Folder[]; requests: RequestDef[]; environments: Environment[]; globals?: KV[] }
@@ -44,11 +43,24 @@ export interface ImportResult extends Workspace {
  */
 export function importFile(text: string): ImportResult {
   let data: any
-  try { data = JSON.parse(text) } catch {
-    // OpenAPI specs are often YAML.
-    try { data = parseYaml(text) } catch { data = undefined }
+  try { data = JSON.parse(text) } catch { throw new Error('That file isn’t valid JSON (or OpenAPI YAML).') }
+  return importData(data)
+}
+
+/** Like importFile, but also reads YAML (OpenAPI specs often are). The YAML parser loads only when needed. */
+export async function importFileAsync(text: string): Promise<ImportResult> {
+  try { JSON.parse(text) } catch {
+    const { parse } = await import('yaml')
+    let data: any
+    try { data = parse(text) } catch { data = undefined }
     if (!data || typeof data !== 'object') throw new Error('That file isn’t valid JSON (or OpenAPI YAML).')
+    return importData(data)
   }
+  return importFile(text)
+}
+
+/** Imports an already-parsed file. */
+export function importData(data: any): ImportResult {
   if (data?.format === FORMAT) return importDispatch(data)
   if (isOpenApi(data)) return importOpenApi(data)
   if (isHar(data)) return importHar(data)

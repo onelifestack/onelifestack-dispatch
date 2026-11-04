@@ -61,3 +61,7 @@ Progress notes go under each step as it lands.
   core/mock.ts (literal segments beat :params, x-mock-response-name/code, ?__example=), desktop = Rust sockets +
   app answers via events, CLI = `dispatch-run mock`. Found and fixed: the yaml dependency broke the CLI bundle
   (scripts/build-cli.mjs adds require); tests/cli.test.ts now builds and runs the real CLI.
+- Step 13 (part 1): GraphQL (introspection via the request's own URL/headers/auth, syntax + schema validation with
+  graphql-js, explorer that inserts starter operations), WebSocket and MQTT-over-WebSocket panes (connections live
+  per request across tab switches, variables in messages, saved messages, live log). Protocol picker per request.
+  Startup bundle cut from 660 KB to 355 KB by loading YAML, chai and GraphQL on demand. gRPC: next.
