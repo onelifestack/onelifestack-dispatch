@@ -1,5 +1,5 @@
 import type { KV } from './types'
-import { uid } from './types'
+import { FAKE } from './fake'
 
 /** Later scopes win: pass [collection, environment] so the environment overrides the collection. */
 export function scopeOf(...layers: (KV[] | undefined)[]): Map<string, string> {
@@ -8,13 +8,7 @@ export function scopeOf(...layers: (KV[] | undefined)[]): Map<string, string> {
   return m
 }
 
-const DYNAMIC: Record<string, () => string> = {
-  $guid: () => uid(),
-  $uuid: () => uid(),
-  $timestamp: () => String(Math.floor(Date.now() / 1000)),
-  $isoTimestamp: () => new Date().toISOString(),
-  $randomInt: () => String(Math.floor(Math.random() * 1001)),
-}
+const DYNAMIC = FAKE
 
 const PATTERN = /\{\{\s*([^{}\s]+)\s*\}\}/g
 

@@ -1,5 +1,5 @@
 import type { KV, Method, PreparedRequest, RequestDef } from './types'
-import { METHODS, emptyAuth, kv, newRequest } from './types'
+import { METHODS, emptyAuth, emptyBody, kv, newRequest } from './types'
 import { paramsFromUrl, parseQuery, withScheme } from './url'
 
 /** Splits a shell command line into words: quotes, backslash escapes and line continuations. */
@@ -48,7 +48,7 @@ export const looksLikeCurl = (text: string) => /^\s*curl(\.exe)?\s/i.test(text)
 const WITH_VALUE = new Set([
   '-X', '--request', '-H', '--header', '-d', '--data', '--data-raw', '--data-binary', '--data-ascii', '--data-urlencode',
   '--json', '-u', '--user', '--url', '-A', '--user-agent', '-b', '--cookie', '-e', '--referer', '-F', '--form',
-  '-o', '--output', '-m', '--max-time', '--connect-timeout', '-x', '--proxy', '--retry', '-w', '--write-out',
+  '--form-string', '-o', '--output', '-m', '--max-time', '--connect-timeout', '-x', '--proxy', '--retry', '-w', '--write-out',
   '-c', '--cookie-jar', '--cacert', '--cert', '--key', '-T', '--upload-file', '--oauth2-bearer',
 ])
 
@@ -65,6 +65,7 @@ export function fromCurl(command: string): CurlImport {
   const data: string[] = []
   let json = false
   let get = false
+  const form: KV[] = []
   let user: string | null = null
   let bearer: string | null = null
 
@@ -101,7 +102,16 @@ export function fromCurl(command: string): CurlImport {
       case '--oauth2-bearer': bearer = value!; break
       case '-G': case '--get': get = true; break
       case '-I': case '--head': method = 'HEAD'; break
-      case '-F': case '--form': warnings.push('Multipart form fields (-F) aren’t supported yet and were skipped.'); break
+      case '-F': case '--form': case '--form-string': {
+        const eq = value!.indexOf('=')
+        const name = eq >= 0 ? value!.slice(0, eq) : value!
+        const v = eq >= 0 ? value!.slice(eq + 1) : ''
+        if (w !== '--form-string' && v.startsWith('@')) {
+          form.push(kv(name, '', true, { type: 'file', file: null }))
+          warnings.push(`File ${v.slice(1).split(';')[0]} for “${name}” wasn’t loaded; choose it in the body tab.`)
+        } else form.push(kv(name, w !== '--form-string' && v.startsWith('<') ? '' : v, true, { type: 'text' }))
+        break
+      }
       case '-T': case '--upload-file': warnings.push('File uploads (-T) aren’t supported yet and were skipped.'); break
       default:
         if (w.startsWith('-')) {
@@ -131,15 +141,22 @@ export function fromCurl(command: string): CurlImport {
     const ctIndex = headers.findIndex((h) => h.key.toLowerCase() === 'content-type')
     const ct = ctIndex >= 0 ? headers[ctIndex].value.toLowerCase() : ''
     if (json || ct.includes('json') || (!ct && /^\s*[[{]/.test(body))) {
-      req.body = { kind: 'json', text: prettyIfJson(body), fields: [] }
+      req.body = { ...emptyBody('json'), text: prettyIfJson(body) }
       if (json && ctIndex < 0) headers.push(kv('Content-Type', 'application/json'))
       if (json && !headers.some((h) => h.key.toLowerCase() === 'accept')) headers.push(kv('Accept', 'application/json'))
     } else if (!ct || ct.includes('x-www-form-urlencoded')) {
-      req.body = { kind: 'urlencoded', text: '', fields: parseQuery(body).map(({ key, value }) => kv(key, value)) }
+      req.body = { ...emptyBody('urlencoded'), fields: parseQuery(body).map(({ key, value }) => kv(key, value)) }
       if (ctIndex >= 0) headers.splice(ctIndex, 1) // the body type adds it back
     } else {
-      req.body = { kind: 'text', text: body, fields: [] }
+      req.body = { ...emptyBody(ct.includes('xml') ? 'xml' : ct.includes('html') ? 'html' : 'text'), text: body }
     }
+  }
+
+  if (form.length) {
+    req.body = { ...emptyBody('formdata'), fields: form }
+    if (!method) req.method = 'POST'
+    const ctIndex = headers.findIndex((h) => h.key.toLowerCase() === 'content-type' && h.value.toLowerCase().startsWith('multipart/'))
+    if (ctIndex >= 0) headers.splice(ctIndex, 1) // the boundary is set when sending
   }
 
   if (user !== null) {

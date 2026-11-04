@@ -1,0 +1,35 @@
+{
+  "info": { "name": "Demo shop", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Try Dispatch: run `node examples/demo-server.mjs`, then run this collection (with examples/users.csv as the data file)." },
+  "variable": [{ "key": "base", "value": "http://localhost:4318" }],
+  "item": [
+    { "name": "1 Login", "request": { "method": "POST", "url": "{{base}}/login",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"user\": \"{{user}}\" }", "options": { "raw": { "language": "json" } } } },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('logged in', () => pm.response.to.have.status(200))",
+        "pm.collectionVariables.set('token', pm.response.json().token)"
+      ] } }] },
+    { "name": "Orders", "item": [
+      { "name": "2 Create order", "request": { "method": "POST", "url": "{{base}}/orders",
+          "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": { "mode": "raw", "raw": "{ \"item\": \"{{item}}\", \"qty\": {{qty}} }", "options": { "raw": { "language": "json" } } } },
+        "event": [{ "listen": "test", "script": { "exec": [
+          "pm.test('created', () => pm.response.to.have.status(201))",
+          "pm.test('belongs to the user', () => pm.expect(pm.response.json().by).to.equal(pm.iterationData.get('user')))",
+          "pm.collectionVariables.set('orderId', pm.response.json().id)"
+        ] } }] },
+      { "name": "3 Get order", "request": { "method": "GET", "url": { "raw": "{{base}}/orders/:id", "variable": [{ "key": "id", "value": "{{orderId}}" }] },
+          "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] } },
+        "event": [{ "listen": "test", "script": { "exec": [
+          "pm.test('same item', () => pm.expect(pm.response.json().item).to.equal(pm.iterationData.get('item')))",
+          "pm.test('fast', () => pm.expect(pm.response.responseTime).to.be.below(1000))"
+        ] } }] }
+    ] },
+    { "name": "4 Digest", "request": { "method": "GET", "url": "{{base}}/digest",
+        "auth": { "type": "digest", "digest": [{ "key": "username", "value": "ann" }, { "key": "password", "value": "secret" }] } },
+      "event": [{ "listen": "test", "script": { "exec": ["pm.test('digest works', () => pm.response.to.have.status(200))"] } }] },
+    { "name": "5 Flaky", "request": { "method": "GET", "url": "{{base}}/flaky" } }
+  ]
+}

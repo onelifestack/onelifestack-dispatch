@@ -1,7 +1,7 @@
 {
   "name": "onelifestack-dispatch",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,17 +9,23 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:cli": "node scripts/build-cli.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",
+    "chai": "^5.3.3",
+    "graphql": "^16.14.2",
+    "mqtt": "^5.16.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.12.4",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
+    "@types/chai": "^5.2.3",
     "@types/node": "^22.20.5",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
@@ -29,5 +35,8 @@
     "typescript": "5.6",
     "vite": "^6.4.5",
     "vitest": "^2.1.9"
+  },
+  "bin": {
+    "dispatch-run": "dist-cli/dispatch-run.mjs"
   }
 }
