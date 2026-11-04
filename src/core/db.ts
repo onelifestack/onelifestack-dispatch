@@ -1,5 +1,6 @@
 import type { Collection, Environment, Folder, HistoryEntry, KV, RequestDef, Settings } from './types'
 import { defaultSettings, normalizeCollection, normalizeFolder, normalizeRequest } from './types'
+import { resetVaultForTests, secretsOf, seal, unseal, vaultKey } from './vault'
 
 /** Everything lives in this device's IndexedDB; nothing is sent anywhere except the requests you send. */
 const NAME = 'dispatch'
@@ -32,6 +33,7 @@ export function open(): Promise<IDBDatabase> {
 export async function resetForTests() {
   if (opening) (await opening).close()
   opening = null
+  resetVaultForTests()
   await new Promise<void>((res) => { const r = indexedDB.deleteDatabase(NAME); r.onsuccess = r.onerror = r.onblocked = () => res() })
 }
 
@@ -41,14 +43,22 @@ async function all<T>(store: string): Promise<T[]> { const db = await open(); re
 async function put(store: string, v: unknown, key?: string) { const db = await open(); const t = db.transaction(store, 'readwrite'); t.objectStore(store).put(v, key); await done(t) }
 async function del(store: string, key: string) { const db = await open(); const t = db.transaction(store, 'readwrite'); t.objectStore(store).delete(key); await done(t) }
 
-export const listRequests = async () => (await all<RequestDef>('requests')).map(normalizeRequest)
-export const listCollections = async () => (await all<Collection>('collections')).map(normalizeCollection)
-export const listFolders = async () => (await all<Folder>('folders')).map(normalizeFolder)
-export const putFolder = (f: Folder) => put('folders', f)
-export const listEnvironments = () => all<Environment>('environments')
-export const putRequest = (r: RequestDef) => put('requests', r)
-export const putCollection = (c: Collection) => put('collections', c)
-export const putEnvironment = (e: Environment) => put('environments', e)
+// Secrets are sealed on the way in and unsealed on the way out (see vault.ts).
+const key = () => vaultKey({
+  get: async () => { const db = await open(); return wrap(db.transaction('meta').objectStore('meta').get('vaultKey')) },
+  set: (v) => put('meta', v, 'vaultKey'),
+})
+const sealer = async () => { const k = await key(); return (s: string) => seal(k, s) }
+const unsealer = async () => { const k = await key(); return (s: string) => unseal(k, s) }
+
+export const listRequests = async () => { const f = await unsealer(); return Promise.all((await all<RequestDef>('requests')).map((r) => secretsOf.request(normalizeRequest(r), f))) }
+export const listCollections = async () => { const f = await unsealer(); return Promise.all((await all<Collection>('collections')).map((c) => secretsOf.collection(normalizeCollection(c), f))) }
+export const listFolders = async () => { const f = await unsealer(); return Promise.all((await all<Folder>('folders')).map((x) => secretsOf.folder(normalizeFolder(x), f))) }
+export const listEnvironments = async () => { const f = await unsealer(); return Promise.all((await all<Environment>('environments')).map((e) => secretsOf.environment(e, f))) }
+export const putFolder = async (x: Folder) => put('folders', await secretsOf.folder(x, await sealer()))
+export const putRequest = async (r: RequestDef) => put('requests', await secretsOf.request(r, await sealer()))
+export const putCollection = async (c: Collection) => put('collections', await secretsOf.collection(c, await sealer()))
+export const putEnvironment = async (e: Environment) => put('environments', await secretsOf.environment(e, await sealer()))
 export const deleteRequest = (id: string) => del('requests', id)
 export const deleteEnvironment = (id: string) => del('environments', id)
 
@@ -85,9 +95,9 @@ export async function deleteFolders(ids: string[]) {
 /** Global variables (available in every request). */
 export async function getGlobals(): Promise<KV[]> {
   const db = await open()
-  return (await wrap<KV[] | undefined>(db.transaction('meta').objectStore('meta').get('globals'))) ?? []
+  return secretsOf.globals((await wrap<KV[] | undefined>(db.transaction('meta').objectStore('meta').get('globals'))) ?? [], await unsealer())
 }
-export const putGlobals = (g: KV[]) => put('meta', g, 'globals')
+export const putGlobals = async (g: KV[]) => put('meta', await secretsOf.globals(g, await sealer()), 'globals')
 
 /** Small UI state kept between sessions (open tabs...). */
 export async function getMeta<T>(key: string): Promise<T | undefined> {
@@ -98,11 +108,13 @@ export const putMeta = (key: string, v: unknown) => put('meta', v, key)
 
 /** Newest first. */
 export async function listHistory(): Promise<HistoryEntry[]> {
-  return (await all<HistoryEntry>('history')).sort((a, b) => b.at - a.at)
+  const f = await unsealer()
+  return Promise.all((await all<HistoryEntry>('history')).sort((a, b) => b.at - a.at).map((h) => secretsOf.history(h, f)))
 }
 
 /** Adds an entry and trims history to the newest HISTORY_LIMIT entries. */
-export async function addHistory(e: HistoryEntry) {
+export async function addHistory(plain: HistoryEntry) {
+  const e = await secretsOf.history(plain, await sealer())
   const db = await open()
   const t = db.transaction('history', 'readwrite')
   const store = t.objectStore('history')
@@ -125,7 +137,14 @@ export async function getSettings(): Promise<Settings> {
 export const putSettings = (s: Settings) => put('meta', s, 'settings')
 
 /** Writes a whole workspace (imports) in one transaction. */
-export async function putMany(data: { collections?: Collection[]; folders?: Folder[]; requests?: RequestDef[]; environments?: Environment[] }) {
+export async function putMany(plain: { collections?: Collection[]; folders?: Folder[]; requests?: RequestDef[]; environments?: Environment[] }) {
+  const f = await sealer()
+  const data = {
+    collections: plain.collections && await Promise.all(plain.collections.map((c) => secretsOf.collection(c, f))),
+    folders: plain.folders && await Promise.all(plain.folders.map((x) => secretsOf.folder(x, f))),
+    requests: plain.requests && await Promise.all(plain.requests.map((r) => secretsOf.request(r, f))),
+    environments: plain.environments && await Promise.all(plain.environments.map((e) => secretsOf.environment(e, f))),
+  }
   const db = await open()
   const t = db.transaction(['collections', 'folders', 'requests', 'environments'], 'readwrite')
   data.folders?.forEach((f) => t.objectStore('folders').put(f))
@@ -133,4 +152,16 @@ export async function putMany(data: { collections?: Collection[]; folders?: Fold
   data.requests?.forEach((r) => t.objectStore('requests').put(r))
   data.environments?.forEach((e) => t.objectStore('environments').put(e))
   await done(t)
+}
+
+/** Open tabs (drafts included), with their secrets sealed like saved requests. */
+export async function putOpenTabs(drafts: RequestDef[], active: number) {
+  const f = await sealer()
+  await put('meta', { tabs: await Promise.all(drafts.map((d) => secretsOf.request(d, f))), active }, 'tabs')
+}
+export async function getOpenTabs(): Promise<{ tabs: RequestDef[]; active: number } | undefined> {
+  const saved = await getMeta<{ tabs: RequestDef[]; active: number }>('tabs')
+  if (!saved?.tabs) return saved
+  const f = await unsealer()
+  return { ...saved, tabs: await Promise.all(saved.tabs.map((d) => secretsOf.request(normalizeRequest(d), f))) }
 }

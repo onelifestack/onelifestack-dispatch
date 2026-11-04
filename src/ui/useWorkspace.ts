@@ -81,7 +81,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     void (async () => {
       const [c, f, r, e, g, h, s, saved] = await Promise.all([
         db.listCollections(), db.listFolders(), db.listRequests(), db.listEnvironments(), db.getGlobals(), db.listHistory(), db.getSettings(),
-        db.getMeta<{ tabs: RequestDef[]; active: number }>('tabs'),
+        db.getOpenTabs(),
       ])
       if (!live) return
       setCollections(c.sort(byName)); setFolders(f); setRequests(r); setEnvironments(e.sort(byName)); setGlobalsState(g)
@@ -98,7 +98,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   // Open tabs survive a reload (drafts included).
   useEffect(() => {
     if (!ready) return
-    const t = setTimeout(() => { void db.putMeta('tabs', { tabs: tabs.map((x) => x.draft), active: Math.max(0, tabs.findIndex((x) => x.id === activeId)) }) }, 400)
+    const t = setTimeout(() => { void db.putOpenTabs(tabs.map((x) => x.draft), Math.max(0, tabs.findIndex((x) => x.id === activeId))) }, 400)
     return () => clearTimeout(t)
   }, [tabs, activeId, ready])
 
@@ -218,6 +218,21 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     if (glob) { setGlobalsState(glob); await db.putGlobals(glob) }
   }, [])
 
+  /** Saves OAuth tokens refreshed during a send back to the request, folder or collection that owns the auth. */
+  const applyAuthUpdate = useCallback(async (u: NonNullable<Execution['authUpdate']>) => {
+    if (u.owner === 'request') {
+      setTabs((ts) => ts.map((t) => (t.draft.id === u.id ? { ...t, draft: { ...t.draft, auth: { ...t.draft.auth, ...u.patch } } } : t)))
+      const savedReq = requests.find((r) => r.id === u.id)
+      if (savedReq) { const next = { ...savedReq, auth: { ...savedReq.auth, ...u.patch } }; await db.putRequest(next); setRequests((rs) => rs.map((r) => (r.id === u.id ? next : r))) }
+    } else if (u.owner === 'folder') {
+      const f = folders.find((x) => x.id === u.id)
+      if (f) { const next = { ...f, auth: { ...f.auth, ...u.patch } }; setFolders((fs) => fs.map((x) => (x.id === u.id ? next : x))); await db.putFolder(next) }
+    } else {
+      const c = collections.find((x) => x.id === u.id)
+      if (c) { const next = { ...c, auth: { ...c.auth, ...u.patch } }; setCollections((cs) => cs.map((x) => (x.id === u.id ? next : x))); await db.putCollection(next) }
+    }
+  }, [requests, folders, collections])
+
   const send = useCallback(async () => {
     const tab = active
     if (tab.sending) return
@@ -232,12 +247,13 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
       text: `${x.sent.method} ${x.sent.url} → ${x.response ? `${x.response.status} ${x.response.statusText} · ${x.response.timeMs} ms` : x.error}`,
     }])
     await applyChanges(x, ctx)
+    if (x.authUpdate) await applyAuthUpdate(x.authUpdate)
     let entry: HistoryEntry = { id: uid(), at: Date.now(), request: structuredClone(tab.draft), sent: x.sent, response: x.response, error: x.error, tests: x.tests }
     // Large bodies would bloat history; keep the first 256 KB and drop binary data.
     if (entry.response) entry = { ...entry, response: { ...entry.response, body: entry.response.body.slice(0, 262_144), base64: undefined } }
     await db.addHistory(entry)
     setHistory((h) => [entry, ...h].slice(0, db.HISTORY_LIMIT))
-  }, [active, patchTab, runContext, transport, settings, log, applyChanges])
+  }, [active, patchTab, runContext, transport, settings, log, applyChanges, applyAuthUpdate])
 
   const cancel = useCallback(() => aborts.current.get(active.id)?.abort(), [active.id])
 
