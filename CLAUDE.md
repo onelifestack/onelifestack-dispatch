@@ -93,7 +93,7 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 ## Where we left off
 
 2026-11-04: inbox item 5 (browser automation) built on `feature/flows` (based on `feature/inbox`, PR #4): browser
-login requests and visual flows. PR open, not merged.
+login requests and visual flows. Merged to main (PRs #4 and #5).
 
 v0.3 built autonomously 2026-11-04 on `feature/v0.3` (PR to main; not merged). Plan and notes:
 `docs/PLAN-v0.3.md`. Desktop app still hasn't been opened on a real display; that's the owner's next step.
