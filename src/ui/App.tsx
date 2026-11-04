@@ -18,6 +18,7 @@ import { MockView } from './MockView'
 import { Markdown } from './Markdown'
 import { ProtocolPicker, RealtimePane } from './RealtimePane'
 import { GrpcPane } from './GrpcPane'
+import { BackupsView } from './BackupsView'
 import type { Auth } from '../core/types'
 import type { Collection } from '../core/types'
 import type { Pipeline } from '../core/runtime'
@@ -90,7 +91,7 @@ export interface AppExtras {
 export function App({ transport, engine, extras = {} }: { transport?: Transport; engine?: ScriptEngine; extras?: AppExtras }) {
   const ws = useWorkspace({ transport, engine, extend: extras.extend })
   const { ask, confirm, askSave, askPlace, node: dialog } = useDialogs()
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ text: string; action?: { label: string; run: () => void } } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const fileInput = useRef<HTMLInputElement>(null)
   const [consoleOpen, setConsoleOpen] = useState(false)
@@ -105,9 +106,19 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
     },
   }
 
-  const notify = useCallback((msg: string) => {
-    setToast(msg); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(null), msg.length > 80 ? 8000 : 3500)
+  const notify = useCallback((msg: string, action?: { label: string; run: () => void }) => {
+    setToast({ text: msg, action }); clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), action ? 9000 : msg.length > 80 ? 8000 : 3500)
   }, [])
+  // Every delete can be undone from the toast.
+  const trashCount = useRef(0)
+  useEffect(() => {
+    if (ws.trash.length > trashCount.current) {
+      const last = ws.trash[ws.trash.length - 1]
+      notify(`Deleted ${last.label}.`, { label: 'Undo', run: () => { void ws.undoDelete().then((l) => { if (l) notify(`Restored ${l}.`) }) } })
+    }
+    trashCount.current = ws.trash.length
+  }, [ws.trash]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const root = document.documentElement
@@ -203,6 +214,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           <div className="menuList right" role="menu">
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); fileInput.current?.click() }}>Import (backup, Postman, OpenAPI, HAR)…</button>
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); void onExport() }}>Export backup</button>
+            <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); ws.setView({ kind: 'backups' }) }}>Local backups…</button>
             <hr />
             <label className="menuRow">Theme
               <select value={ws.settings.theme} onChange={(e) => ws.setSettings({ theme: e.target.value as 'system' | 'light' | 'dark' })}>
@@ -238,6 +250,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           : env ? <EnvironmentEditor key={env.id} ws={ws} confirm={confirm} environment={env} />
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
           : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
+          : viewed.kind === 'backups' ? <BackupsView ws={ws} notify={notify} confirm={confirm} />
           : viewed.kind === 'docs' ? <DocsView key={viewed.collectionId} ws={ws} notify={notify} collectionId={viewed.collectionId} />
           : viewed.kind === 'mock' ? <MockView key={viewed.collectionId} ws={ws} notify={notify} collectionId={viewed.collectionId} />
           : viewed.kind === 'load' ? <LoadView key={viewed.requestId ?? 'tab'} ws={ws} notify={notify} requestId={viewed.requestId} />
@@ -273,7 +286,13 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
         <span>{ws.environment ? `Environment: ${ws.environment.name}` : 'No environment'}</span>
         <span>Saved on this device only</span>
       </footer>
-      {toast && <div className="toast" role="status" onClick={() => setToast(null)}>{toast}</div>}
+      {toast && (
+        <div className="toast" role="status">
+          <span>{toast.text}</span>
+          {toast.action && <button type="button" className="toastAction" onClick={() => { toast.action!.run(); setToast(null) }}>{toast.action.label}</button>}
+          <button type="button" className="toastClose" aria-label="Dismiss" onClick={() => setToast(null)}>×</button>
+        </div>
+      )}
       {dialog}
     </div>
   )

@@ -397,3 +397,7 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
   .runGrid, .rtGrid, .detailGrid { grid-template-columns: minmax(0, 1fr); }
   .editor { padding: 1rem 16px 3rem; }
 }
+.toast { display: flex; align-items: center; gap: .8rem; cursor: default; }
+.toastAction { border: 0; background: var(--primary); color: var(--on-primary); font: 700 13px system-ui, sans-serif; padding: .3rem .7rem; border-radius: 6px; cursor: pointer; }
+.toastClose { border: 0; background: none; color: inherit; opacity: .7; cursor: pointer; font-size: 16px; }
+.rowActions { display: flex; gap: .3rem; justify-content: flex-end; }

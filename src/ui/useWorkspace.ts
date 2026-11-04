@@ -21,6 +21,7 @@ export type View =
   | { kind: 'load'; requestId: string | null }
   | { kind: 'docs'; collectionId: string }
   | { kind: 'mock'; collectionId: string }
+  | { kind: 'backups' }
 
 export interface Result {
   sent: PreparedRequest
@@ -68,6 +69,9 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   const [activeId, setActiveId] = useState<string>(() => tabs[0].id)
   const [view, setView] = useState<View>({ kind: 'request' })
   const [logs, setLogs] = useState<LogLine[]>([])
+  /** Recently deleted things, newest last, so a delete can be undone. */
+  const [trash, setTrash] = useState<{ label: string; data: Workspace }[]>([])
+  const [backups, setBackups] = useState<db.BackupInfo[]>([])
   const aborts = useRef(new Map<string, AbortController>())
   const [pipeline] = useState<Pipeline>(() => {
     const sendOpts = () => ({ timeoutMs: settingsRef.current.timeoutMs, followRedirects: settingsRef.current.followRedirects, insecureTls: settingsRef.current.insecureTls })
@@ -86,6 +90,14 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
       if (!live) return
       setCollections(c.sort(byName)); setFolders(f); setRequests(r); setEnvironments(e.sort(byName)); setGlobalsState(g)
       setHistory(h); setSettingsState(s)
+      // A daily backup, taken quietly when the app opens.
+      void (async () => {
+        let list = await db.listBackups()
+        if (!list.length || Date.now() - list[0].at > 24 * 3600_000) {
+          if (c.length || r.length || e.length) { await db.addBackup({ collections: c, folders: f, requests: r, environments: e, globals: g }, 'daily'); list = await db.listBackups() }
+        }
+        if (live) setBackups(list)
+      })()
       if (saved?.tabs?.length) {
         const restored = saved.tabs.map((d) => newTab(normalizeRequest(d)))
         setTabs(restored); setActiveId(restored[Math.min(saved.active, restored.length - 1)]?.id ?? restored[0].id)
@@ -191,12 +203,18 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     setTabs((ts) => ts.map((t) => (t.draft.id === r.id ? { ...t, draft: { ...t.draft, collectionId, folderId } } : t)))
   }, [persistRequest])
 
+  const toTrash = useCallback((label: string, data: Partial<Workspace>) => {
+    setTrash((t) => [...t, { label, data: { collections: [], folders: [], requests: [], environments: [], ...data } }].slice(-20))
+  }, [])
+
   const removeRequest = useCallback(async (id: string) => {
+    const r = requests.find((x) => x.id === id)
     await db.deleteRequest(id)
-    setRequests((rs) => rs.filter((r) => r.id !== id))
+    setRequests((rs) => rs.filter((x) => x.id !== id))
+    if (r) toTrash(`“${r.name}”`, { requests: [r] })
     // Open tabs keep the request as an unsaved draft.
     setTabs((ts) => ts.map((t) => (t.draft.id === id ? { ...t, draft: { ...t.draft, id: uid() } } : t)))
-  }, [])
+  }, [requests, toTrash])
 
   const duplicateRequest = useCallback(async (r: RequestDef) => {
     const copy: RequestDef = { ...structuredClone(r), id: uid(), name: `${r.name} copy`, updatedAt: Date.now() }
@@ -276,13 +294,16 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     await db.putCollection(next)
   }, [])
   const removeCollection = useCallback(async (id: string) => {
+    const c = collections.find((x) => x.id === id)
+    const gone = c ? { collections: [c], folders: folders.filter((f) => f.collectionId === id), requests: requests.filter((r) => r.collectionId === id) } : null
     await db.deleteCollection(id)
     setCollections((cs) => cs.filter((c) => c.id !== id))
     setFolders((fs) => fs.filter((f) => f.collectionId !== id))
     setRequests((rs) => rs.filter((r) => r.collectionId !== id))
     setTabs((ts) => ts.map((t) => (t.draft.collectionId === id ? { ...t, draft: { ...t.draft, id: uid(), collectionId: null, folderId: null } } : t)))
     setView((v) => (v.kind === 'collection' && v.id === id ? { kind: 'request' } : v))
-  }, [])
+    if (c && gone) toTrash(`“${c.name}”`, gone)
+  }, [collections, folders, requests, toTrash])
 
   const addFolder = useCallback(async (collectionId: string, name: string, parentId: string | null = null) => {
     const f = newFolder(collectionId, name, parentId); await db.putFolder(f)
@@ -297,12 +318,15 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   const removeFolder = useCallback(async (id: string) => {
     const ids = new Set([id])
     for (let grew = true; grew;) { grew = false; for (const f of folders) if (f.parentId && ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); grew = true } }
+    const top = folders.find((f) => f.id === id)
+    const gone = { folders: folders.filter((f) => ids.has(f.id)), requests: requests.filter((r) => r.folderId && ids.has(r.folderId)) }
     await db.deleteFolders([...ids])
     setFolders((fs) => fs.filter((f) => !ids.has(f.id)))
     setRequests((rs) => rs.filter((r) => !r.folderId || !ids.has(r.folderId)))
     setTabs((ts) => ts.map((t) => (t.draft.folderId && ids.has(t.draft.folderId) ? { ...t, draft: { ...t.draft, id: uid(), folderId: null } } : t)))
     setView((v) => (v.kind === 'folder' && ids.has(v.id) ? { kind: 'request' } : v))
-  }, [folders])
+    if (top) toTrash(`“${top.name}”`, gone)
+  }, [folders, requests, toTrash])
 
   const addEnvironment = useCallback(async (name: string) => {
     const e = newEnvironment(name); await db.putEnvironment(e)
@@ -315,11 +339,13 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     await db.putEnvironment(next)
   }, [])
   const removeEnvironment = useCallback(async (id: string) => {
+    const e = environments.find((x) => x.id === id)
     await db.deleteEnvironment(id)
     setEnvironments((es) => es.filter((e) => e.id !== id))
     setSettingsState((s) => { if (s.activeEnvId !== id) return s; const n = { ...s, activeEnvId: null }; void db.putSettings(n); return n })
     setView((v) => (v.kind === 'environment' && v.id === id ? { kind: 'request' } : v))
-  }, [])
+    if (e) toTrash(`“${e.name}”`, { environments: [e] })
+  }, [environments, toTrash])
   const setGlobals = useCallback(async (g: KV[]) => { setGlobalsState(g); await db.putGlobals(g) }, [])
 
   const importWorkspace = useCallback(async (w: Workspace) => {
@@ -334,7 +360,33 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     }
   }, [globals, setGlobals])
 
+  /** Puts back the most recent delete. */
+  const undoDelete = useCallback(async () => {
+    const last = trash[trash.length - 1]
+    if (!last) return null
+    setTrash((t) => t.slice(0, -1))
+    await importWorkspace(last.data)
+    return last.label
+  }, [trash, importWorkspace])
+
+  const snapshot = useCallback((): db.BackupData => ({ collections, folders, requests, environments, globals }), [collections, folders, requests, environments, globals])
+  const backupNow = useCallback(async (reason: db.BackupInfo['reason'] = 'manual') => {
+    await db.addBackup(snapshot(), reason); setBackups(await db.listBackups())
+  }, [snapshot])
+  /** Replaces everything with a backup, after backing up what's there now. */
+  const restoreBackup = useCallback(async (id: string) => {
+    const data = await db.getBackup(id)
+    if (!data) return false
+    await db.addBackup(snapshot(), 'before-restore')
+    await db.replaceAll(data)
+    setCollections(data.collections.sort(byName)); setFolders(data.folders); setRequests(data.requests)
+    setEnvironments(data.environments.sort(byName)); setGlobalsState(data.globals)
+    setBackups(await db.listBackups()); setView({ kind: 'request' })
+    return true
+  }, [snapshot])
+
   return {
+    trash, undoDelete, backups, backupNow, restoreBackup,
     ready, transport, collections, folders, requests, environments, globals, history, settings, logs,
     tabs, activeId, active, draft, view, result: active.result, sending: active.sending, saved, dirty, isDirty,
     collection, environment, prepared, chain, runContext, pipeline: pipelineRef,
