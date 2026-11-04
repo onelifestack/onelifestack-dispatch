@@ -23,6 +23,9 @@ and an import format; never copy its name, branding, icons or UI.
   - browser logins: `cdp.ts` (minimal DevTools-protocol client), `browser.ts` (steps, launcher interface),
     `browserPipeline.ts` (the `Pipeline.browser` hook); launchers in `src/node/browserLauncher.ts` (CLI) and
     `src/ui/desktopBrowser.ts` (Tauri `browser_launch`)
+  - `mcpAuth.ts`: MCP sign-in (discovery → registration → PKCE + `resource` → refresh), `MCP_SUGGESTIONS`; sign-ins
+    sealed in IndexedDB meta `mcpSignIns`, keyed by environment + server. `examples/mcp-http-server.mjs --oauth` is
+    a complete local sign-in server for tests and the Windows guide.
   - `flows.ts`: flow graph (nodes, wires from output ports) and `runFlow`; straight chains run in a loop, recursion
     only for branches and For each (deep recursion overflowed the stack). Stored in IndexedDB v4 `flows`.
 - `src/ui/` — `useWorkspace.ts` holds all state and actions; one component per view (RequestPane, ResponsePane,

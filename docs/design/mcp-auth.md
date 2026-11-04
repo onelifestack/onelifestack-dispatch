@@ -1,6 +1,14 @@
 # Signing in to protected MCP servers (plan)
 
-Status: proposal, 2026-11-04. Not started.
+Status: built 2026-11-04 on `feature/mcp-auth` (issue #11).
+
+## Decisions (owner, 2026-11-04)
+
+1. No preferred servers: offer well-known ones as suggestions. These are 16 remote servers whose addresses and
+   sign-in were checked on 2026-11-04 (`MCP_SUGGESTIONS` in `src/core/mcpAuth.ts`). 11 register Dispatch by
+   themselves, GitHub and Asana need a client ID you register with them, and 3 are open.
+2. Sign-in in the desktop app only. The CLI and the web app use a token pasted into the request's auth.
+3. Sign-ins are kept per environment (and per server).
 
 ## Today
 
