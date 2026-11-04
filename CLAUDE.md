@@ -40,6 +40,12 @@ Tool calls don't load `~/.bashrc`, so put node and cargo on PATH first:
 - `npm run tauri dev` — desktop app with hot reload. `npm run tauri build` — `.deb` and AppImage in
   `src-tauri/target/release/bundle/`.
 
+Installers for every OS come from GitHub Actions (`.github/workflows/build.yml`), not this machine: each push or PR
+builds Windows (`.msi`, NSIS `.exe`), Linux (`.deb`, `.rpm`, AppImage) and macOS (`.dmg`) as run artifacts. To
+release: bump the version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, push a tag
+`vX.Y.Z`, and the installers land on a draft GitHub Release to review and publish. The installers aren't code-signed
+yet (Windows SmartScreen and macOS Gatekeeper will warn).
+
 Desktop builds on Linux need these system packages (owner installs them; sudo isn't available to Claude):
 
     sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libsoup-3.0-dev \
