@@ -247,6 +247,57 @@ async fn oauth_listen(port: u16, path: String, timeout_secs: u64) -> Result<Stri
     tokio::time::timeout(Duration::from_secs(timeout_secs), wait).await.map_err(|_| "Timed out waiting for the login to finish.".to_string())?
 }
 
+// ---------- MCP over stdio (desktop) ----------
+// Starts an MCP server process; its stdout lines and stderr come back as "mcp-stdio" events, and the app writes
+// JSON-RPC lines to its stdin. The app asks the user before running a command.
+
+#[derive(Default)]
+struct McpProcs(Mutex<HashMap<u64, (tokio::process::ChildStdin, tauri::async_runtime::JoinHandle<()>)>>);
+
+#[derive(Serialize, Clone)]
+struct McpLine { id: u64, kind: String, text: String }
+
+#[tauri::command]
+async fn mcp_stdio_start(app: tauri::AppHandle, state: tauri::State<'_, McpProcs>, id: u64, command: String, args: Vec<String>, env: Vec<(String, String)>, cwd: Option<String>) -> Result<(), String> {
+    use tauri::Emitter;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    let mut cmd = tokio::process::Command::new(&command);
+    cmd.args(&args).envs(env).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).kill_on_drop(true);
+    if let Some(dir) = cwd.filter(|d| !d.trim().is_empty()) { cmd.current_dir(dir); }
+    let mut child = cmd.spawn().map_err(|e| format!("Couldn’t start “{command}”: {e}"))?;
+    let stdin = child.stdin.take().ok_or("No stdin")?;
+    let stdout = child.stdout.take().ok_or("No stdout")?;
+    let stderr = child.stderr.take().ok_or("No stderr")?;
+    let app2 = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut lines = BufReader::new(stderr).lines();
+        while let Ok(Some(l)) = lines.next_line().await { let _ = app2.emit("mcp-stdio", McpLine { id, kind: "stderr".into(), text: l }); }
+    });
+    let handle = tauri::async_runtime::spawn(async move {
+        let mut lines = BufReader::new(stdout).lines();
+        while let Ok(Some(l)) = lines.next_line().await { let _ = app.emit("mcp-stdio", McpLine { id, kind: "line".into(), text: l }); }
+        let code = child.wait().await.ok().and_then(|s| s.code()).map(|c| c.to_string()).unwrap_or_else(|| "?".into());
+        let _ = app.emit("mcp-stdio", McpLine { id, kind: "exit".into(), text: code });
+    });
+    state.0.lock().unwrap().insert(id, (stdin, handle));
+    Ok(())
+}
+
+#[tauri::command]
+async fn mcp_stdio_send(state: tauri::State<'_, McpProcs>, id: u64, line: String) -> Result<(), String> {
+    use tokio::io::AsyncWriteExt;
+    let stdin = state.0.lock().unwrap().remove(&id);
+    let Some((mut stdin, handle)) = stdin else { return Err("The MCP server isn’t running.".into()) };
+    let r = async { stdin.write_all(line.as_bytes()).await?; stdin.write_all(b"\n").await?; stdin.flush().await }.await;
+    state.0.lock().unwrap().insert(id, (stdin, handle));
+    r.map_err(|e| format!("Couldn’t write to the MCP server: {e}"))
+}
+
+#[tauri::command]
+fn mcp_stdio_stop(state: tauri::State<'_, McpProcs>, id: u64) {
+    if let Some((_, handle)) = state.0.lock().unwrap().remove(&id) { handle.abort(); } // dropping the child kills it
+}
+
 // ---------- Server-sent events (desktop) ----------
 
 #[derive(Default)]
@@ -502,8 +553,9 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(InFlight::default())
         .manage(SseStreams::default())
+        .manage(McpProcs::default())
         .manage(std::sync::Arc::new(MockState::default()))
-        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call, pick_folder, read_collection_dir, write_collection_dir, notify_desktop, sse_open, sse_close])
+        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call, pick_folder, read_collection_dir, write_collection_dir, notify_desktop, sse_open, sse_close, mcp_stdio_start, mcp_stdio_send, mcp_stdio_stop])
         .run(tauri::generate_context!())
         .expect("error while running Dispatch");
 }

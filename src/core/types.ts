@@ -77,7 +77,7 @@ export interface Auth {
   service: string
 }
 
-export type Protocol = 'http' | 'ws' | 'mqtt' | 'grpc' | 'sse' | 'socketio'
+export type Protocol = 'http' | 'ws' | 'mqtt' | 'grpc' | 'sse' | 'socketio' | 'mcp'
 
 export interface RequestSettings {
   /** null = use the app setting. */
@@ -99,6 +99,7 @@ export interface Example {
 
 export interface WsConfig { messages: KV[] }
 export interface MqttConfig { clientId: string; topics: KV[]; publishTopic: string; payload: string; qos: 0 | 1 | 2; retain: boolean }
+export interface McpConfig { transport: 'http' | 'stdio'; command: string; env: KV[]; cwd: string; tool: string; arguments: string }
 export interface SocketIoConfig { listen: string; emitEvent: string }
 export interface GrpcConfig { method: string; proto: string; useReflection: boolean; message: string; metadata: KV[]; tls: boolean }
 
@@ -126,6 +127,7 @@ export interface RequestDef {
   mqtt: MqttConfig
   grpc: GrpcConfig
   sio: SocketIoConfig
+  mcp: McpConfig
   /** Position among its siblings (requests and folders share one order); ties sort by name. */
   sort: number
   updatedAt: number
@@ -288,6 +290,7 @@ export function normalizeRequest(r: Partial<RequestDef> & { id: string }): Reque
     mqtt: { clientId: '', topics: [], publishTopic: '', payload: '', qos: 0, retain: false, ...r.mqtt },
     grpc: { method: '', proto: '', useReflection: true, message: '{}', metadata: [], tls: false, ...r.grpc },
     sio: { listen: '', emitEvent: 'message', ...r.sio },
+    mcp: { transport: 'http', command: '', env: [], cwd: '', tool: '', arguments: '{}', ...r.mcp },
   }
 }
 

@@ -18,6 +18,7 @@ import { pickFolder, readCollectionDir, useLinkedDirSync } from './linkedDirs'
 import { SchedulesView, useScheduler } from './Schedules'
 import { layeredVars, selectLayer } from '../core/layers'
 import { SpacesView } from './SpacesView'
+import { McpPane } from './McpPane'
 import { DocsView } from './DocsView'
 import { MockView } from './MockView'
 import { Markdown } from './Markdown'
@@ -74,7 +75,7 @@ function TabBar({ ws, onClose }: { ws: WorkspaceApi; onClose: (id: string) => vo
           <div key={t.id} className={`reqTab ${on ? 'on' : ''}`}>
             <button type="button" role="tab" aria-selected={on} className="reqTabMain" onClick={() => ws.selectTab(t.id)} title={t.draft.url || t.draft.name}
               onAuxClick={(e) => { if (e.button === 1) onClose(t.id) }}>
-              <span className={`mtag m-${t.draft.protocol === 'http' ? t.draft.method : 'proto'}`}>{t.draft.protocol !== 'http' ? ({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO' } as Record<string, string>)[t.draft.protocol] : t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>
+              <span className={`mtag m-${t.draft.protocol === 'http' ? t.draft.method : 'proto'}`}>{t.draft.protocol !== 'http' ? ({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO', mcp: 'MCP' } as Record<string, string>)[t.draft.protocol] : t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>
               <span className="reqTabName">{t.draft.name}</span>
               {t.sending && <span className="spin" aria-label="sending" />}
             </button>
@@ -305,7 +306,9 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
                     <span className="grow" />
                     <button type="button" className="btn ghost" onClick={() => void save()}>Save <kbd>Ctrl S</kbd></button>
                   </div>
-                  {ws.draft.protocol === 'grpc' ? <GrpcPane ws={ws} notify={notify} /> : <RealtimePane key={ws.draft.id} ws={ws} notify={notify} />}
+                  {ws.draft.protocol === 'grpc' ? <GrpcPane ws={ws} notify={notify} />
+                    : ws.draft.protocol === 'mcp' ? <McpPane key={ws.draft.id} ws={ws} notify={notify} confirm={confirm} />
+                    : <RealtimePane key={ws.draft.id} ws={ws} notify={notify} />}
                 </div>
               )}
             </>}

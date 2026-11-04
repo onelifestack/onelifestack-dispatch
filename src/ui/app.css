@@ -441,3 +441,9 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 @media (max-width: 760px) { .layerPick .mono { display: none; } }
 .spacePick select { font-weight: 700; max-width: 180px; }
 @media (max-width: 760px) { .spacePick select { max-width: 120px; } }
+.mcpConn { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-bottom: .4rem; }
+.mcpConn .url { min-width: 240px; padding: .5rem .6rem; border-radius: 8px; }
+.mcpList { list-style: none; padding: 0; margin: .4rem 0; display: grid; gap: .2rem; max-height: 50vh; overflow: auto; }
+.mcpList .rowMain.on { background: var(--primary-soft); border-radius: 8px; }
+.mcpList li { display: grid; gap: .2rem; }
+.mcpResult { display: grid; gap: .4rem; margin-top: .5rem; }
