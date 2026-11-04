@@ -3,7 +3,7 @@
 2. Duplicate environment
    → Done: "Duplicate" in the environment editor and the environment's ⋯ menu (values included).
 3. Smart conversion of http request into paramertized that use environments and variables
-   → Next.
+   → Done: "Parameterize" by the request name (also offered after pasting curl) suggests {{baseUrl}}, secret {{token}}/{{apiKey}}/{{password}}, :userId-style path variables, and reuses variables whose values already appear; you pick what to apply and where new variables go.
 4. Collections under collections
    → Planned as workspaces: a level above collections that groups collections and environments, with a switcher.
 5. Automation testing that can UI testing, like for user name and password, fetching of cookies, or auth token from browser cookies and then using it as token it as for the rst of the pipeline for rest calls. Its more like n8n for testing. We can discuss

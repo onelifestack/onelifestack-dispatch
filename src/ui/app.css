@@ -432,3 +432,6 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 .dadd { background: var(--good-soft); color: var(--good); } .ddel { background: var(--danger-soft); color: var(--danger); }
 .dgap { color: var(--muted); font-style: italic; }
 .emptyInner { display: grid; gap: .6rem; justify-items: center; max-width: 900px; width: 100%; }
+.paramPanel { border: 1px solid var(--primary); border-radius: 12px; padding: .7rem .8rem; margin-bottom: .6rem; background: var(--surface); display: grid; gap: .5rem; box-shadow: var(--shadow); }
+.paramList { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; }
+.paramList .toggle { align-items: baseline; }
