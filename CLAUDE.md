@@ -18,13 +18,19 @@ and an import format; never copy its name, branding, icons or UI.
     `scriptWorker.ts` + `workerEngine.ts` (sandboxed Web Worker per script)
   - running: `runner.ts` (collections/suites/data, JUnit), `load.ts` (load tests), `csv.ts`
   - other: `codegen.ts` (12 languages), `curl.ts`, `docs.ts`, `mock.ts`, `graphql.ts`, `jsonpath.ts`, `format.ts`
+  - v0.3: `vault.ts` (secrets at rest), `interop.ts` (Postman export, Insomnia/Bruno import), `fileFormat.ts`
+    (collections as files), `schedules.ts`, `sse.ts`, `diff.ts`, `scriptLibs.ts` (require'able libraries)
 - `src/ui/` — `useWorkspace.ts` holds all state and actions; one component per view (RequestPane, ResponsePane,
-  RunnerView, LoadView, DocsView, MockView, RealtimePane for WebSocket/MQTT, GrpcPane, Editors…).
+  RunnerView, LoadView, DocsView, MockView, RealtimePane for WebSocket/MQTT/SSE/Socket.IO, GrpcPane, Editors,
+  SettingsView/CookiesView, BackupsView, Schedules, ResponseHistory…). `editor/codemirror.ts` is the lazy editor;
+  `CodeArea` falls back to a textarea in jsdom. `linkedDirs.ts` syncs collections to folders.
 - `src/cli/main.ts` — `dispatch-run` (run, `load`, `mock`); bundled by `scripts/build-cli.mjs`.
-- `src-tauri/src/lib.rs` — send/cancel, save files, open URL, OAuth loopback, mock server sockets;
+- `src-tauri/src/lib.rs` — send/cancel (proxy, mTLS, CA certs), save files, open URL, OAuth loopback, mock server
+  sockets, SSE streams, notifications, collection folders (pick/read/write);
   `grpc.rs` — gRPC (tonic + prost-reflect + protox).
 - `tests/` — vitest (jsdom; `cli.test.ts` builds and runs the real CLI in Node). `src-tauri/tests/grpc_live.rs` —
-  live gRPC test (needs `examples/grpc`).
+  live gRPC test (needs `examples/grpc`); `network_live.rs` — mTLS/proxy (needs `examples/tls`);
+  `collection_files.rs` — folder write/prune/escape.
 - `examples/` — demo API, demo collection, data file, gRPC test server.
 
 ## Commands
@@ -68,9 +74,14 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 - gRPC reflection servers may omit imports or send well-known types under their own file names; `grpc.rs` handles
   both (found with the grpc-js reflection server).
 - Keep collection order: requests and folders share a `sort` position; never sort runs by name.
+- Run `npm run build` before committing, not just tests: a worker-format change once passed tests but broke the
+  build. The script worker must stay `worker: { format: 'es' }`.
+- CodeMirror and React: never push a value the editor itself emitted back into it (CodeArea tracks emitted values).
+- Port 4321 is taken on this machine by another app; use other ports for test servers.
+- Tauri commands can't also be `pub` at the crate root; expose a separate pub function for tests.
 
 ## Where we left off
 
-v0.2 built overnight 2026-11-03/04 on branch `overnight/v0.2` (PR to main). Plan and notes: `docs/PLAN.md`.
-Desktop installers build; the app itself hasn't been opened on a real desktop yet (no display here). Next: open the
-desktop build, then README "Not yet".
+v0.3 built autonomously 2026-11-04 on `feature/v0.3` (PR to main; not merged). Plan and notes:
+`docs/PLAN-v0.3.md`. Desktop app still hasn't been opened on a real display; that's the owner's next step.
+Waiting on the owner: code-signing certificates and the updater key (docs/RELEASING.md), sync design.

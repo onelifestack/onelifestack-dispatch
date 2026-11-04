@@ -16,8 +16,8 @@ public web hosting / developer-site listing, OneLifeStack sync design.
 9. [x] Scheduled runs (desktop): run a collection every N minutes, notify on failure, keep results.
 10. [x] Server-sent events and Socket.IO requests.
 11. [x] Response history per request and side-by-side compare.
-12. [ ] CI: macOS universal (Intel + Apple silicon), Linux ARM64; updater wiring documented.
-13. [ ] Browser tour, docs, PR.
+12. [x] CI: macOS universal (Intel + Apple silicon), Linux ARM64; updater wiring documented.
+13. [x] Browser tour, docs, PR.
 
 Progress notes go below as steps land.
 - Step 1: core/vault.ts — AES-GCM with a non-extractable WebCrypto device key (raw-key fallback where a CryptoKey can't be stored); sealed: secret variables, auth secret fields, sensitive request headers, history request + sent headers, open-tab drafts. A database copied to another device reads secrets as empty. OAuth refresh → Execution.authUpdate → saved to request/folder/collection; runs reuse the new token.
@@ -31,3 +31,5 @@ Progress notes go below as steps land.
 - Step 9: core/schedules.ts + ui/Schedules.tsx — schedules (collection/folder, environment, every N min, notify), checked every 30 s while open, one at a time; last 100 runs kept with failure reasons; desktop notifications via tauri-plugin-notification (Rust command), browser Notification API on the web. Script variable changes not kept.
 - Step 10: core/sse.ts parser (chunk boundaries, ids, event types, retry, comments); SSE via fetch streaming on the web and a Rust stream (sse_open/sse_close, UTF-8-safe chunks) on desktop, with the request's headers and auth; Socket.IO over WebSocket (listen to named events or all, emit with JSON args, bearer → auth.token). Demo server has /events. Browser-checked against real servers (port 4321 is used by another app here; tests use 4331).
 - Step 11: core/diff.ts (LCS with common prefix/suffix trimming, fallback for huge inputs, context collapsing); History tab per request (saved: by id; drafts: by method+URL) with Open and Compare (status/time/size, body diff on pretty JSON, header diff); earlier responses also listed before the first send.
+- Step 12: CI matrix adds Linux ARM64 (ubuntu-22.04-arm) and a macOS universal build; docs/RELEASING.md covers signing and the updater (owner's key).
+- Step 13: v0.2 tour still passes on v0.3; new screens screenshotted and checked at phone width; polish (wording, a glyph that didn't render). Version 0.3.0.

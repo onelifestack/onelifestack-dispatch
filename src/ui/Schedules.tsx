@@ -82,7 +82,7 @@ export function SchedulesView({ ws, sched, notify }: { ws: WorkspaceApi; sched: 
               <label className="toggle"><input type="checkbox" checked={s.enabled} onChange={(e) => upd(s.id, { enabled: e.target.checked })} aria-label={`Enable ${s.name}`} /></label>
               <input className="grow schedName" aria-label="Schedule name" value={s.name} onChange={(e) => upd(s.id, { name: e.target.value })} />
               {last && <span className={`pill ${runFailed(last) ? 'badPill' : ''}`}>{runFailed(last) ? 'failing' : 'passing'}</span>}
-              <button type="button" className="btn small" disabled={sched.running !== null} onClick={async () => { const r = await sched.runNow(s); if (r) notify(runFailed(r) ? `${s.name}: ${r.testsFailed + r.failedRequests} failures.` : `${s.name} passed.`) }}>
+              <button type="button" className="btn small" disabled={sched.running !== null} onClick={async () => { const r = await sched.runNow(s); if (r) { const n = r.testsFailed + r.failedRequests; notify(runFailed(r) ? `${s.name}: ${n} failure${n === 1 ? '' : 's'}.` : `${s.name} passed.`) } }}>
                 {sched.running === s.id ? 'Running…' : 'Run now'}
               </button>
               <button type="button" className="icon" aria-label={`Delete ${s.name}`} onClick={() => void sched.setSchedules(sched.schedules.filter((x) => x.id !== s.id))}>×</button>
@@ -108,7 +108,7 @@ export function SchedulesView({ ws, sched, notify }: { ws: WorkspaceApi; sched: 
               <label className="toggle"><input type="checkbox" checked={s.notifyOnFailure} onChange={(e) => upd(s.id, { notifyOnFailure: e.target.checked })} /> Notify on failure</label>
             </div>
             <p className="small muted">{last ? `Last run ${new Date(last.at).toLocaleString()}: ${last.requests} requests, ${last.testsPassed} passed, ${last.testsFailed} failed, avg ${formatMs(last.avgTimeMs)}.` : 'Not run yet.'}
-              {runs.length > 0 && <button type="button" className="linkBtn small" onClick={() => setOpen(open === s.id ? null : s.id)}> {open === s.id ? 'Hide history' : `History (${runs.length})`}</button>}</p>
+              {runs.length > 0 && <>{' '}<button type="button" className="linkBtn small" onClick={() => setOpen(open === s.id ? null : s.id)}>{open === s.id ? 'Hide history' : `History (${runs.length})`}</button></>}</p>
             {open === s.id && (
               <table className="resultTable" aria-label={`${s.name} history`}>
                 <thead><tr><th>When</th><th>Result</th><th>Tests</th><th>Avg</th><th>Failures</th></tr></thead>
