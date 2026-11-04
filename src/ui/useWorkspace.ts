@@ -3,7 +3,10 @@ import * as db from '../core/db'
 import type { Collection, Environment, Folder, HistoryEntry, HttpResponse, KV, LogLine, PreparedRequest, RequestDef, Settings, TestResult } from '../core/types'
 import { DEFAULT_SPACE, type Space, bySort, defaultSettings, newCollection, newEnvironment, newFolder, newRequest, normalizeRequest, spaceOf, uid } from '../core/types'
 import { prepare } from '../core/prepare'
-import { CookieTransport, type Transport, defaultTransport } from '../core/transport'
+import { CookieTransport, type Transport, defaultTransport, isDesktop } from '../core/transport'
+import { browserHook } from '../core/browserPipeline'
+import type { BrowserLauncher } from '../core/browser'
+import { desktopLauncher } from './desktopBrowser'
 import { CookieJar } from '../core/cookies'
 import type { Workspace } from '../core/backup'
 import { type Execution, type Pipeline, type RunContext, execute, folderChain, prepareContext, sendOptions } from '../core/runtime'
@@ -34,6 +37,7 @@ export interface Result {
   error: string | null
   tests: TestResult[]
   visualizer?: { html: string }
+  browser?: import('../core/browser').BrowserRunResult
 }
 
 export interface Tab {
@@ -52,6 +56,7 @@ const newTab = (draft: RequestDef = newRequest()): Tab => ({ id: uid(), draft, r
 export interface WorkspaceOptions {
   transport?: Transport
   engine?: ScriptEngine
+  browserLauncher?: BrowserLauncher
   /** Extra hooks merged after scripts (auth signing...). */
   extend?: (base: Pipeline, transport: Transport) => Pipeline
 }
@@ -82,7 +87,10 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   const aborts = useRef(new Map<string, AbortController>())
   const [pipeline] = useState<Pipeline>(() => {
     const sendOpts = () => ({ timeoutMs: settingsRef.current.timeoutMs, followRedirects: settingsRef.current.followRedirects, insecureTls: settingsRef.current.insecureTls })
-    const base = authPipeline(scriptPipeline({ engine: opts.engine ?? new WorkerEngine(), transport, sendOptions: sendOpts }), transport, sendOpts)
+    const scripted = authPipeline(scriptPipeline({ engine: opts.engine ?? new WorkerEngine(), transport, sendOptions: sendOpts }), transport, sendOpts)
+    // Browser login steps need a browser the app can start: the desktop app (or a launcher passed in, for tests).
+    const launcher = opts.browserLauncher ?? (isDesktop() ? desktopLauncher : null)
+    const base: Pipeline = launcher ? { ...scripted, browser: browserHook(launcher, () => (transport instanceof CookieTransport ? transport.jar : null)) } : scripted
     return opts.extend ? opts.extend(base, transport) : base
   })
   const pipelineRef = useRef(pipeline)
@@ -279,7 +287,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     const ctx = runContext(tab.draft)
     const x = await execute(tab.draft, ctx, transport, sendOptions(tab.draft, settings, ctrl.signal), pipelineRef.current)
     aborts.current.delete(tab.id)
-    patchTab(tab.id, { sending: false, result: { sent: x.sent, response: x.response, error: x.error, tests: x.tests, visualizer: x.visualizer } })
+    patchTab(tab.id, { sending: false, result: { sent: x.sent, response: x.response, error: x.error, tests: x.tests, visualizer: x.visualizer, browser: x.browser } })
     log([...x.logs, {
       level: x.error ? 'error' : 'info', at: Date.now(), source: 'network',
       text: `${x.sent.method} ${x.sent.url} → ${x.response ? `${x.response.status} ${x.response.statusText} · ${x.response.timeMs} ms` : x.error}`,

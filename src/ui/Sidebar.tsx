@@ -74,7 +74,7 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
       {...(r.collectionId ? dropProps(`before:${r.id}`, { collectionId: r.collectionId, folderId: r.folderId }, r.id) : {})}>
       <button type="button" className="rowMain" title={r.url} aria-pressed={selected.has(r.id) || undefined}
         onClick={(e) => { if (e.ctrlKey || e.metaKey) toggleSelect(r.id); else { setSelected(new Set()); ws.openRequest(r) } }}>
-        {r.protocol === 'http' ? <Method m={r.method} /> : <span className="mtag m-proto">{({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO', mcp: 'MCP' } as Record<string, string>)[r.protocol]}</span>}<span className="rowName">{r.name}</span>
+        {r.protocol === 'http' ? <Method m={r.method} /> : <span className="mtag m-proto">{({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO', mcp: 'MCP', browser: 'WEB' } as Record<string, string>)[r.protocol]}</span>}<span className="rowName">{r.name}</span>
         {openTabIds.has(r.id) && ws.draft.id !== r.id && <span className="openDot" aria-label="open in a tab" />}
       </button>
       <Menu label={`More for ${r.name}`} items={[

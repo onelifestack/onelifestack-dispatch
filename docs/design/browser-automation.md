@@ -1,6 +1,6 @@
 # Browser steps and flows (design, for discussion)
 
-Status: proposal, nothing built. From inbox item 5: "UI testing, like user name and password, fetching of cookies,
+Status: decided 2026-11-04 (answers below); being built on `feature/flows`. From inbox item 5: "UI testing, like user name and password, fetching of cookies,
 or auth token from browser cookies and then using it as token for the rest of the pipeline for REST calls. More like
 n8n for testing."
 
@@ -91,3 +91,15 @@ Build in three steps, each useful on its own:
 2. Is relying on an installed Chrome/Edge acceptable for scripted steps, or must it work with no browser installed?
 3. Should UI checks be a real goal (assertions on page content, screenshots) or only a means to get tokens?
 4. Flows: is a visual canvas important to you, or would "steps in a collection" be enough?
+
+## Decisions (owner, 2026-11-04)
+
+1. Simple username/password forms are enough → scripted steps (option B); no SSO/MFA handling needed now.
+2. Relying on an installed Chrome or Edge is fine → drive it over the DevTools protocol (B1).
+3. For now browser steps only get tokens/cookies; UI assertions come later.
+4. A visual flow builder (option C, n8n-like) is wanted.
+
+Plan: (1) a "Browser login" request type with steps (goto, fill, click, wait, extract cookie / storage / text)
+that runs everywhere requests run (app, runner, schedules, CLI, MCP) and stores what it extracts as secret
+variables and cookies; (2) Flows: a canvas of blocks (HTTP request, browser login, script, condition, set
+variable, delay, loop over data) with live status, runnable in the app and with `dispatch-run flow`.

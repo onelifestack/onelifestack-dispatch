@@ -247,6 +247,58 @@ async fn oauth_listen(port: u16, path: String, timeout_secs: u64) -> Result<Stri
     tokio::time::timeout(Duration::from_secs(timeout_secs), wait).await.map_err(|_| "Timed out waiting for the login to finish.".to_string())?
 }
 
+// ---------- Browser for login steps (desktop) ----------
+// Starts Chrome/Edge with its own throwaway profile and returns the DevTools address; the app drives it.
+
+#[derive(Default)]
+struct Browsers(Mutex<HashMap<u64, (tokio::process::Child, std::path::PathBuf)>>);
+
+fn find_exe(candidates: &[String]) -> Option<String> {
+    for c in candidates {
+        if c.contains('/') || c.contains('\\') { if std::path::Path::new(c).exists() { return Some(c.clone()); } continue; }
+        if let Some(paths) = std::env::var_os("PATH") {
+            for dir in std::env::split_paths(&paths) { let p = dir.join(c); if p.exists() { return Some(p.display().to_string()); } }
+        }
+    }
+    None
+}
+
+#[tauri::command]
+async fn browser_launch(state: tauri::State<'_, Browsers>, id: u64, path: String, candidates: Vec<String>, args: Vec<String>) -> Result<String, String> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    let exe = if path.trim().is_empty() { find_exe(&candidates).ok_or("No Chrome or Edge found. Install one, or set its path in the step settings.")? } else { path };
+    let profile = std::env::temp_dir().join(format!("dispatch-browser-{id}"));
+    let _ = std::fs::create_dir_all(&profile);
+    let args: Vec<String> = args.into_iter().map(|a| a.replace("{PROFILE}", &profile.display().to_string())).collect();
+    let mut child = tokio::process::Command::new(&exe).args(&args).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped()).kill_on_drop(true)
+        .spawn().map_err(|e| format!("Couldn’t start {exe}: {e}"))?;
+    let stderr = child.stderr.take().ok_or("No stderr")?;
+    let mut lines = BufReader::new(stderr).lines();
+    let found = tokio::time::timeout(Duration::from_secs(15), async {
+        let mut tail = vec![];
+        while let Ok(Some(l)) = lines.next_line().await {
+            if let Some(i) = l.find("ws://") { return Ok(l[i..].trim().to_string()); }
+            tail.push(l); if tail.len() > 5 { tail.remove(0); }
+        }
+        Err(format!("The browser closed: {}", tail.join(" ")))
+    }).await.map_err(|_| "The browser didn’t start in time.".to_string())?;
+    let ws = match found { Ok(w) => w, Err(e) => { let _ = std::fs::remove_dir_all(&profile); return Err(e) } };
+    // Keep reading stderr so the browser never blocks on a full pipe.
+    tauri::async_runtime::spawn(async move { while let Ok(Some(_)) = lines.next_line().await {} });
+    state.0.lock().unwrap().insert(id, (child, profile));
+    Ok(ws)
+}
+
+#[tauri::command]
+async fn browser_close(state: tauri::State<'_, Browsers>, id: u64) -> Result<(), String> {
+    let entry = state.0.lock().unwrap().remove(&id);
+    if let Some((mut child, profile)) = entry {
+        let _ = child.kill().await;
+        let _ = std::fs::remove_dir_all(&profile);
+    }
+    Ok(())
+}
+
 // ---------- MCP over stdio (desktop) ----------
 // Starts an MCP server process; its stdout lines and stderr come back as "mcp-stdio" events, and the app writes
 // JSON-RPC lines to its stdin. The app asks the user before running a command.
@@ -554,8 +606,9 @@ pub fn run() {
         .manage(InFlight::default())
         .manage(SseStreams::default())
         .manage(McpProcs::default())
+        .manage(Browsers::default())
         .manage(std::sync::Arc::new(MockState::default()))
-        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call, pick_folder, read_collection_dir, write_collection_dir, notify_desktop, sse_open, sse_close, mcp_stdio_start, mcp_stdio_send, mcp_stdio_stop])
+        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call, pick_folder, read_collection_dir, write_collection_dir, notify_desktop, sse_open, sse_close, mcp_stdio_start, mcp_stdio_send, mcp_stdio_stop, browser_launch, browser_close])
         .run(tauri::generate_context!())
         .expect("error while running Dispatch");
 }

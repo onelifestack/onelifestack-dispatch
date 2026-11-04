@@ -447,3 +447,11 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 .mcpList .rowMain.on { background: var(--primary-soft); border-radius: 8px; }
 .mcpList li { display: grid; gap: .2rem; }
 .mcpResult { display: grid; gap: .4rem; margin-top: .5rem; }
+.steps { list-style: none; padding: 0; margin: .5rem 0; display: grid; gap: .35rem; }
+.steps li { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding: .4rem .5rem; border: 1px solid var(--outline); border-radius: 10px; background: var(--surface); }
+.steps li.stepOk { border-color: var(--good); } .steps li.stepBad { border-color: var(--danger); background: var(--danger-soft); }
+.stepNo { font: 700 12px var(--mono); color: var(--muted); width: 1.4rem; }
+.steps input.grow { min-width: 200px; }
+.stepTools { margin-left: auto; }
+.stepNote { flex-basis: 100%; padding-left: 1.8rem; }
+.okBox { background: var(--good-soft); color: var(--good); border-radius: 8px; padding: .55rem .75rem; margin-top: .5rem; }

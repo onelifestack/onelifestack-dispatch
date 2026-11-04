@@ -15,6 +15,8 @@ import { InlineEngine, scriptPipeline } from '../core/scriptPipeline'
 import { CookieTransport, FetchTransport } from '../core/transport'
 import { CookieJar } from '../core/cookies'
 import { authPipeline } from '../core/auth'
+import { browserHook } from '../core/browserPipeline'
+import { nodeLauncher } from '../node/browserLauncher'
 import type { Compile } from '../core/scripts'
 import { type Environment, type KV, type Settings, defaultSettings, kv } from '../core/types'
 import { formatMs } from '../core/format'
@@ -208,7 +210,7 @@ async function main(argv: string[]): Promise<number> {
   const settings: Settings = { ...defaultSettings, timeoutMs: int(one(opts, 'timeout'), 'timeout', 30_000), insecureTls: !!opts.insecure }
   const transport = new CookieTransport(new FetchTransport(), new CookieJar())
   const scripts = opts['no-scripts'] ? {} : scriptPipeline({ engine: new InlineEngine(compileInVm), transport, sendOptions: () => ({ timeoutMs: settings.timeoutMs, followRedirects: true, insecureTls: settings.insecureTls }) })
-  const pipeline = authPipeline(scripts, transport)
+  const pipeline = { ...authPipeline(scripts, transport), browser: browserHook(nodeLauncher, () => transport.jar) }
   if (isMcp) {
     // Stdout is the protocol channel from here on.
     console.error(`dispatch-run ${VERSION}: serving ${ws.collections[0]?.name ?? file} over MCP (stdio)`)
