@@ -68,7 +68,7 @@ export function BrowserPane({ ws }: { ws: WorkspaceApi; notify?: (m: string) => 
         <label className="field"><span>Chrome / Edge path (empty = find it)</span><input className="mono" value={b.browserPath} onChange={(e) => set({ browserPath: e.target.value })} /></label>
         <label className="field"><span>Timeout per step (seconds)</span><input type="number" min={1} max={300} value={Math.round(b.timeoutMs / 1000)} onChange={(e) => set({ timeoutMs: Math.max(1, Number(e.target.value) || 30) * 1000 })} /></label>
       </details>
-      {ws.result && (
+      {ws.result && !ws.sending && (
         <div className={ws.result.error ? 'errorBox' : 'okBox'} role="status">
           {ws.result.error ?? `Logged in. Saved ${Object.keys(run?.extracted ?? {}).map((k) => `{{${k}}}`).join(', ') || 'nothing'}${ws.environment ? ` in ${ws.environment.name}` : ' in Globals'}${run?.cookies.length ? `; ${run.cookies.length} cookies kept` : ''}.`}
         </div>

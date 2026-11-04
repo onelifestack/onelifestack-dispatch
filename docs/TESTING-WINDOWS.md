@@ -1,4 +1,4 @@
-# Testing Dispatch 0.4.1 on Windows
+# Testing Dispatch 0.4.2 on Windows
 
 Instructions for a tester (a person or an AI agent) on a Windows 10/11 machine. Work through each section, record
 **PASS / FAIL / BLOCKED** for every numbered check, and write the results into a report (template at the end).
@@ -45,11 +45,13 @@ cd onelifestack-dispatch           # stay on main: it has the demo login page an
 npm ci
 npm run build:cli          # builds dist-cli\dispatch-run.mjs
 mkdir ..\installers
-gh release download v0.4.1 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
+gh release download v0.4.2 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
 ```
 
 The release is a **draft**, so it's only visible to accounts with access to the repo. If `gh release download`
-says "release not found", check `gh auth status` and that the account can see the repo.
+says "release not found", run `gh release list --repo onelifestack/onelifestack-dispatch`: the draft must be listed
+with its installers (the build can take 20+ minutes after the tag). Also check `gh auth status`. If only an older
+draft is there, stop and report that rather than testing a build you made yourself.
 
 Start the demo API in its **own terminal** and leave it running for the whole session:
 
@@ -71,7 +73,7 @@ What the demo API offers:
 
 ## 1. Install, first launch, uninstall
 
-1.1. Run `Dispatch_0.4.1_x64-setup.exe`. SmartScreen will warn because the installer isn't code-signed yet: click
+1.1. Run `Dispatch_0.4.2_x64-setup.exe`. SmartScreen will warn because the installer isn't code-signed yet: click
      "More info" → "Run anyway". Record the exact warning text. The install must finish without errors.
 
 1.2. Start Dispatch from the Start menu. A window titled Dispatch opens and shows the request editor (URL field,
@@ -132,10 +134,11 @@ What the demo API offers:
    3. Add `examples\users.csv` as the data file and run.
    4. Results appear per iteration. The only expected failures are occasional `/flaky` ones.
 
-2.9. **Code:** copy a request as code (cURL and PowerShell or Python). Paste the cURL into PowerShell with
-     `curl.exe` and confirm it runs.
+2.9. **Code:** copy a request as code as **PowerShell** and as **Python**. Run the PowerShell snippet in
+     PowerShell. The cURL snippet is multi-line bash (`\` continuations), so it's for Git Bash or WSL, not
+     PowerShell. That's a known limitation; just note whether it runs in Git Bash if you have it.
 
-## 3. Browser login (new in 0.4, never tried on Windows)
+## 3. Browser login (new in 0.4; fixed for the desktop app in 0.4.2, issue #9)
 
 This drives Microsoft Edge (or Chrome) in the background to log in through a web form and keep the token.
 
@@ -238,8 +241,9 @@ Run these from the repo folder in PowerShell.
    - Prints p50/p95 and statuses, plus a pass/fail line for the threshold.
 
 5.6. `node dist-cli\dispatch-run.mjs mock examples\demo-shop.postman_collection.json --port 4319`, then in another
-     terminal run `curl.exe http://127.0.0.1:4319/orders`. You get a saved example back, or a clear 404 listing the
-     routes. Stop the mock with Ctrl+C.
+     terminal run `curl.exe http://127.0.0.1:4319/orders/7`. You get the saved example
+     `{ "id": 1, "item": "coffee", "qty": 2 }`. `curl.exe http://127.0.0.1:4319/nope` gives a 404 listing the routes.
+     Stop the mock with Ctrl+C.
 
 5.7. A path with spaces: copy `examples` to `C:\Temp\dispatch test\` and run 5.3 from there.
 
@@ -261,7 +265,8 @@ Run these from the repo folder in PowerShell.
    4. Call `run_flow` with name "Login then orders". The result starts with `Passed`.
    5. Disconnect. Check Task Manager: no `node.exe` left over from this.
 
-6.4b. **Windows fixes in 0.4.1**: check each one; they were found by reading the code and have never run on Windows.
+6.4b. **Windows fixes from 0.4.1**: confirmed from a source build in the first test run (#8). Check them again in
+     the installed app:
    - The command from 6.4 with **backslashes** in the paths (`node C:\Users\<you>\...\dispatch-run.mjs mcp ...`)
      also connects. In 0.4.0 the backslashes were dropped.
    - A command starting with `npx` starts. Try `npx -y @modelcontextprotocol/server-everything` (needs internet);
@@ -320,7 +325,7 @@ comment (drag them into the comment box, or `gh issue comment <number> --repo on
 failure, titled `[Windows] <problem>`, and link it from the report.
 
 ```markdown
-# Dispatch 0.4.1 — Windows test report
+# Dispatch 0.4.2 — Windows test report
 
 - Date / tester:
 - Windows version (winver) and build:
