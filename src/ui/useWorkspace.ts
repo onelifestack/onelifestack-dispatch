@@ -31,6 +31,7 @@ export interface Result {
   response: HttpResponse | null
   error: string | null
   tests: TestResult[]
+  visualizer?: { html: string }
 }
 
 export interface Tab {
@@ -274,7 +275,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     const ctx = runContext(tab.draft)
     const x = await execute(tab.draft, ctx, transport, sendOptions(tab.draft, settings, ctrl.signal), pipelineRef.current)
     aborts.current.delete(tab.id)
-    patchTab(tab.id, { sending: false, result: { sent: x.sent, response: x.response, error: x.error, tests: x.tests } })
+    patchTab(tab.id, { sending: false, result: { sent: x.sent, response: x.response, error: x.error, tests: x.tests, visualizer: x.visualizer } })
     log([...x.logs, {
       level: x.error ? 'error' : 'info', at: Date.now(), source: 'network',
       text: `${x.sent.method} ${x.sent.url} → ${x.response ? `${x.response.status} ${x.response.statusText} · ${x.response.timeMs} ms` : x.error}`,

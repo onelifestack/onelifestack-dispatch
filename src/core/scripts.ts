@@ -47,6 +47,8 @@ export interface ScriptOutput {
   nextRequest?: string | null
   /** A thrown error (the script stopped there). */
   error?: string
+  /** pm.visualizer.set(): rendered HTML for the Visualize tab. */
+  visualizer?: { html: string }
 }
 
 /** What a script can ask of the outside world. */
@@ -93,7 +95,7 @@ function scope(store: Vars, label: string) {
 }
 
 /** Builds a response object for scripts, with pm.response.to.* assertions. */
-function responseApi(r: PmResponseData) {
+function responseApi(r: PmResponseData, libs: Record<string, unknown> = {}) {
   const headers = headerList(r.headers.map(([key, value]) => ({ key, value })))
   let parsed: unknown
   const json = () => {
@@ -125,6 +127,14 @@ function responseApi(r: PmResponseData) {
       if (v !== undefined) chai.expect(headers.get(k)).to.equal(v)
     },
     body: (want: string) => chai.expect(r.body).to.equal(want),
+    jsonSchema: (schema: object, options: object = {}) => {
+      const Ajv = libs.ajv as (new (o: object) => { compile: (s: object) => ((d: unknown) => boolean) & { errors?: { instancePath: string; message?: string }[] } }) | undefined
+      if (!Ajv) throw new Error('JSON Schema checks need ajv, which didn’t load.')
+      const validate = new Ajv({ allErrors: true, strict: false, ...options }).compile(schema)
+      const ok = validate(json())
+      const why = (validate.errors ?? []).slice(0, 5).map((e) => `${e.instancePath || '(root)'} ${e.message ?? ''}`.trim()).join('; ')
+      chai.expect(ok, `the response doesn’t match the schema: ${why}`).to.equal(true)
+    },
     jsonBody: (path?: string, value?: unknown) => {
       const data = json() as Record<string, unknown>
       if (path === undefined) return
@@ -138,7 +148,7 @@ function responseApi(r: PmResponseData) {
 }
 
 /** Runs one script. Never throws: errors come back in `error` (and as a failed test when inside pm.test). */
-export async function runScript(input: ScriptInput, host: ScriptHost, compile: Compile): Promise<ScriptOutput> {
+export async function runScript(input: ScriptInput, host: ScriptHost, compile: Compile, libs: Record<string, unknown> = {}): Promise<ScriptOutput> {
   const vars = structuredClone(input.vars)
   const request: PmRequestData = structuredClone(input.request)
   const tests: TestResult[] = []
@@ -146,7 +156,8 @@ export async function runScript(input: ScriptInput, host: ScriptHost, compile: C
   const pending: Promise<unknown>[] = []
   let skip = false
   let nextRequest: string | null | undefined
-  const out = (): ScriptOutput => ({ tests, logs, vars, request, skip, nextRequest })
+  let visualizer: ScriptOutput['visualizer']
+  const out = (): ScriptOutput => ({ tests, logs, vars, request, skip, nextRequest, ...(visualizer ? { visualizer } : {}) })
 
   const log = (level: LogLine['level']) => (...args: unknown[]) => logs.push({ level, text: args.map(fmt).join(' '), at: Date.now(), source: input.source })
   const console = { log: log('log'), info: log('info'), warn: log('warn'), error: log('error'), debug: log('log') }
@@ -216,7 +227,7 @@ export async function runScript(input: ScriptInput, host: ScriptHost, compile: C
       replaceIn: (s: string) => s.replace(/\{\{\s*([^{}\s]+)\s*\}\}/g, (w, n: string) => resolved()[n] ?? w),
     },
     request: requestApi,
-    response: input.response ? responseApi(input.response) : undefined,
+    response: input.response ? responseApi(input.response, libs) : undefined,
     test, expect: chai.expect,
     sendRequest,
     info: { ...input.info, eventName: input.phase === 'pre' ? 'prerequest' : 'test' },
@@ -227,7 +238,19 @@ export async function runScript(input: ScriptInput, host: ScriptHost, compile: C
     },
     require: (name: string) => {
       if (name === 'chai') return chai
-      throw new Error(`require('${name}') isn’t available. Built in: pm, console, chai (pm.expect), JSON, Math, Date, atob/btoa.`)
+      if (libs[name]) return libs[name]
+      throw new Error(`require('${name}') isn’t available. You can use: chai, lodash, moment, crypto-js, uuid, ajv, handlebars.`)
+    },
+    visualizer: {
+      set: (template: string, data?: unknown) => {
+        const hb = libs.handlebars as { compile: (t: string) => (d: unknown) => string } | undefined
+        if (!hb) throw new Error('The visualizer needs handlebars, which didn’t load.')
+        const body = hb.compile(String(template))(data ?? {})
+        // pm.getData() inside the template's own scripts (they run in the web version's sandboxed frame).
+        const json = JSON.stringify(data ?? null).replace(/</g, '\\u003c')
+        visualizer = { html: `<script>window.pm={getData:function(cb){cb(null,${json})}}</script>${body}` }
+      },
+      clear: () => { visualizer = { html: '' } },
     },
   }
   // Older Postman syntax.
@@ -235,8 +258,8 @@ export async function runScript(input: ScriptInput, host: ScriptHost, compile: C
   const postman = { setNextRequest: pm.execution.setNextRequest, setEnvironmentVariable: pm.environment.set, getEnvironmentVariable: pm.environment.get, setGlobalVariable: pm.globals.set, getGlobalVariable: pm.globals.get }
 
   try {
-    const fn = compile(`"use strict";\nreturn (async () => {\n${input.code}\n})()`, ['pm', 'console', 'postman', 'tests', 'require', 'responseBody', 'responseCode'])
-    await fn(pm, console, postman, legacyTests, pm.require, input.response?.body, input.response ? { code: input.response.code, name: input.response.status } : undefined)
+    const fn = compile(`"use strict";\nreturn (async () => {\n${input.code}\n})()`, ['pm', 'console', 'postman', 'tests', 'require', 'responseBody', 'responseCode', '_'])
+    await fn(pm, console, postman, legacyTests, pm.require, input.response?.body, input.response ? { code: input.response.code, name: input.response.status } : undefined, libs.lodash)
     // Callbacks from pm.sendRequest may add more; wait (bounded by the engine's timeout).
     for (let i = 0; i < pending.length; i++) await pending[i]
   } catch (e) {

@@ -7,7 +7,7 @@ import { uid } from '../core/types'
 import type { WorkspaceApi } from './useWorkspace'
 import { CodeArea } from './CodeArea'
 
-type Tab = 'body' | 'preview' | 'headers' | 'cookies' | 'tests' | 'sent'
+type Tab = 'body' | 'preview' | 'visualize' | 'headers' | 'cookies' | 'tests' | 'sent'
 
 /** Shows long bodies in full only on request, so a huge response doesn't freeze the page. */
 const PREVIEW_LIMIT = 200_000
@@ -41,7 +41,7 @@ export function ResponsePane({ ws, notify, saveFile }: { ws: WorkspaceApi; notif
   const canPreview = !!res && (isHtml || isImage)
 
   // Keep the chosen tab when it exists for this response; otherwise fall back.
-  const avail: Tab[] = res ? ['body', ...(canPreview ? ['preview' as Tab] : []), 'headers', ...(cookies.length ? ['cookies' as Tab] : []), ...(tests.length ? ['tests' as Tab] : []), 'sent'] : [...(tests.length ? ['tests' as Tab] : []), 'sent']
+  const avail: Tab[] = res ? ['body', ...(result?.visualizer ? ['visualize' as Tab] : []), ...(canPreview ? ['preview' as Tab] : []), 'headers', ...(cookies.length ? ['cookies' as Tab] : []), ...(tests.length ? ['tests' as Tab] : []), 'sent'] : [...(tests.length ? ['tests' as Tab] : []), 'sent']
   const current: Tab = avail.includes(tab) ? tab : avail[0]
 
   const copy = async (text: string, what: string) => {
@@ -61,7 +61,7 @@ export function ResponsePane({ ws, notify, saveFile }: { ws: WorkspaceApi; notif
   }
 
   const label: Record<Tab, React.ReactNode> = {
-    body: 'Body', preview: 'Preview', headers: <>Headers<span className="badge">{res?.headers.length}</span></>,
+    body: 'Body', preview: 'Preview', visualize: 'Visualize', headers: <>Headers<span className="badge">{res?.headers.length}</span></>,
     cookies: <>Cookies<span className="badge">{cookies.length}</span></>,
     tests: <>Tests<span className={`badge ${passed === tests.length ? 'goodBadge' : 'badBadge'}`}>{passed}/{tests.length}</span></>, sent: 'Sent',
   }
@@ -113,6 +113,10 @@ export function ResponsePane({ ws, notify, saveFile }: { ws: WorkspaceApi; notif
               <p className="muted small">Shown in a sandbox: scripts, forms and links in the page don’t run.</p>
               <iframe className="htmlPreview" title="Response preview" sandbox="" srcDoc={res.body} />
             </>)}
+        {current === 'visualize' && result.visualizer && <>
+          <p className="muted small">Made by <code>pm.visualizer.set()</code> in a script, shown in a sandbox{ws.transport.unrestricted ? ' (scripts inside the template run in the web version only)' : ''}.</p>
+          <iframe className="htmlPreview" title="Visualization" sandbox="allow-scripts" srcDoc={result.visualizer.html} />
+        </>}
         {res && current === 'headers' && (
           <table className="kv readonly" aria-label="Response headers">
             <tbody>{res.headers.map(([k, v], i) => <tr key={i}><th className="mono">{k}</th><td className="mono">{v}</td></tr>)}</tbody>

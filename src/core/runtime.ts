@@ -41,6 +41,8 @@ export interface Execution {
   scriptError?: string
   /** A pre-request script skipped the request. */
   skipped?: boolean
+  /** HTML from pm.visualizer.set() in a post-response script. */
+  visualizer?: { html: string }
   /** OAuth 2 tokens refreshed while sending, to save back to where the auth lives. */
   authUpdate?: { owner: 'request' | 'folder' | 'collection'; id: string; patch: Partial<Auth> }
 }
