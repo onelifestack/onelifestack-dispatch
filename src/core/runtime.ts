@@ -59,6 +59,7 @@ export function sendOptions(req: RequestDef, settings: Settings, signal?: AbortS
     followRedirects: req.settings.followRedirects ?? settings.followRedirects,
     insecureTls: req.settings.insecureTls ?? settings.insecureTls,
     signal,
+    proxyUrl: settings.proxyUrl, proxyBypass: settings.proxyBypass, clientCerts: settings.clientCerts, caCerts: settings.caCerts,
   }
 }
 

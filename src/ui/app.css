@@ -416,3 +416,8 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 .selBar { display: flex; align-items: center; gap: .4rem; padding: .35rem .6rem; background: var(--primary-soft); border-bottom: 1px solid var(--outline); }
 .selBar .icon { margin-left: auto; }
 [draggable="true"] { cursor: grab; }
+.certRow { display: flex; gap: .4rem; align-items: start; margin-bottom: .4rem; }
+.certRow textarea { flex: 1; }
+.certCard { border: 1px solid var(--outline); border-radius: 10px; padding: .6rem; margin-bottom: .5rem; display: grid; gap: .5rem; }
+.certPair { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.resultTable input.mono { width: 100%; padding: .2rem .35rem; }

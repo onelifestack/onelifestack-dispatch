@@ -314,3 +314,28 @@ describe('format', () => {
     expect(prettyJson('{"a":1}')).toBe('{\n  "a": 1\n}'); expect(prettyJson('<html>')).toBeNull()
   })
 })
+
+import { certFor } from '../src/core/transport'
+import { CookieJar as Jar2 } from '../src/core/cookies'
+describe('network settings', () => {
+  const cert = (host: string, extra = {}) => ({ id: host, host, cert: 'C', key: 'K', enabled: true, ...extra })
+  it('picks the client certificate by host, port and wildcard', () => {
+    const certs = [cert('*.example.com'), cert('api.example.com'), cert('api.example.com:8443'), cert('off.test', { enabled: false })]
+    expect(certFor('https://api.example.com/x', certs)?.host).toBe('api.example.com')
+    expect(certFor('https://api.example.com:8443/x', certs)?.host).toBe('api.example.com:8443')
+    expect(certFor('https://other.example.com', certs)?.host).toBe('*.example.com')
+    expect(certFor('https://example.com', certs)?.host).toBe('*.example.com')
+    expect(certFor('https://off.test', certs)).toBeNull()
+    expect(certFor('https://nope.test', certs)).toBeNull()
+  })
+  it('lets the cookie manager add, edit and remove cookies, and reports changes', () => {
+    const jar = new Jar2(); let changes = 0; jar.onChange = () => changes++
+    jar.set({ host: 'a.test', name: 'sid', value: '1', path: '/', expiresAt: null })
+    jar.set({ host: 'a.test', name: 'sid', value: '2', path: '/', expiresAt: null })
+    expect(jar.entries()).toHaveLength(1); expect(jar.header('https://a.test/')).toBe('sid=2')
+    const saved = jar.entries(); const again = new Jar2(); again.load(saved)
+    expect(again.header('https://a.test/x')).toBe('sid=2')
+    jar.remove('a.test', 'sid'); expect(jar.entries()).toHaveLength(0)
+    expect(changes).toBe(3)
+  })
+})

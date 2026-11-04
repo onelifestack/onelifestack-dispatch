@@ -23,6 +23,8 @@ export type View =
   | { kind: 'docs'; collectionId: string }
   | { kind: 'mock'; collectionId: string }
   | { kind: 'backups' }
+  | { kind: 'settings' }
+  | { kind: 'cookies' }
 
 export interface Result {
   sent: PreparedRequest
@@ -91,6 +93,11 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
       if (!live) return
       setCollections(c.sort(byName)); setFolders(f); setRequests(r); setEnvironments(e.sort(byName)); setGlobalsState(g)
       setHistory(h); setSettingsState(s)
+      if (transport instanceof CookieTransport) {
+        transport.jar.load(await db.getCookies() as never[])
+        let timer: ReturnType<typeof setTimeout> | undefined
+        transport.jar.onChange = () => { clearTimeout(timer); timer = setTimeout(() => { void db.putCookies(transport.jar.entries()) }, 300) }
+      }
       // A daily backup, taken quietly when the app opens.
       void (async () => {
         let list = await db.listBackups()

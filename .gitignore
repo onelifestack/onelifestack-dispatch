@@ -5,3 +5,5 @@ src-tauri/gen
 dist-cli
 examples/grpc/node_modules
 examples/grpc/package*.json
+examples/tls/*.pem
+examples/tls/*.key

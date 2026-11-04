@@ -9,7 +9,7 @@ public web hosting / developer-site listing, OneLifeStack sync design.
 2. [x] Undo for deletes; automatic local backups with restore.
 3. [x] CodeMirror editor: syntax colours, {{variable}} + pm API + GraphQL autocomplete, foldable JSON responses.
 4. [x] Sidebar: drag-and-drop reorder/move, search across everything, multi-select move/delete.
-5. [ ] Client certificates (mTLS), proxy settings, cookie manager (view/edit/delete, persisted).
+5. [x] Client certificates (mTLS), proxy settings, cookie manager (view/edit/delete, persisted).
 6. [ ] Script compatibility: require lodash, moment, crypto-js, uuid; pm.visualizer with a Visualize tab.
 7. [ ] Postman collection export; Insomnia and Bruno import.
 8. [ ] Collections as files (desktop): save/open a collection as a folder of YAML files; CLI runs folders too.
@@ -24,3 +24,4 @@ Progress notes go below as steps land.
 - Step 2: undo stack for deleted requests/folders/collections/environments (toast with Undo, after the delete lands); IndexedDB v3 `backups` store: daily snapshot on open, manual, and before every restore; newest 10 kept; secrets stay sealed; restore replaces everything in one transaction; download strips secrets.
 - Step 3: src/ui/editor/codemirror.ts (lazy chunk ~570 KB): JSON/JS/XML/HTML/GraphQL (cm6-graphql with the fetched schema), {{var}} highlight + completion (scope + generators), pm API completion, read-only foldable JSON response viewer, theme on app tokens. CodeArea keeps its API; jsdom gets a textarea. Found and fixed in the browser: React echoing older values back into the editor lost fast keystrokes (now only outside changes sync), and Enter must accept a completion (completion keymap at highest precedence).
 - Step 4: ws.placeItems (re-parent + renumber siblings; folders carry descendants across collections; no moving a folder into itself), drag-and-drop in the sidebar (drop on a row = before it, on a folder/collection header = into it), Ctrl/Cmd-click selection with a Move/Delete bar (one undo), search across name/URL/method/body/headers/docs, Ctrl+K.
+- Step 5: Settings view (general, proxy + bypass, CA certificates, client certificates by host/*.domain/:port, keys sealed); Rust: reqwest proxy/no_proxy, Identity::from_pem, extra roots. Cookie manager view (add/edit/delete/clear), jar saved sealed and reloaded on start. Live test src-tauri/tests/network_live.rs with examples/tls (passes: unknown CA refused, CA without client cert refused, mTLS accepted, proxy used and bypassed). Fixed: port-specific certificates now win over host-only ones.

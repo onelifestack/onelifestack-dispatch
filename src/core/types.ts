@@ -201,10 +201,28 @@ export interface Settings {
   insecureTls: boolean
   /** Keep cookies from responses and send them back (desktop). */
   cookieJar: boolean
+  /** Desktop: proxy for every request ("" = none), and hosts that skip it (comma separated). */
+  proxyUrl: string
+  proxyBypass: string
+  /** Desktop: client certificates (mutual TLS), picked by host. */
+  clientCerts: ClientCert[]
+  /** Desktop: extra CA certificates (PEM) to trust. */
+  caCerts: string[]
+}
+
+export interface ClientCert {
+  id: string
+  /** "api.example.com", "*.example.com", optionally with ":port". */
+  host: string
+  /** PEM certificate (chain) and private key. */
+  cert: string
+  key: string
+  enabled: boolean
 }
 
 export const defaultSettings: Settings = {
   activeEnvId: null, theme: 'system', timeoutMs: 30_000, followRedirects: true, insecureTls: false, cookieJar: true,
+  proxyUrl: '', proxyBypass: 'localhost, 127.0.0.1', clientCerts: [], caCerts: [],
 }
 
 let counter = 0

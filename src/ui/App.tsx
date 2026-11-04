@@ -8,7 +8,7 @@ import { CollectionEditor, EnvironmentEditor, FolderEditor, GlobalsEditor } from
 import { exportCollection, exportWorkspace, importFileAsync, type ImportResult } from '../core/backup'
 import { nameFromUrl } from '../core/curl'
 import { withScheme } from '../core/url'
-import { CookieTransport, type Transport } from '../core/transport'
+import type { Transport } from '../core/transport'
 import { saveAnyFile, saveTextFile } from './files'
 import { RunnerView } from './RunnerView'
 import { LoadView } from './LoadView'
@@ -19,6 +19,7 @@ import { Markdown } from './Markdown'
 import { ProtocolPicker, RealtimePane } from './RealtimePane'
 import { GrpcPane } from './GrpcPane'
 import { BackupsView } from './BackupsView'
+import { CookiesView, SettingsView } from './SettingsView'
 import type { Auth } from '../core/types'
 import type { Collection } from '../core/types'
 import type { Pipeline } from '../core/runtime'
@@ -216,29 +217,8 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); void onExport() }}>Export backup</button>
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); ws.setView({ kind: 'backups' }) }}>Local backups…</button>
             <hr />
-            <label className="menuRow">Theme
-              <select value={ws.settings.theme} onChange={(e) => ws.setSettings({ theme: e.target.value as 'system' | 'light' | 'dark' })}>
-                <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
-              </select>
-            </label>
-            <label className="menuRow">Timeout (s)
-              <input type="number" min={1} max={600} value={Math.round(ws.settings.timeoutMs / 1000)}
-                onChange={(e) => ws.setSettings({ timeoutMs: Math.min(600, Math.max(1, Number(e.target.value) || 30)) * 1000 })} />
-            </label>
-            <label className="menuRow"><input type="checkbox" checked={ws.settings.followRedirects} onChange={(e) => ws.setSettings({ followRedirects: e.target.checked })} /> Follow redirects</label>
-            {ws.transport.unrestricted && <>
-              <label className="menuRow"><input type="checkbox" checked={ws.settings.insecureTls} onChange={(e) => ws.setSettings({ insecureTls: e.target.checked })} /> Allow self-signed certificates</label>
-              <label className="menuRow"><input type="checkbox" checked={ws.settings.cookieJar} onChange={(e) => ws.setSettings({ cookieJar: e.target.checked })} /> Keep cookies between requests</label>
-              {ws.transport instanceof CookieTransport && (
-                <button type="button" role="menuitem" onClick={(e) => {
-                  closeMenu(e)
-                  const jar = (ws.transport as CookieTransport).jar
-                  const list = jar.list()
-                  ws.log([{ level: 'info', at: Date.now(), source: 'cookies', text: list.length ? `Cleared ${list.length} cookie${list.length > 1 ? 's' : ''}: ${list.map((c) => `${c.name} (${c.domain})`).join(', ')}` : 'The cookie jar was already empty.' }])
-                  jar.clear(); notify(list.length ? `Cleared ${list.length} cookie${list.length > 1 ? 's' : ''}.` : 'No cookies to clear.')
-                }}>Clear cookies</button>
-              )}
-            </>}
+            <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); ws.setView({ kind: 'settings' }) }}>Settings…</button>
+            {ws.transport.unrestricted && <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); ws.setView({ kind: 'cookies' }) }}>Cookies…</button>}
           </div>
         </details>
         <input ref={fileInput} type="file" accept="application/json,.json,.yaml,.yml,.har" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void onImport(f) }} />
@@ -250,6 +230,8 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           : env ? <EnvironmentEditor key={env.id} ws={ws} confirm={confirm} environment={env} />
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
           : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
+          : viewed.kind === 'settings' ? <SettingsView ws={ws} notify={notify} />
+          : viewed.kind === 'cookies' ? <CookiesView ws={ws} notify={notify} />
           : viewed.kind === 'backups' ? <BackupsView ws={ws} notify={notify} confirm={confirm} />
           : viewed.kind === 'docs' ? <DocsView key={viewed.collectionId} ws={ws} notify={notify} collectionId={viewed.collectionId} />
           : viewed.kind === 'mock' ? <MockView key={viewed.collectionId} ws={ws} notify={notify} collectionId={viewed.collectionId} />

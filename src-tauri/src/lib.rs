@@ -27,6 +27,19 @@ pub struct SendRequest {
     timeout_ms: u64,
     follow_redirects: bool,
     insecure_tls: bool,
+    /// Proxy URL (http://, https:// or socks5://), and hosts that skip it.
+    #[serde(default)]
+    proxy: Option<String>,
+    #[serde(default)]
+    no_proxy: Option<String>,
+    /// Client certificate and key (PEM) for mutual TLS.
+    #[serde(default)]
+    client_cert_pem: Option<String>,
+    #[serde(default)]
+    client_key_pem: Option<String>,
+    /// Extra CA certificates (PEM) to trust, e.g. a homelab CA.
+    #[serde(default)]
+    ca_certs_pem: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -69,13 +82,26 @@ fn describe(e: &reqwest::Error) -> String {
 
 async fn perform(req: SendRequest) -> Result<SendResponse, String> {
     let method = reqwest::Method::from_bytes(req.method.as_bytes()).map_err(|_| format!("Unknown method {}.", req.method))?;
-    let client = reqwest::Client::builder()
+    let mut cb = reqwest::Client::builder()
         .timeout(Duration::from_millis(req.timeout_ms))
         .redirect(if req.follow_redirects { reqwest::redirect::Policy::limited(10) } else { reqwest::redirect::Policy::none() })
         .danger_accept_invalid_certs(req.insecure_tls)
-        .user_agent(concat!("Dispatch/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| describe(&e))?;
+        .user_agent(concat!("Dispatch/", env!("CARGO_PKG_VERSION")));
+    if let Some(p) = req.proxy.as_deref().filter(|p| !p.trim().is_empty()) {
+        let mut proxy = reqwest::Proxy::all(p.trim()).map_err(|e| format!("The proxy address isn’t valid: {e}"))?;
+        if let Some(np) = req.no_proxy.as_deref().filter(|x| !x.trim().is_empty()) { proxy = proxy.no_proxy(reqwest::NoProxy::from_string(np)); }
+        cb = cb.proxy(proxy);
+    } else {
+        cb = cb.no_proxy();
+    }
+    if let (Some(cert), Some(key)) = (req.client_cert_pem.as_deref(), req.client_key_pem.as_deref()) {
+        let identity = reqwest::Identity::from_pem(format!("{cert}\n{key}").as_bytes()).map_err(|e| format!("The client certificate or key couldn’t be read: {}", describe(&e)))?;
+        cb = cb.identity(identity);
+    }
+    for pem in &req.ca_certs_pem {
+        for c in reqwest::Certificate::from_pem_bundle(pem.as_bytes()).map_err(|e| format!("A CA certificate couldn’t be read: {}", describe(&e)))? { cb = cb.add_root_certificate(c); }
+    }
+    let client = cb.build().map_err(|e| describe(&e))?;
 
     let mut builder = client.request(method, &req.url);
     for (k, v) in &req.headers {
@@ -130,6 +156,13 @@ async fn perform(req: SendRequest) -> Result<SendResponse, String> {
         time_ms: started.elapsed().as_millis() as u64,
         ttfb_ms,
     })
+}
+
+/// The send path for tests: a SendRequest as JSON in, the SendResponse as JSON out.
+pub async fn send_json(req: serde_json::Value) -> Result<serde_json::Value, String> {
+    let req: SendRequest = serde_json::from_value(req).map_err(|e| e.to_string())?;
+    let res = perform(req).await?;
+    serde_json::to_value(res).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
