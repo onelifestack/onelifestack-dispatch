@@ -19,6 +19,8 @@ export type View =
   | { kind: 'globals' }
   | { kind: 'runner'; collectionId: string | null; folderId: string | null }
   | { kind: 'load'; requestId: string | null }
+  | { kind: 'docs'; collectionId: string }
+  | { kind: 'mock'; collectionId: string }
 
 export interface Result {
   sent: PreparedRequest

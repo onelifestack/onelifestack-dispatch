@@ -14,7 +14,7 @@ import type { WorkspaceApi } from './useWorkspace'
 type Tab = 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'docs' | 'settings'
 
 export interface AuthActions { getToken: (auth: Auth, apply: (a: Auth) => void) => void; gettingToken: boolean }
-interface Props { ws: WorkspaceApi; onSave: () => void; notify: (msg: string) => void; authActions?: AuthActions; scriptHelp?: React.ReactNode }
+interface Props { ws: WorkspaceApi; onSave: () => void; notify: (msg: string) => void; authActions?: AuthActions; scriptHelp?: React.ReactNode; renderDocs?: (md: string) => React.ReactNode }
 
 /** One-click examples for the script editor. */
 const SNIPPETS: Record<'pre' | 'post', [string, string][]> = {
@@ -41,7 +41,7 @@ const BODY_KINDS: [BodyKind, string][] = [
   ['urlencoded', 'Form (urlencoded)'], ['formdata', 'Form-data (files)'], ['binary', 'Binary file'], ['graphql', 'GraphQL'],
 ]
 
-export function RequestPane({ ws, onSave, notify, authActions, scriptHelp }: Props) {
+export function RequestPane({ ws, onSave, notify, authActions, scriptHelp, renderDocs }: Props) {
   const { draft, setDraft, sending } = ws
   const [tab, setTab] = useState<Tab>('params')
   const [scriptTab, setScriptTab] = useState<'pre' | 'post'>('pre')
@@ -71,7 +71,7 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp }: Pro
     ['body', 'Body', draft.body.kind === 'none' ? null : (BODY_KINDS.find(([k]) => k === draft.body.kind)?.[1].split(' ')[0].toLowerCase() ?? null)],
     ['auth', 'Auth', draft.auth.kind === 'inherit' || draft.auth.kind === 'none' ? null : authLabel(draft.auth.kind).split(' ')[0]],
     ['scripts', 'Scripts', scriptCount || null],
-    ['docs', 'Docs', draft.docs.trim() ? '•' : null],
+    ['docs', 'Docs', draft.examples.length || (draft.docs.trim() ? '•' : null)],
     ['settings', 'Settings', overrides || null],
   ]
   const problem = draft.body.kind === 'json' ? jsonProblem(draft.body.text) : draft.body.kind === 'graphql' ? jsonProblem(draft.body.graphqlVariables) : null
@@ -200,7 +200,24 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp }: Pro
         )}
         {tab === 'docs' && (
           <div className="docsEdit">
-            <CodeArea label="Request docs (Markdown)" rows={10} value={draft.docs} onChange={(docs) => set({ docs })} placeholder="What this request does, what it needs, what it returns. Markdown works." mono={false} />
+            <CodeArea label="Request docs (Markdown)" rows={8} value={draft.docs} onChange={(docs) => set({ docs })} placeholder="What this request does, what it needs, what it returns. Markdown works." mono={false} />
+            {renderDocs && draft.docs.trim() && <details className="docPreview"><summary className="small">Preview</summary>{renderDocs(draft.docs)}</details>}
+            <h3 className="subhead">Saved examples</h3>
+            {draft.examples.length ? (
+              <ul className="exampleList">
+                {draft.examples.map((ex, i) => (
+                  <li key={ex.id}>
+                    <details>
+                      <summary><span className={`hstat ${ex.status < 300 ? 'good' : ex.status < 400 ? 'info' : 'warn'}`}>{ex.status}</span> {ex.name}</summary>
+                      <label className="field"><span>Name</span><input value={ex.name} onChange={(e) => set({ examples: draft.examples.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} /></label>
+                      <label className="field"><span>Status</span><input type="number" value={ex.status} onChange={(e) => set({ examples: draft.examples.map((x, j) => (j === i ? { ...x, status: Number(e.target.value) || 200 } : x)) })} /></label>
+                      <CodeArea label={`Example ${ex.name} body`} rows={6} value={ex.body} onChange={(body) => set({ examples: draft.examples.map((x, j) => (j === i ? { ...x, body } : x)) })} />
+                      <button type="button" className="btn small danger" onClick={() => set({ examples: draft.examples.filter((_, j) => j !== i) })}>Delete example</button>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="muted small">None yet. Send the request and press <b>Save as example</b> on the response; examples show up in the docs and the mock server serves them.</p>}
           </div>
         )}
         {tab === 'settings' && (

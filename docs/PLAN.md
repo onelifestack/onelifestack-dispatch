@@ -21,7 +21,7 @@ Order (each step: code + tests + typecheck + build, then commit and push):
 9. [x] Code generation (curl, JS fetch, Node axios, Python requests, Go, Java, C#, PHP, Ruby, Rust, HTTPie, PowerShell).
 10. [x] Import OpenAPI 3 / Swagger 2 and HAR.
 11. [x] Response: HTML preview (sandboxed), JSON filter, save to file, timing breakdown, cookies; cookie jar.
-12. [ ] Docs (Markdown) on collections/folders/requests; saved examples; local mock server (desktop).
+12. [x] Docs (Markdown) on collections/folders/requests; saved examples; local mock server (desktop).
 13. [ ] GraphQL (schema introspection, autocomplete), WebSocket (live log), MQTT (over WebSocket), gRPC (desktop).
 14. [ ] Desktop build + Playwright visual pass; README/CLAUDE.md; PR.
 
@@ -56,3 +56,8 @@ Progress notes go under each step as it lands.
 - Step 9: core/codegen.ts — 12 languages from the prepared request (escaping tested; Python output parsed with ast; curl round-trips). "</> Code" panel.
 - Step 10: core/openapi.ts — OpenAPI 3 (JSON/YAML) + Swagger 2: servers→{{baseUrl}}, tags→folders, params→path vars/query/headers, sample bodies from examples/schemas ($ref, allOf/oneOf, recursion-safe), security→auth (+secret vars), response examples. HAR: entries→requests with recorded responses. All via importFile (app and CLI).
 - Step 11: done in step 3 + cookie jar (step 5) + "Clear cookies" menu item (desktop).
+- Step 12: safe Markdown renderer (React elements only; fixed an infinite loop on odd tables, fuzz test added),
+  generated collection docs (core/docs.ts, export .md), examples editor in the Docs tab, mock server: shared matcher
+  core/mock.ts (literal segments beat :params, x-mock-response-name/code, ?__example=), desktop = Rust sockets +
+  app answers via events, CLI = `dispatch-run mock`. Found and fixed: the yaml dependency broke the CLI bundle
+  (scripts/build-cli.mjs adds require); tests/cli.test.ts now builds and runs the real CLI.

@@ -53,6 +53,8 @@ export function CollectionEditor({ ws, confirm, collection, authActions, renderD
       <div className="actions">
         <button type="button" className="btn primary" onClick={() => ws.setView({ kind: 'runner', collectionId: c.id, folderId: null })}>▶ Run collection</button>
         <button type="button" className="btn" onClick={() => ws.startNew(c.id)}>New request here</button>
+        <button type="button" className="btn" onClick={() => ws.setView({ kind: 'docs', collectionId: c.id })}>View docs</button>
+        <button type="button" className="btn" onClick={() => ws.setView({ kind: 'mock', collectionId: c.id })}>Mock server</button>
       </div>
       <DocsEditor docs={c.docs} onChange={(docs) => setC({ ...c, docs })} render={renderDocs} />
       <h2>Auth</h2>

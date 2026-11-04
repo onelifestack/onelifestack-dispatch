@@ -10,7 +10,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
-    "build:cli": "esbuild src/cli/main.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist-cli/dispatch-run.mjs --banner:js='#!/usr/bin/env node' --log-level=warning"
+    "build:cli": "node scripts/build-cli.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",

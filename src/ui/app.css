@@ -344,3 +344,13 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 .auth .toggle, .editor .toggle:not(.small) { margin-left: 0; }
 .codeList { width: min(640px, calc(100vw - 32px)); gap: .5rem; padding: .6rem; }
 .codeList pre.out { max-height: 50vh; white-space: pre; }
+.docsPage { max-width: 900px; }
+.docsPage .markdown h2 { border-top: 1px solid var(--outline); padding-top: .8rem; margin-top: 1.4rem; }
+.markdown code { font-size: 12.5px; }
+.markdown blockquote { border-left: 3px solid var(--outline); margin: 0 0 1em; padding-left: .8rem; color: var(--muted); }
+.markdown table { margin-bottom: 1em; font-size: 13px; }
+.exampleList { list-style: none; padding: 0; margin: 0; display: grid; gap: .3rem; }
+.exampleList details { border: 1px solid var(--outline); border-radius: 8px; padding: .4rem .6rem; }
+.exampleList details[open] { display: grid; gap: .5rem; }
+.exampleList summary { cursor: pointer; }
+.docPreview { margin: .5rem 0; } .docPreview summary { cursor: pointer; color: var(--link); }

@@ -13,6 +13,9 @@ import { saveAnyFile, saveTextFile } from './files'
 import { RunnerView } from './RunnerView'
 import { LoadView } from './LoadView'
 import { getOAuthToken } from './oauth'
+import { DocsView } from './DocsView'
+import { MockView } from './MockView'
+import { Markdown } from './Markdown'
 import type { Auth } from '../core/types'
 import type { Collection } from '../core/types'
 import type { Pipeline } from '../core/runtime'
@@ -168,6 +171,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
     } catch (e) { notify(`Couldn’t export: ${String(e)}`) }
   }
 
+  const renderDocs = (md: string) => <Markdown text={md} />
   const closeMenu = (e: React.MouseEvent) => { (e.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open') }
 
   if (!ws.ready) return <p className="loading">Opening…</p>
@@ -227,17 +231,19 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
       </header>
       <Sidebar ws={ws} dialogs={dialogs} onExportCollection={(c) => void onExportCollection(c)} />
       <main className="work">
-        {col ? <CollectionEditor key={col.id} ws={ws} confirm={confirm} collection={col} authActions={authActions} />
-          : folder ? <FolderEditor key={folder.id} ws={ws} confirm={confirm} folder={folder} authActions={authActions} />
+        {col ? <CollectionEditor key={col.id} ws={ws} confirm={confirm} collection={col} authActions={authActions} renderDocs={renderDocs} />
+          : folder ? <FolderEditor key={folder.id} ws={ws} confirm={confirm} folder={folder} authActions={authActions} renderDocs={renderDocs} />
           : env ? <EnvironmentEditor key={env.id} ws={ws} confirm={confirm} environment={env} />
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
           : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
+          : viewed.kind === 'docs' ? <DocsView key={viewed.collectionId} ws={ws} notify={notify} collectionId={viewed.collectionId} />
+          : viewed.kind === 'mock' ? <MockView key={viewed.collectionId} ws={ws} notify={notify} collectionId={viewed.collectionId} />
           : viewed.kind === 'load' ? <LoadView key={viewed.requestId ?? 'tab'} ws={ws} notify={notify} requestId={viewed.requestId} />
           : extraView ? extraView(ws, notify)
           : <>
               <TabBar ws={ws} onClose={(id) => void closeTab(id)} />
               <div className="split">
-                <RequestPane ws={ws} onSave={save} notify={notify} authActions={authActions} />
+                <RequestPane ws={ws} onSave={save} notify={notify} authActions={authActions} renderDocs={renderDocs} />
                 <ResponsePane ws={ws} notify={notify} saveFile={saveAnyFile} />
               </div>
             </>}

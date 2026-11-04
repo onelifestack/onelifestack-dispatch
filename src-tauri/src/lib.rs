@@ -212,13 +212,123 @@ async fn oauth_listen(port: u16, path: String, timeout_secs: u64) -> Result<Stri
     tokio::time::timeout(Duration::from_secs(timeout_secs), wait).await.map_err(|_| "Timed out waiting for the login to finish.".to_string())?
 }
 
+// ---------- Mock server ----------
+// Rust only does the sockets: each request is sent to the app as a "mock-request" event and the app answers with
+// mock_reply, using the same route matcher as the CLI (src/core/mock.ts). Listens on 127.0.0.1 only.
+
+#[derive(Default)]
+struct MockState {
+    stop: Mutex<Option<oneshot::Sender<()>>>,
+    waiting: Mutex<HashMap<u64, oneshot::Sender<MockReply>>>,
+    next: std::sync::atomic::AtomicU64,
+}
+
+#[derive(Deserialize)]
+pub struct MockReply {
+    status: u16,
+    headers: Vec<(String, String)>,
+    body: String,
+}
+
+#[derive(Serialize, Clone)]
+struct MockRequestEvent {
+    id: u64,
+    method: String,
+    target: String,
+    headers: Vec<(String, String)>,
+    body: String,
+}
+
+fn reason(code: u16) -> &'static str {
+    reqwest::StatusCode::from_u16(code).ok().and_then(|s| s.canonical_reason()).unwrap_or("")
+}
+
+async fn serve_one(mut sock: tokio::net::TcpStream, app: tauri::AppHandle, state: std::sync::Arc<MockState>) {
+    use tauri::Emitter;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut buf = Vec::new();
+    let mut tmp = [0u8; 8192];
+    let head_end = loop {
+        match sock.read(&mut tmp).await {
+            Ok(0) | Err(_) => return,
+            Ok(n) => buf.extend_from_slice(&tmp[..n]),
+        }
+        if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") { break i; }
+        if buf.len() > 64 * 1024 { return; }
+    };
+    let head = String::from_utf8_lossy(&buf[..head_end]).to_string();
+    let mut lines = head.split("\r\n");
+    let mut first = lines.next().unwrap_or("").split_whitespace();
+    let method = first.next().unwrap_or("GET").to_string();
+    let target = first.next().unwrap_or("/").to_string();
+    let headers: Vec<(String, String)> = lines.filter_map(|l| l.split_once(':').map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))).collect();
+    let len: usize = headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("content-length")).and_then(|(_, v)| v.parse().ok()).unwrap_or(0).min(10 * 1024 * 1024);
+    let mut body = buf[head_end + 4..].to_vec();
+    while body.len() < len {
+        match sock.read(&mut tmp).await { Ok(0) | Err(_) => break, Ok(n) => body.extend_from_slice(&tmp[..n]) }
+    }
+    let cors = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nAccess-Control-Allow-Methods: *\r\n";
+    if method == "OPTIONS" {
+        let _ = sock.write_all(format!("HTTP/1.1 204 No Content\r\n{cors}Content-Length: 0\r\nConnection: close\r\n\r\n").as_bytes()).await;
+        return;
+    }
+    let id = state.next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let (tx, rx) = oneshot::channel();
+    state.waiting.lock().unwrap().insert(id, tx);
+    let _ = app.emit("mock-request", MockRequestEvent { id, method: method.clone(), target, headers, body: String::from_utf8_lossy(&body).to_string() });
+    let reply = match tokio::time::timeout(Duration::from_secs(30), rx).await {
+        Ok(Ok(r)) => r,
+        _ => { state.waiting.lock().unwrap().remove(&id); MockReply { status: 504, headers: vec![], body: "{\"error\":\"the mock didn’t answer\"}".into() } }
+    };
+    let mut out = format!("HTTP/1.1 {} {}\r\n{cors}", reply.status, reason(reply.status));
+    for (k, v) in &reply.headers {
+        if k.eq_ignore_ascii_case("content-length") || k.eq_ignore_ascii_case("connection") || k.eq_ignore_ascii_case("transfer-encoding") { continue; }
+        out.push_str(&format!("{}: {}\r\n", k.replace(['\r', '\n'], ""), v.replace(['\r', '\n'], "")));
+    }
+    let body = if method == "HEAD" { Vec::new() } else { reply.body.into_bytes() };
+    out.push_str(&format!("Content-Length: {}\r\nConnection: close\r\n\r\n", body.len()));
+    let _ = sock.write_all(out.as_bytes()).await;
+    let _ = sock.write_all(&body).await;
+}
+
+#[tauri::command]
+async fn mock_start(app: tauri::AppHandle, state: tauri::State<'_, std::sync::Arc<MockState>>, port: u16) -> Result<(), String> {
+    let st = state.inner().clone();
+    if let Some(stop) = st.stop.lock().unwrap().take() { let _ = stop.send(()); }
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| format!("Couldn’t start the mock on port {port}: {e}"))?;
+    let (tx, mut rx) = oneshot::channel::<()>();
+    *st.stop.lock().unwrap() = Some(tx);
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::select! {
+                _ = &mut rx => break,
+                acc = listener.accept() => {
+                    if let Ok((sock, _)) = acc { tauri::async_runtime::spawn(serve_one(sock, app.clone(), st.clone())); }
+                }
+            }
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+fn mock_stop(state: tauri::State<'_, std::sync::Arc<MockState>>) {
+    if let Some(stop) = state.stop.lock().unwrap().take() { let _ = stop.send(()); }
+}
+
+#[tauri::command]
+fn mock_reply(state: tauri::State<'_, std::sync::Arc<MockState>>, id: u64, reply: MockReply) {
+    if let Some(tx) = state.waiting.lock().unwrap().remove(&id) { let _ = tx.send(reply); }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(InFlight::default())
-        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen])
+        .manage(std::sync::Arc::new(MockState::default()))
+        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply])
         .run(tauri::generate_context!())
         .expect("error while running Dispatch");
 }

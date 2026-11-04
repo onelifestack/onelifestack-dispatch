@@ -16,6 +16,8 @@ import { authPipeline } from '../core/auth'
 import type { Compile } from '../core/scripts'
 import { type Environment, type KV, type Settings, defaultSettings, kv } from '../core/types'
 import { formatMs } from '../core/format'
+import { createServer } from 'node:http'
+import { buildRoutes, fillMockBody, matchRoute } from '../core/mock'
 
 const VERSION = '0.2.0'
 const color = process.stdout.isTTY && !process.env.NO_COLOR
@@ -27,6 +29,7 @@ const HELP = `dispatch-run ${VERSION} — run API collections from the command l
 Usage:
   dispatch-run <file> [options]          run a collection (Dispatch backup or Postman collection)
   dispatch-run load <file> [options]     load-test a request or a collection
+  dispatch-run mock <file> [options]     serve a collection's saved examples (mock server)
 
 Run options:
   -c, --collection <name>      collection to run (default: the only/first one)
@@ -57,6 +60,10 @@ Load options:
       --min-rps <n>            fail if throughput is below this
       --samples <path>         write every sample as CSV
       --i-have-permission      required: you own the server or may load-test it
+
+Mock options:
+      --port <n>               port to listen on (default 4319, 127.0.0.1 only)
+      --delay <ms>             wait before each response
 
 Exit code: 0 when everything passed, 1 when a test, request or threshold failed, 2 for usage errors.
 `
@@ -131,10 +138,39 @@ async function main(argv: string[]): Promise<number> {
   if (opts.help || !pos.length) { process.stdout.write(HELP); return pos.length || opts.help ? 0 : 2 }
   if (opts.version) { console.log(VERSION); return 0 }
   const isLoad = pos[0] === 'load'
-  const file = isLoad ? pos[1] : pos[0]
+  const isMock = pos[0] === 'mock'
+  const file = isLoad || isMock ? pos[1] : pos[0]
   if (!file) throw new Usage('Give a collection file.')
   const ws = loadWorkspace(file)
   for (const w of ws.warnings) console.error(yellow(`note: ${w}`))
+
+  if (isMock) {
+    const name = one(opts, 'collection')
+    const col = name ? ws.collections.find((x) => x.name === name) : ws.collections[0]
+    if (!col) throw new Usage(name ? `No collection named "${name}".` : 'The file has no collection.')
+    const routes = buildRoutes(col, ws.folders, ws.requests, int(one(opts, 'delay'), 'delay', 0))
+    if (!routes.length) throw new Usage(`${col.name} has no saved examples to serve.`)
+    const port = int(one(opts, 'port'), 'port', 4319)
+    const server = createServer(async (req, res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Access-Control-Allow-Headers', '*'); res.setHeader('Access-Control-Allow-Methods', '*')
+      if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return }
+      const hit = matchRoute(routes, req.method ?? 'GET', req.url ?? '/', Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)])))
+      if (hit?.route.delayMs) await new Promise((r) => setTimeout(r, hit.route.delayMs))
+      if (!hit) {
+        res.writeHead(404, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ error: 'No saved example matches this request.', routes: routes.map((r) => `${r.method} ${r.path}`) }, null, 2))
+      } else {
+        const headers = Object.fromEntries(hit.response.headers.filter(([k]) => !/^(content-length|transfer-encoding|connection)$/i.test(k)))
+        res.writeHead(hit.response.status, headers)
+        res.end(req.method === 'HEAD' ? undefined : fillMockBody(hit.response.body, hit.params))
+      }
+      console.log(`${dim(new Date().toLocaleTimeString())} ${req.method} ${req.url} → ${hit ? `${hit.response.status} ${hit.response.name}` : red('404 no match')}`)
+    })
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', () => resolve()) })
+    console.log(bold(`Mock of ${col.name} on http://127.0.0.1:${port}`))
+    for (const r of routes) console.log(`  ${r.method.padEnd(6)} ${r.path}  ${dim(r.responses.map((x) => x.status).join(', '))}`)
+    await new Promise(() => {}) // until Ctrl+C
+  }
 
   let environment = pickEnvironment(ws, one(opts, 'environment'))
   let globals: KV[] = ws.globals ?? []

@@ -120,6 +120,8 @@ export function Sidebar({ ws, dialogs, onExportCollection }: Props) {
                     ['New request', () => ws.startNew(c.id)],
                     ['New folder', async () => { const n = await ask('New folder'); if (n) await ws.addFolder(c.id, n) }],
                     ['Run collection…', () => ws.setView({ kind: 'runner', collectionId: c.id, folderId: null })],
+                    ['View docs', () => ws.setView({ kind: 'docs', collectionId: c.id })],
+                    ['Mock server…', () => ws.setView({ kind: 'mock', collectionId: c.id })],
                     ['Rename', async () => { const n = await ask('Rename collection', c.name); if (n) await ws.updateCollection({ ...c, name: n }) }],
                     ['Export collection', () => onExportCollection(c)],
                     ['Delete', async () => { if (await confirm(`Delete “${c.name}” and everything in it? This can’t be undone.`)) await ws.removeCollection(c.id) }, 'danger'],
