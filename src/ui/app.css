@@ -342,3 +342,5 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 @media (max-width: 800px) { .detailGrid, .thresholds { grid-template-columns: 1fr; } }
 .consent { padding: .5rem .6rem; border: 1px dashed var(--outline); border-radius: 8px; }
 .auth .toggle, .editor .toggle:not(.small) { margin-left: 0; }
+.codeList { width: min(640px, calc(100vw - 32px)); gap: .5rem; padding: .6rem; }
+.codeList pre.out { max-height: 50vh; white-space: pre; }
