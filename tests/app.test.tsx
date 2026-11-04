@@ -246,4 +246,22 @@ describe('Dispatch app', () => {
     expect(t.sent.map((p) => p.url)).toEqual(['https://api.test/users/ann', 'https://api.test/users/bo'])
     expect(within(runner).getByRole('status').textContent).toMatch(/2 sent.*2 tests passed/)
   })
+
+  it('load-tests the open tab after confirming permission', async () => {
+    await start()
+    typeUrl('https://api.test/ping')
+    fireEvent.click(side().getByRole('button', { name: /Load test/ }))
+    const view = await screen.findByRole('region', { name: 'Load test' })
+    fireEvent.change(within(view).getByLabelText('Run for'), { target: { value: 'iterations' } })
+    fireEvent.change(within(view).getByLabelText('Loops per user'), { target: { value: '3' } })
+    fireEvent.change(within(view).getByLabelText(/Virtual users/), { target: { value: '4' } })
+    fireEvent.change(within(view).getByLabelText(/Ramp-up/), { target: { value: '0' } })
+    const startBtn = within(view).getByRole('button', { name: /Start load test/ }) as HTMLButtonElement
+    expect(startBtn.disabled).toBe(true)
+    fireEvent.click(within(view).getByLabelText(/permission to load-test/))
+    fireEvent.click(startBtn)
+    await within(view).findByText('Results', {}, { timeout: 3000 })
+    expect(t.sent).toHaveLength(12)
+    expect(within(view).getByText(/✓ Passed/)).toBeTruthy()
+  })
 })

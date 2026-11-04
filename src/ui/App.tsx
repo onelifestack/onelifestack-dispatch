@@ -11,6 +11,7 @@ import { withScheme } from '../core/url'
 import type { Transport } from '../core/transport'
 import { saveAnyFile, saveTextFile } from './files'
 import { RunnerView } from './RunnerView'
+import { LoadView } from './LoadView'
 import type { Collection } from '../core/types'
 import type { Pipeline } from '../core/runtime'
 import type { ScriptEngine } from '../core/scriptPipeline'
@@ -210,6 +211,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           : env ? <EnvironmentEditor key={env.id} ws={ws} confirm={confirm} environment={env} />
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
           : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
+          : viewed.kind === 'load' ? <LoadView key={viewed.requestId ?? 'tab'} ws={ws} notify={notify} requestId={viewed.requestId} />
           : extraView ? extraView(ws, notify)
           : <>
               <TabBar ws={ws} onClose={(id) => void closeTab(id)} />

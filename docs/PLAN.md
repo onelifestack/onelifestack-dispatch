@@ -14,7 +14,7 @@ Order (each step: code + tests + typecheck + build, then commit and push):
 4. [x] Dynamic fake-data variables ({{$randomEmail}} etc.).
 5. [x] Collection runner: folder/collection, iterations, CSV/JSON data files (data-driven), delay, stop on
        failure, results + export. Suite runner = run several collections/folders in order.
-6. [ ] Performance/load testing: virtual users, duration/iterations, ramp-up, think time; p50/p90/p95/p99,
+6. [x] Performance/load testing: virtual users, duration/iterations, ramp-up, think time; p50/p90/p95/p99,
        throughput, error rate, latency-over-time chart; caps + confirmation.
 7. [ ] CLI runner (`dispatch-run`) for CI: runs a backup/collection file with the same core in Node.
 8. [ ] Auth: Digest, OAuth 2 (client credentials, password, auth code + PKCE, refresh), JWT, AWS SigV4.
@@ -40,3 +40,7 @@ Progress notes go under each step as it lands.
 - Step 5: runner view (targets = suite, pick/reorder, iterations, delay, CSV/JSON data, stop on failure, keep
   variable changes, live results + inspector, JSON/JUnit export); setNextRequest with loop guard; cookie jar
   (CookieTransport) on desktop and in runs. Core in core/runner.ts + core/csv.ts so the CLI reuses it.
+- Step 6: core/load.ts (VUs ≤200, ramp-up, duration ≤30 min or loops, think time, per-user variables, optional
+  scripts/tests, data rows, thresholds → pass/fail), latency + throughput charts (palette validated with the dataviz
+  checks in both themes), tiles, per-request/status tables, per-second table, JSON/CSV export, permission checkbox.
+  Browser-checked in light and dark with a real 8 s run.
