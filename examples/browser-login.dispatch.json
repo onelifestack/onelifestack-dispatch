@@ -1,0 +1,454 @@
+{
+  "format": "onelifestack-dispatch",
+  "version": 2,
+  "exportedAt": "2026-11-04T13:48:22.497Z",
+  "collections": [
+    {
+      "name": "Login check",
+      "variables": [],
+      "docs": "",
+      "linkedDir": "",
+      "workspaceId": "default",
+      "updatedAt": 1793800102496,
+      "id": "33abc08a-20bd-4c94-b5f2-743b3c01b031",
+      "auth": {
+        "kind": "none",
+        "username": "",
+        "password": "",
+        "token": "",
+        "key": "",
+        "value": "",
+        "in": "header",
+        "grant": "client_credentials",
+        "tokenUrl": "",
+        "authUrl": "",
+        "clientId": "",
+        "clientSecret": "",
+        "scope": "",
+        "redirectUri": "http://127.0.0.1:45719/callback",
+        "usePkce": true,
+        "clientAuth": "header",
+        "accessToken": "",
+        "refreshToken": "",
+        "expiresAt": 0,
+        "algorithm": "HS256",
+        "secret": "",
+        "payload": "{\n  \"sub\": \"1234\"\n}",
+        "headerPrefix": "Bearer",
+        "accessKey": "",
+        "secretKey": "",
+        "sessionToken": "",
+        "region": "us-east-1",
+        "service": "execute-api"
+      },
+      "scripts": {
+        "pre": "",
+        "post": ""
+      }
+    }
+  ],
+  "folders": [],
+  "requests": [
+    {
+      "name": "Browser login",
+      "protocol": "browser",
+      "method": "GET",
+      "url": "",
+      "params": [],
+      "pathVars": [],
+      "headers": [],
+      "docs": "",
+      "examples": [],
+      "collectionId": "33abc08a-20bd-4c94-b5f2-743b3c01b031",
+      "folderId": null,
+      "sort": 0,
+      "updatedAt": 1793800102496,
+      "id": "4bab6d8d-42df-4be9-b256-5efe50338647",
+      "browser": {
+        "steps": [
+          {
+            "id": "25efce3a-d221-4664-97ec-bb7359cd5e72",
+            "kind": "goto",
+            "target": "{{base}}/login",
+            "value": "",
+            "saveAs": "",
+            "option": ""
+          },
+          {
+            "id": "59e4f1d7-e073-44c9-8114-22b8b9f5f99d",
+            "kind": "fill",
+            "target": "input[name=username]",
+            "value": "{{user}}",
+            "saveAs": "",
+            "option": ""
+          },
+          {
+            "id": "4eb2360e-3c9c-40cd-8f64-6e713aefb74f",
+            "kind": "fill",
+            "target": "input[type=password]",
+            "value": "{{password}}",
+            "saveAs": "",
+            "option": ""
+          },
+          {
+            "id": "c4ba4493-e5fb-4378-b392-452fde7809b8",
+            "kind": "click",
+            "target": "button[type=submit]",
+            "value": "",
+            "saveAs": "",
+            "option": ""
+          },
+          {
+            "id": "fb0fe20b-cea4-43df-b2a8-eae7ca5b2c0a",
+            "kind": "waitUrl",
+            "target": "/dashboard",
+            "value": "",
+            "saveAs": "",
+            "option": ""
+          },
+          {
+            "id": "69d42dba-610c-4a10-ada4-83e2d7a31ced",
+            "kind": "extractCookie",
+            "target": "sid",
+            "value": "",
+            "saveAs": "sessionCookie",
+            "option": ""
+          },
+          {
+            "id": "cada4eef-9e70-46e6-92dc-27e8b1c53639",
+            "kind": "extractStorage",
+            "target": "auth",
+            "value": "",
+            "saveAs": "token",
+            "option": "local"
+          },
+          {
+            "id": "4a2c073b-6a14-4e21-967c-c315f3c7fd69",
+            "kind": "extractText",
+            "target": "#who",
+            "value": "",
+            "saveAs": "whoText",
+            "option": ""
+          }
+        ],
+        "show": false,
+        "browserPath": "",
+        "timeoutMs": 30000,
+        "keepCookies": true
+      },
+      "body": {
+        "kind": "none",
+        "text": "",
+        "fields": [],
+        "graphqlVariables": "",
+        "file": null
+      },
+      "auth": {
+        "kind": "inherit",
+        "username": "",
+        "password": "",
+        "token": "",
+        "key": "",
+        "value": "",
+        "in": "header",
+        "grant": "client_credentials",
+        "tokenUrl": "",
+        "authUrl": "",
+        "clientId": "",
+        "clientSecret": "",
+        "scope": "",
+        "redirectUri": "http://127.0.0.1:45719/callback",
+        "usePkce": true,
+        "clientAuth": "header",
+        "accessToken": "",
+        "refreshToken": "",
+        "expiresAt": 0,
+        "algorithm": "HS256",
+        "secret": "",
+        "payload": "{\n  \"sub\": \"1234\"\n}",
+        "headerPrefix": "Bearer",
+        "accessKey": "",
+        "secretKey": "",
+        "sessionToken": "",
+        "region": "us-east-1",
+        "service": "execute-api"
+      },
+      "scripts": {
+        "pre": "",
+        "post": ""
+      },
+      "settings": {
+        "timeoutMs": null,
+        "followRedirects": null,
+        "insecureTls": null
+      },
+      "ws": {
+        "messages": []
+      },
+      "mqtt": {
+        "clientId": "",
+        "topics": [],
+        "publishTopic": "",
+        "payload": "",
+        "qos": 0,
+        "retain": false
+      },
+      "grpc": {
+        "method": "",
+        "proto": "",
+        "useReflection": true,
+        "message": "{}",
+        "metadata": [],
+        "tls": false
+      },
+      "sio": {
+        "listen": "",
+        "emitEvent": "message"
+      },
+      "mcp": {
+        "transport": "http",
+        "command": "",
+        "env": [],
+        "cwd": "",
+        "tool": "",
+        "arguments": "{}"
+      }
+    },
+    {
+      "name": "Orders with token",
+      "protocol": "http",
+      "method": "GET",
+      "url": "{{base}}/orders",
+      "params": [],
+      "pathVars": [],
+      "headers": [
+        {
+          "id": "80d70615-09f4-4d65-a5a9-f3cc75cafdc4",
+          "key": "Authorization",
+          "value": "Bearer {{token}}",
+          "enabled": true
+        }
+      ],
+      "docs": "",
+      "examples": [],
+      "collectionId": "33abc08a-20bd-4c94-b5f2-743b3c01b031",
+      "folderId": null,
+      "sort": 1,
+      "updatedAt": 1793800102496,
+      "id": "7636d7d9-6bb5-45a8-b502-d240fdfe08ae",
+      "scripts": {
+        "pre": "",
+        "post": "pm.test('200', () => pm.response.to.have.status(200))"
+      },
+      "body": {
+        "kind": "none",
+        "text": "",
+        "fields": [],
+        "graphqlVariables": "",
+        "file": null
+      },
+      "auth": {
+        "kind": "inherit",
+        "username": "",
+        "password": "",
+        "token": "",
+        "key": "",
+        "value": "",
+        "in": "header",
+        "grant": "client_credentials",
+        "tokenUrl": "",
+        "authUrl": "",
+        "clientId": "",
+        "clientSecret": "",
+        "scope": "",
+        "redirectUri": "http://127.0.0.1:45719/callback",
+        "usePkce": true,
+        "clientAuth": "header",
+        "accessToken": "",
+        "refreshToken": "",
+        "expiresAt": 0,
+        "algorithm": "HS256",
+        "secret": "",
+        "payload": "{\n  \"sub\": \"1234\"\n}",
+        "headerPrefix": "Bearer",
+        "accessKey": "",
+        "secretKey": "",
+        "sessionToken": "",
+        "region": "us-east-1",
+        "service": "execute-api"
+      },
+      "settings": {
+        "timeoutMs": null,
+        "followRedirects": null,
+        "insecureTls": null
+      },
+      "ws": {
+        "messages": []
+      },
+      "mqtt": {
+        "clientId": "",
+        "topics": [],
+        "publishTopic": "",
+        "payload": "",
+        "qos": 0,
+        "retain": false
+      },
+      "grpc": {
+        "method": "",
+        "proto": "",
+        "useReflection": true,
+        "message": "{}",
+        "metadata": [],
+        "tls": false
+      },
+      "sio": {
+        "listen": "",
+        "emitEvent": "message"
+      },
+      "mcp": {
+        "transport": "http",
+        "command": "",
+        "env": [],
+        "cwd": "",
+        "tool": "",
+        "arguments": "{}"
+      },
+      "browser": {
+        "steps": [
+          {
+            "id": "d06fcb95-715d-4d79-ad2d-2635ec52f82c",
+            "kind": "goto",
+            "target": "{{baseUrl}}/login",
+            "value": "",
+            "saveAs": "",
+            "option": ""
+          },
+          {
+            "id": "411e08f3-601f-441b-aec5-198853b06c90",
+            "kind": "fill",
+            "target": "input[name=username]",
+            "value": "{{username}}",
+            "saveAs": "",
+            "option": ""
+          },
+          {
+            "id": "9ba16523-ce9a-4977-bfef-5b1da087f32c",
+            "kind": "fill",
+            "target": "input[type=password]",
+            "value": "{{password}}",
+            "saveAs": "",
+            "option": ""
+          },
+          {
+            "id": "8e1c9c91-608c-4d42-bf7b-195c6248e6c2",
+            "kind": "click",
+            "target": "button[type=submit]",
+            "value": "",
+            "saveAs": "",
+            "option": ""
+          },
+          {
+            "id": "9ac9a565-0305-4452-b494-86a02b126025",
+            "kind": "waitUrl",
+            "target": "/",
+            "value": "",
+            "saveAs": "",
+            "option": ""
+          },
+          {
+            "id": "19a288ca-0cd9-4fc8-8085-cafea8ae2611",
+            "kind": "extractCookie",
+            "target": "session",
+            "value": "",
+            "saveAs": "sessionCookie",
+            "option": ""
+          }
+        ],
+        "show": false,
+        "browserPath": "",
+        "timeoutMs": 30000,
+        "keepCookies": true
+      }
+    }
+  ],
+  "environments": [
+    {
+      "id": "c274d22f-8846-475b-ba98-ce3f5b4a44a5",
+      "name": "Demo local",
+      "variables": [
+        {
+          "id": "8ba7b31b-bea0-4cdc-8ff0-7f66420cc945",
+          "key": "base",
+          "value": "http://localhost:4318",
+          "enabled": true
+        },
+        {
+          "id": "6c51d0f0-72c7-4130-b57e-5a4632c1b2c7",
+          "key": "user",
+          "value": "ann",
+          "enabled": true
+        },
+        {
+          "id": "b59ecfd4-7864-454a-b28d-54475b005c6d",
+          "key": "password",
+          "value": "secret",
+          "enabled": true
+        }
+      ],
+      "updatedAt": 1793800102496
+    }
+  ],
+  "globals": [],
+  "flows": [
+    {
+      "id": "ea13913b-d3b1-4b91-8b21-613fe34fcf18",
+      "name": "Login then orders",
+      "nodes": [
+        {
+          "id": "d85f3e91-b08e-42a6-98a3-47936d9e4c17",
+          "type": "start",
+          "x": 60,
+          "y": 140,
+          "label": "Start",
+          "config": {}
+        },
+        {
+          "id": "67b5e9c1-75d7-4cd4-aa26-4aa6b1718ae9",
+          "type": "request",
+          "x": 0,
+          "y": 0,
+          "label": "Login",
+          "config": {
+            "requestId": "4bab6d8d-42df-4be9-b256-5efe50338647"
+          }
+        },
+        {
+          "id": "7d04c975-aff0-4788-bb31-0e63a9a47bee",
+          "type": "request",
+          "x": 0,
+          "y": 0,
+          "label": "Orders",
+          "config": {
+            "requestId": "7636d7d9-6bb5-45a8-b502-d240fdfe08ae"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1",
+          "from": "d85f3e91-b08e-42a6-98a3-47936d9e4c17",
+          "port": "next",
+          "to": "67b5e9c1-75d7-4cd4-aa26-4aa6b1718ae9"
+        },
+        {
+          "id": "e2",
+          "from": "67b5e9c1-75d7-4cd4-aa26-4aa6b1718ae9",
+          "port": "ok",
+          "to": "7d04c975-aff0-4788-bb31-0e63a9a47bee"
+        }
+      ],
+      "docs": "",
+      "updatedAt": 1793800102496
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // A tiny API to try Dispatch against: node examples/demo-server.mjs [port]  (default 4318). No dependencies.
-// POST /login {user}  -> sets a session cookie, returns a token
+// POST /login {user}  -> sets a session cookie, returns a token ({user, password} checks password "secret")
+// GET  /login         -> an HTML login form (for Browser login requests): user "ann", password "secret"; on success it
+//                        sets an HttpOnly "sid" cookie, stores {"access_token": …} in localStorage "auth", opens /dashboard
 // GET  /orders        -> needs the cookie or "Authorization: Bearer <token>"
 // POST /orders {item, qty} -> 201 with the new order
 // GET  /orders/:id    -> one order, 404 if unknown
@@ -31,8 +33,25 @@ createServer(async (req, res) => {
   const bearer = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1]
   const who = sessions.get(cookie) ?? sessions.get(bearer)
 
+  const html = (status, page) => { res.writeHead(status, { 'content-type': 'text/html; charset=utf-8' }); res.end(page) }
+  if (req.method === 'GET' && url.pathname === '/login') return html(200, `<!doctype html><title>Demo login</title>
+<form id="f"><label>User <input name="username" autocomplete="username"></label>
+<label>Password <input name="password" type="password"></label><button type="submit">Log in</button><p id="err"></p></form>
+<script>
+f.onsubmit = async (e) => {
+  e.preventDefault()
+  const r = await fetch('/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ user: f.username.value, password: f.password.value }) })
+  if (!r.ok) { err.textContent = 'Wrong user or password'; return }
+  const j = await r.json()
+  localStorage.setItem('auth', JSON.stringify({ access_token: j.token, user: j.user }))
+  setTimeout(() => { location.href = '/dashboard' }, 300)
+}
+</script>`)
+  if (req.method === 'GET' && url.pathname === '/dashboard') return html(who ? 200 : 401, who ? `<!doctype html><title>Dashboard</title><h1>Welcome <span id="who">${who}</span></h1>` : '<!doctype html><p>Not logged in. <a href="/login">Log in</a></p>')
+
   if (req.method === 'POST' && url.pathname === '/login') {
     if (!body?.user) return json(res, 400, { error: 'user is required' })
+    if (body.password !== undefined && body.password !== 'secret') return json(res, 401, { error: 'wrong password' })
     const token = randomUUID()
     sessions.set(token, body.user)
     return json(res, 200, { token, user: body.user }, { 'set-cookie': `sid=${token}; Path=/; HttpOnly` })
@@ -75,5 +94,5 @@ createServer(async (req, res) => {
     setTimeout(() => (r < 0.05 ? json(res, 503, { error: 'busy' }) : json(res, 200, { ok: true })), 15 + Math.random() * 40 + (r > 0.95 ? 250 : 0))
     return
   }
-  json(res, 404, { error: 'not found', try: ['/login', '/orders', '/orders/:id', '/digest', '/flaky', '/events'] })
+  json(res, 404, { error: 'not found', try: ['/login', '/dashboard', '/orders', '/orders/:id', '/digest', '/flaky', '/events'] })
 }).listen(port, () => console.log(`Demo API on http://localhost:${port}`))
