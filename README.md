@@ -6,7 +6,7 @@ Linux, Windows and macOS), as a web app built from the same code, and as a comma
 No account, no sync, no telemetry. Collections, environments and history stay in this device's storage. The only
 network traffic is the requests you send.
 
-## Features (v0.3)
+## Features (v0.4)
 
 **New in v0.3**
 - Code editor (CodeMirror): syntax colours, `{{variable}}` and `pm.` autocomplete, GraphQL completion from the
