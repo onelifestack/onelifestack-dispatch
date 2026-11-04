@@ -144,3 +144,28 @@ describe('schedules', () => {
     expect(gone.failures[0].reason).toMatch(/no longer exists/)
   })
 })
+
+import { layerRows, layeredVars, selectLayer, setOptions, startLayers } from '../src/core/layers'
+describe('layers (endpoint alternatives)', () => {
+  it('switches the active alternative and keeps the value in step', () => {
+    let v = startLayers(kv('baseUrl', 'https://lb.test'), 'load balancer')
+    v = setOptions(v, [...v.options!, { id: 'i', name: 'ingress', value: 'https://ingress.test' }, { id: 'p', name: 'pod-1', value: 'http://10.0.0.5:8080' }])
+    expect(v.value).toBe('https://lb.test')
+    v = selectLayer(v, 'pod-1')
+    expect(v).toMatchObject({ active: 'pod-1', value: 'http://10.0.0.5:8080' })
+    v = setOptions(v, v.options!.filter((o) => o.name !== 'pod-1'))
+    expect(v).toMatchObject({ active: 'load balancer', value: 'https://lb.test' })
+  })
+  it('runs a collection once per alternative, labelled', async () => {
+    const env = { ...newEnvironment('Prod'), variables: [setOptions(startLayers(kv('base', 'https://lb.test'), 'lb'), [{ id: '1', name: 'lb', value: 'https://lb.test' }, { id: '2', name: 'pod', value: 'http://pod.test' }])] }
+    expect(layeredVars(env).map((v) => v.key)).toEqual(['base'])
+    const rows = layerRows(env, 'base')
+    const t = new Fake()
+    const c = newCollection('L')
+    const req = newRequest({ name: 'ping', url: '{{base}}/ping', collectionId: c.id })
+    const s = await runCollection({ items: [{ request: req, path: '' }], iterations: 0, data: rows.map((r) => r.row), iterationLabels: rows.map((r) => r.label),
+      delayMs: 0, stopOnFailure: false, environment: env, collections: [c], folders: [], globals: [], settings: defaultSettings }, t, {})
+    expect(t.sent.map((p) => p.url)).toEqual(['https://lb.test/ping', 'http://pod.test/ping'])
+    expect(s.results.map((r) => r.label)).toEqual(['lb', 'pod'])
+  })
+})

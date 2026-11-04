@@ -12,8 +12,16 @@ export interface KV {
   file?: FileData | null
   /** Variables only: hide the value on screen and leave it out of exports. */
   secret?: boolean
+  /**
+   * Variables only: named alternatives ("layers"), e.g. load balancer, ingress, one pod. `value` is always the
+   * active one's value; `active` names it.
+   */
+  options?: VarOption[]
+  active?: string
   description?: string
 }
+
+export interface VarOption { id: string; name: string; value: string }
 
 /** A file kept with the request (form-data part or binary body). Stored as base64 in IndexedDB. */
 export interface FileData { name: string; type: string; size: number; base64: string }

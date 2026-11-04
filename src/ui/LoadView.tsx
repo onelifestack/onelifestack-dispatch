@@ -7,6 +7,7 @@ import type { WorkspaceApi } from './useWorkspace'
 import { folderOptions } from './Dialogs'
 import { saveTextFile } from './files'
 import { LatencyChart, ThroughputChart } from './charts'
+import { layeredVars } from '../core/layers'
 
 type Source = { kind: 'tab' } | { kind: 'request'; id: string } | { kind: 'flow'; collectionId: string; folderId: string | null }
 
@@ -29,6 +30,14 @@ export function LoadView({ ws, notify, requestId }: { ws: WorkspaceApi; notify: 
   const [errPct, setErrPct] = useState('1')
   const [minRps, setMinRps] = useState('')
   const [allowed, setAllowed] = useState(false)
+  /** "variable|alternative" to aim the test at one alternative; empty = the active ones. */
+  const [layer, setLayer] = useState('')
+  const layerData = (): Record<string, string>[] | null => {
+    if (!layer) return null
+    const [k, n] = layer.split('|')
+    const o = layeredVars(ws.environment).find((x) => x.key === k)?.options?.find((x) => x.name === n)
+    return o ? [{ [k]: o.value }] : null
+  }
   const [running, setRunning] = useState(false)
   const [stats, setStats] = useState<LoadStats | null>(null)
   const [activeUsers, setActiveUsers] = useState(0)
@@ -53,7 +62,7 @@ export function LoadView({ ws, notify, requestId }: { ws: WorkspaceApi; notify: 
     try {
       const r = await runLoad({
         items: list, virtualUsers: vus, rampUpMs: rampS * 1000, mode, durationMs: durationS * 1000, iterations, thinkTimeMs: thinkMs,
-        runScripts, data: data?.rows ?? null, environment: ws.environment, collections: ws.collections, folders: ws.folders, globals: ws.globals,
+        runScripts, data: data?.rows ?? layerData(), environment: ws.environment, collections: ws.collections, folders: ws.folders, globals: ws.globals,
         settings: ws.settings, thresholds,
       }, ws.transport, ws.pipeline.current, { signal: ctrl.signal, onProgress: (s, a) => { setStats(s); setActiveUsers(a) } })
       setStats(r.stats); setSamples(r.samples)
@@ -100,6 +109,14 @@ export function LoadView({ ws, notify, requestId }: { ws: WorkspaceApi; notify: 
               </label>
             )}
             <p className="muted small">{items().length} request{items().length === 1 ? '' : 's'} per loop · environment: {ws.environment?.name ?? 'none'}</p>
+            {layeredVars(ws.environment).length > 0 && (
+              <label className="field"><span>Target</span>
+                <select aria-label="Load test target" value={layer} onChange={(e) => setLayer(e.target.value)} disabled={!!data}>
+                  <option value="">The active alternatives</option>
+                  {layeredVars(ws.environment).flatMap((v) => v.options!.map((o) => <option key={`${v.key}|${o.name}`} value={`${v.key}|${o.name}`}>{`{{${v.key}}}`} = {o.name}</option>))}
+                </select>
+              </label>
+            )}
             <label className="toggle"><input type="checkbox" checked={runScripts} onChange={(e) => setRunScripts(e.target.checked)} /> Run scripts and tests (failed tests count as errors; slower)</label>
             <div className="field"><span>Data file (optional; each loop takes the next row)</span>
               <span className="filePick">

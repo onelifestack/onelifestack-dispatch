@@ -5,6 +5,7 @@ import { formatMs, statusTone } from '../core/format'
 import type { WorkspaceApi } from './useWorkspace'
 import { folderOptions } from './Dialogs'
 import { saveTextFile } from './files'
+import { layerRows, layeredVars } from '../core/layers'
 
 interface Target { collectionId: string; folderId: string | null }
 interface Pick extends RunItem { on: boolean; key: string }
@@ -27,6 +28,8 @@ export function RunnerView({ ws, notify, start }: { ws: WorkspaceApi; notify: (m
   const [summary, setSummary] = useState<RunSummary | null>(null)
   const [inspect, setInspect] = useState<RunResult | null>(null)
   const [onlyFailed, setOnlyFailed] = useState(false)
+  const [perLayer, setPerLayer] = useState('')
+  const layers = perLayer ? layerRows(ws.environment, perLayer) : []
   const abort = useRef<AbortController | null>(null)
 
   // Rebuild the request list when targets change, keeping on/off choices and order where possible.
@@ -42,7 +45,7 @@ export function RunnerView({ ws, notify, start }: { ws: WorkspaceApi; notify: (m
   }, [targetKey, ws.collections, ws.folders, ws.requests]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const chosen = picks.filter((p) => p.on)
-  const its = data && iterations === 0 ? data.rows.length : Math.max(1, iterations)
+  const its = layers.length ? layers.length : data && iterations === 0 ? data.rows.length : Math.max(1, iterations)
   const move = (i: number, d: -1 | 1) => setPicks((ps) => { const n = [...ps]; const j = i + d; if (j < 0 || j >= n.length) return ps; [n[i], n[j]] = [n[j], n[i]]; return n })
 
   const run = async () => {
@@ -50,7 +53,10 @@ export function RunnerView({ ws, notify, start }: { ws: WorkspaceApi; notify: (m
     const ctrl = new AbortController(); abort.current = ctrl
     setRunning(true); setResults([]); setSummary(null); setInspect(null); setProgress({ done: 0, total: its * chosen.length })
     const s = await runCollection({
-      items: chosen, iterations: data && iterations === 0 ? 0 : Math.max(1, iterations), data: data?.rows ?? null, delayMs, stopOnFailure,
+      items: chosen, delayMs, stopOnFailure,
+      ...(layers.length
+        ? { iterations: 0, data: layers.map((l) => l.row), iterationLabels: layers.map((l) => `${perLayer}: ${l.label}`) }
+        : { iterations: data && iterations === 0 ? 0 : Math.max(1, iterations), data: data?.rows ?? null }),
       environment: ws.environment, collections: ws.collections, folders: ws.folders, globals: ws.globals, settings: ws.settings,
     }, ws.transport, ws.pipeline.current, {
       signal: ctrl.signal,
@@ -154,6 +160,14 @@ export function RunnerView({ ws, notify, start }: { ws: WorkspaceApi; notify: (m
                 {data.rows.length > 3 && <p className="tiny muted">…and {data.rows.length - 3} more</p>}
               </div>
             )}
+            {layeredVars(ws.environment).length > 0 && (
+              <label className="field"><span>Run once per alternative of</span>
+                <select aria-label="Run once per alternative of" value={perLayer} onChange={(e) => setPerLayer(e.target.value)} disabled={!!data}>
+                  <option value="">(no, use the active one)</option>
+                  {layeredVars(ws.environment).map((v) => <option key={v.id} value={v.key}>{`{{${v.key}}}`}: {v.options!.map((o) => o.name).join(', ')}</option>)}
+                </select>
+              </label>
+            )}
             <label className="toggle"><input type="checkbox" checked={stopOnFailure} onChange={(e) => setStopOnFailure(e.target.checked)} /> Stop at the first failure</label>
             <label className="toggle"><input type="checkbox" checked={saveVars} onChange={(e) => setSaveVars(e.target.checked)} /> Keep variable changes from scripts</label>
             <p className="muted small">Environment: {ws.environment?.name ?? 'none'} · {its} iteration{its === 1 ? '' : 's'} × {chosen.length} request{chosen.length === 1 ? '' : 's'} = {its * chosen.length} sends</p>
@@ -188,7 +202,7 @@ export function RunnerView({ ws, notify, start }: { ws: WorkspaceApi; notify: (m
             <tbody>
               {shown.map((r, i) => (
                 <tr key={i} className={`${failed(r) ? 'bad' : ''} ${inspect === r ? 'on' : ''}`} onClick={() => setInspect(r)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') setInspect(r) }}>
-                  <td className="muted tiny">{r.iteration + 1}.{r.index + 1}</td>
+                  <td className="muted tiny">{r.iteration + 1}.{r.index + 1}{r.label && <span className="block">{r.label}</span>}</td>
                   <td><span className={`mtag m-${r.method}`}>{r.method}</span> {r.name}<span className="tiny muted block mono">{r.url}</span></td>
                   <td>{r.skipped ? <span className="muted">skipped</span> : r.status !== null ? <span className={`hstat ${statusTone(r.status)}`}>{r.status}</span> : <span className="badText small">{r.error}</span>}</td>
                   <td className="mono small">{r.status !== null ? formatMs(r.timeMs) : '—'}</td>

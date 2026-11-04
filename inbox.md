@@ -9,4 +9,4 @@
 5. Automation testing that can UI testing, like for user name and password, fetching of cookies, or auth token from browser cookies and then using it as token it as for the rst of the pipeline for rest calls. Its more like n8n for testing. We can discuss
    → Design doc first (docs/design/browser-automation.md), nothing built yet.
 6. Can same rest endpoint can have aliases, for ex. a load balancer url, a ingress url, then a actual pod or individual instance url. User can set them as layers in env if needed.
-   → Planned.
+   → Done: an environment variable can have named alternatives (e.g. load balancer, ingress, pod-1). Switch the active one from the top bar, run a collection once per alternative in the Runner, or aim a load test at one.

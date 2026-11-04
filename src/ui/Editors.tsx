@@ -7,7 +7,9 @@ import type { WorkspaceApi } from './useWorkspace'
 import type { AuthActions } from './RequestPane'
 import { effectiveAuth } from '../core/prepare'
 import { folderChain } from '../core/runtime'
-import { newRequest } from '../core/types'
+import { newRequest, uid } from '../core/types'
+import type { KV } from '../core/types'
+import { hasLayers, selectLayer, setOptions, startLayers } from '../core/layers'
 import { toPostmanEnvironment } from '../core/interop'
 import { saveTextFile } from './files'
 
@@ -137,6 +139,58 @@ export function FolderEditor({ ws, confirm, folder, authActions, renderDocs }: C
   )
 }
 
+/** Named alternatives for variables (e.g. baseUrl via the load balancer, the ingress, or one pod). */
+function LayersEditor({ vars, onChange }: { vars: KV[]; onChange: (v: KV[]) => void }) {
+  const [pick, setPick] = useState('')
+  const layered = vars.filter((v) => v.options?.length)
+  const plain = vars.filter((v) => v.key.trim() && !v.options?.length && !v.secret)
+  const upd = (v: KV) => onChange(vars.map((x) => (x.id === v.id ? v : x)))
+  return <>
+    <h2>Alternatives</h2>
+    <p className="muted small">Give a variable several named values and switch between them, e.g. <code>{'{{baseUrl}}'}</code> through the load balancer, the ingress, or straight to one pod. The active one is used; switch it here or from the bar at the top, or run a collection once per alternative.</p>
+    {layered.map((v) => (
+      <div key={v.id} className="layerCard">
+        <div className="row-h"><strong className="mono">{`{{${v.key}}}`}</strong><span className="grow" />
+          <button type="button" className="btn small ghost" onClick={() => onChange(vars.map((x) => (x.id === v.id ? { ...x, options: undefined, active: undefined } : x)))}>Stop using alternatives</button>
+        </div>
+        <table className="kv" aria-label={`Alternatives for ${v.key}`}>
+          <thead><tr><th className="kv-on">Active</th><th>Name</th><th>Value</th><th className="kv-x" /></tr></thead>
+          <tbody>
+            {v.options!.map((o, i) => (
+              <tr key={o.id}>
+                <td className="kv-on"><input type="radio" name={`active-${v.id}`} checked={v.active === o.name} aria-label={`Use ${o.name}`} onChange={() => upd(selectLayer(v, o.name))} /></td>
+                <td><input className="mono" aria-label={`${v.key} alternative ${i + 1} name`} value={o.name} onChange={(e) => {
+                  const name = e.target.value
+                  upd(setOptions({ ...v, active: v.active === o.name ? name : v.active }, v.options!.map((x) => (x.id === o.id ? { ...x, name } : x))))
+                }} /></td>
+                <td><input className="mono" aria-label={`${v.key} alternative ${i + 1} value`} value={o.value} onChange={(e) => upd(setOptions(v, v.options!.map((x) => (x.id === o.id ? { ...x, value: e.target.value } : x))))} /></td>
+                <td className="kv-x">{v.options!.length > 1 && <button type="button" className="icon" aria-label={`Remove ${o.name}`} onClick={() => upd(setOptions(v, v.options!.filter((x) => x.id !== o.id)))}>×</button>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button type="button" className="btn small" onClick={() => upd(setOptions(v, [...v.options!, { id: uid(), name: `alternative ${v.options!.length + 1}`, value: '' }]))}>+ Add alternative</button>
+      </div>
+    ))}
+    {plain.length > 0 && (
+      <div className="actions">
+        <select aria-label="Variable to give alternatives" value={pick} onChange={(e) => setPick(e.target.value)}>
+          <option value="">Choose a variable…</option>
+          {plain.map((v) => <option key={v.id} value={v.id}>{v.key}</option>)}
+        </select>
+        <button type="button" className="btn small" disabled={!pick} onClick={() => {
+          onChange(vars.map((x) => { if (x.id !== pick) return x; const st = startLayers(x, 'default'); return setOptions(st, [...st.options!, { id: uid(), name: 'alternative 2', value: '' }]) }))
+          setPick('')
+        }}>Add alternatives</button>
+      </div>
+    )}
+  </>
+}
+
+/** Editing a layered variable's value in the main table edits its active alternative. */
+const syncLayerValues = (vars: KV[]) => vars.map((v) => (v.options?.length ? { ...v, options: v.options.map((o) => (o.name === v.active ? { ...o, value: v.value } : o)) } : v))
+void hasLayers
+
 export function EnvironmentEditor({ ws, confirm, environment }: Common & { environment: Environment }) {
   const [e, setE] = useSaved(environment, ws.updateEnvironment)
   // Scripts may change variables while this is open; pick those up.
@@ -153,7 +207,8 @@ export function EnvironmentEditor({ ws, confirm, environment }: Common & { envir
         </button>
       </div>
       <h2>Variables</h2>
-      <KVTable label="Environment variables" keyPlaceholder="Variable" allowSecrets rows={e.variables} onChange={(variables) => setE({ ...e, variables })} />
+      <KVTable label="Environment variables" keyPlaceholder="Variable" allowSecrets rows={e.variables} onChange={(variables) => setE({ ...e, variables: syncLayerValues(variables) })} />
+      <LayersEditor vars={e.variables} onChange={(variables) => setE({ ...e, variables })} />
       <div className="actions">
         <button type="button" className="btn" onClick={async () => { const c = await ws.duplicateEnvironment(e); ws.setView({ kind: 'environment', id: c.id }) }}>Duplicate</button>
         <button type="button" className="btn" onClick={async () => { await saveTextFile(`${e.name.replace(/[^\w.-]+/g, '-')}.postman_environment.json`, toPostmanEnvironment(e)) }}>Export as Postman environment</button>

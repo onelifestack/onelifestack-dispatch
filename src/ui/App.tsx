@@ -16,6 +16,7 @@ import { getOAuthToken } from './oauth'
 import { importBruno, toPostmanCollection } from '../core/interop'
 import { pickFolder, readCollectionDir, useLinkedDirSync } from './linkedDirs'
 import { SchedulesView, useScheduler } from './Schedules'
+import { layeredVars, selectLayer } from '../core/layers'
 import { DocsView } from './DocsView'
 import { MockView } from './MockView'
 import { Markdown } from './Markdown'
@@ -222,6 +223,14 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
             {ws.environments.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
         </label>
+        {layeredVars(ws.environment).map((v) => (
+          <label key={v.id} className="layerPick" title={`Which ${v.key} to use`}>
+            <span className="mono small">{v.key}</span>
+            <select aria-label={`Alternative for ${v.key}`} value={v.active} onChange={(e) => { const env = ws.environment!; void ws.updateEnvironment({ ...env, variables: env.variables.map((x) => (x.id === v.id ? selectLayer(x, e.target.value) : x)) }) }}>
+              {v.options!.map((o) => <option key={o.id} value={o.name}>{o.name}</option>)}
+            </select>
+          </label>
+        ))}
         <details className="menu">
           <summary className="btn small ghost" aria-label="Menu">☰</summary>
           <div className="menuList right" role="menu">

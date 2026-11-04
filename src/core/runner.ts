@@ -37,6 +37,8 @@ export interface RunConfig {
   /** Ignored when data rows are given and iterations is 0 (one iteration per row). */
   iterations: number
   data: Record<string, string>[] | null
+  /** Optional names for the iterations (e.g. the alternative of {{baseUrl}} each one used). */
+  iterationLabels?: string[]
   delayMs: number
   stopOnFailure: boolean
   environment: Environment | null
@@ -48,6 +50,8 @@ export interface RunConfig {
 
 export interface RunResult {
   iteration: number
+  /** The iteration's label, when the run has them (alternatives). */
+  label?: string
   index: number
   name: string
   path: string
@@ -130,7 +134,7 @@ export async function runCollection(cfg: RunConfig, transport: Transport, pipeli
       if (x.changes.collection && ctx.collection) collections.set(ctx.collection.id, { ...ctx.collection, variables: x.changes.collection })
       if (x.changes.globals) globals = x.changes.globals
       const r: RunResult = {
-        iteration: it0, index: i, name: item.request.name, path: item.path, method: x.sent.method, url: x.sent.url,
+        iteration: it0, label: cfg.iterationLabels?.[it0], index: i, name: item.request.name, path: item.path, method: x.sent.method, url: x.sent.url,
         status: x.response?.status ?? null, statusText: x.response?.statusText ?? '', timeMs: x.response?.timeMs ?? 0, size: x.response?.size ?? 0,
         tests: x.tests, error: x.error, skipped: !!x.skipped,
         detail: { sent: x.sent, logs: x.logs, response: x.response ? { ...x.response, body: capBody(x.response.body), base64: undefined } : null },
