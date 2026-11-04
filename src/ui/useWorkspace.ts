@@ -363,6 +363,13 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     setView((v) => (v.kind === 'environment' && v.id === id ? { kind: 'request' } : v))
     if (e) toTrash(`“${e.name}”`, { environments: [e] })
   }, [environments, toTrash])
+  /** Copies an environment (values included, secrets too: it stays on this device) as "<name> copy". */
+  const duplicateEnvironment = useCallback(async (e: Environment) => {
+    const copy: Environment = { ...structuredClone(e), id: uid(), name: `${e.name} copy`, updatedAt: Date.now(), variables: e.variables.map((v) => ({ ...v, id: uid() })) }
+    await db.putEnvironment(copy)
+    setEnvironments((es) => [...es, copy].sort(byName))
+    return copy
+  }, [])
   const setGlobals = useCallback(async (g: KV[]) => { setGlobalsState(g); await db.putGlobals(g) }, [])
 
   const importWorkspace = useCallback(async (w: Workspace) => {
@@ -475,7 +482,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     setDraft, setView, setSettings, setLogs, log, openRequest, startNew, closeTab, selectTab, saveDraft, renameRequest,
     moveRequest, removeRequest, duplicateRequest, send, cancel, applyChanges, openHistory, clearHistory,
     addCollection, updateCollection, removeCollection, addFolder, updateFolder, removeFolder,
-    addEnvironment, updateEnvironment, removeEnvironment, setGlobals, importWorkspace,
+    addEnvironment, updateEnvironment, removeEnvironment, duplicateEnvironment, setGlobals, importWorkspace,
   }
 }
 

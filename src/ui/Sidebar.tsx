@@ -229,6 +229,12 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
                 <span className="rowName">{e.name}</span>
                 {ws.settings.activeEnvId === e.id && <span className="pill">active</span>}
               </button>
+              <Menu label={`More for ${e.name}`} items={[
+                ['Use', () => ws.setSettings({ activeEnvId: e.id })],
+                ['Duplicate', async () => { const c = await ws.duplicateEnvironment(e); ws.setView({ kind: 'environment', id: c.id }) }],
+                ['Rename', async () => { const n = await ask('Rename environment', e.name); if (n) await ws.updateEnvironment({ ...e, name: n }) }],
+                ['Delete', async () => { if (await confirm(`Delete environment “${e.name}”? You can undo this right after.`)) await ws.removeEnvironment(e.id) }, 'danger'],
+              ]} />
             </li>
           ))}
           {!ws.environments.length && <li className="muted small pad">Make an environment to keep base URLs and tokens out of your requests, then use them as <code>{'{{name}}'}</code>.</li>}
