@@ -120,4 +120,32 @@ describe.skipIf(!browser)('browser login (real Chromium)', () => {
     expect(r.stdout).toMatch(/✓ me/)
     expect(r.code ?? 0).toBe(0)
   }, 60_000)
+
+  it('only accepts DevTools connections from the origin it was told to allow (the desktop webview sends one)', async () => {
+    const { request } = await import('node:http')
+    // Status of a WebSocket handshake to the DevTools endpoint, sent with an Origin header like the webview's.
+    const handshake = (wsUrl: string, origin: string) => new Promise<number>((resolve, reject) => {
+      const u = new URL(wsUrl.replace(/^ws/, 'http'))
+      const r = request({ host: u.hostname, port: u.port, path: u.pathname, headers: { Connection: 'Upgrade', Upgrade: 'websocket', Origin: origin,
+        'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==' } })
+      r.on('upgrade', (_res, socket) => { socket.destroy(); resolve(101) })
+      r.on('response', (res) => { res.resume(); resolve(res.statusCode ?? 0) })
+      r.on('error', reject); r.end()
+    })
+    const before = process.env.DISPATCH_BROWSER_ARGS ?? ''
+    // Without the flag (what 0.4.1 did): the webview's origin is refused — issue #9.
+    let s = await nodeLauncher.launch({ path: browser!, show: false })
+    try { expect(await handshake(s.wsUrl, 'http://tauri.localhost')).not.toBe(101) } finally { await s.close() }
+    // With browserArgs(…, origin) as the desktop launcher passes it: that origin connects, others still don't.
+    const { browserArgs } = await import('../src/core/browser')
+    process.env.DISPATCH_BROWSER_ARGS = `${before} ${browserArgs('x', false, 'http://tauri.localhost').find((a) => a.startsWith('--remote-allow-origins'))}`
+    try {
+      s = await nodeLauncher.launch({ path: browser!, show: false })
+      try {
+        expect(await handshake(s.wsUrl, 'http://tauri.localhost')).toBe(101)
+        expect(await handshake(s.wsUrl, 'http://localhost:3000')).not.toBe(101)
+      } finally { await s.close() }
+    } finally { process.env.DISPATCH_BROWSER_ARGS = before }
+    expect(browserArgs('x', false).some((a) => a.startsWith('--remote-allow-origins'))).toBe(false)
+  }, 60_000)
 })

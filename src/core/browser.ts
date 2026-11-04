@@ -182,9 +182,12 @@ export const BROWSER_CANDIDATES: Record<'linux' | 'windows' | 'mac', string[]> =
   mac: ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Chromium.app/Contents/MacOS/Chromium'],
 }
 
-/** Arguments for a clean, separate browser (its own profile; no first-run screens). */
-export const browserArgs = (profileDir: string, show: boolean) => [
-  // The desktop app connects from its webview, which sends an Origin header; Chrome/Edge (111+) reject that unless allowed.
-  '--remote-debugging-port=0', '--remote-allow-origins=http://tauri.localhost,tauri://localhost,http://localhost', `--user-data-dir=${profileDir}`, '--no-first-run', '--no-default-browser-check',
+/**
+ * Arguments for a clean, separate browser (its own profile; no first-run screens). `allowOrigin`: the desktop app
+ * connects from its webview, whose WebSocket sends an Origin header, and Chrome/Edge (111+) refuse DevTools connections
+ * from origins not listed in --remote-allow-origins. Pass exactly the app's own origin; Node callers send none.
+ */
+export const browserArgs = (profileDir: string, show: boolean, allowOrigin?: string) => [
+  '--remote-debugging-port=0', ...(allowOrigin ? [`--remote-allow-origins=${allowOrigin}`] : []), `--user-data-dir=${profileDir}`, '--no-first-run', '--no-default-browser-check',
   '--disable-background-networking', '--disable-sync', '--password-store=basic', ...(show ? [] : ['--headless=new']), 'about:blank',
 ]
