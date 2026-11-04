@@ -8,4 +8,6 @@ export default defineConfig({
   clearScreen: false,
   server: { port: 5173, strictPort: true },
   build: { target: 'es2022', sourcemap: false },
+  // The script worker is created as an ES module and loads libraries on demand (code-split chunks).
+  worker: { format: 'es' },
 })
