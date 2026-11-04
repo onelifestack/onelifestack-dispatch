@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as db from '../core/db'
 import type { Collection, Environment, Folder, HistoryEntry, HttpResponse, KV, LogLine, PreparedRequest, RequestDef, Settings, TestResult } from '../core/types'
-import { bySort, defaultSettings, newCollection, newEnvironment, newFolder, newRequest, normalizeRequest, uid } from '../core/types'
+import { DEFAULT_SPACE, type Space, bySort, defaultSettings, newCollection, newEnvironment, newFolder, newRequest, normalizeRequest, spaceOf, uid } from '../core/types'
 import { prepare } from '../core/prepare'
 import { CookieTransport, type Transport, defaultTransport } from '../core/transport'
 import { CookieJar } from '../core/cookies'
@@ -26,6 +26,7 @@ export type View =
   | { kind: 'settings' }
   | { kind: 'cookies' }
   | { kind: 'schedules' }
+  | { kind: 'spaces' }
 
 export interface Result {
   sent: PreparedRequest
@@ -77,6 +78,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   /** Recently deleted things, newest last, so a delete can be undone. */
   const [trash, setTrash] = useState<{ label: string; data: Workspace }[]>([])
   const [backups, setBackups] = useState<db.BackupInfo[]>([])
+  const [spaces, setSpacesState] = useState<Space[]>([DEFAULT_SPACE])
   const aborts = useRef(new Map<string, AbortController>())
   const [pipeline] = useState<Pipeline>(() => {
     const sendOpts = () => ({ timeoutMs: settingsRef.current.timeoutMs, followRedirects: settingsRef.current.followRedirects, insecureTls: settingsRef.current.insecureTls })
@@ -95,6 +97,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
       if (!live) return
       setCollections(c.sort(byName)); setFolders(f); setRequests(r); setEnvironments(e.sort(byName)); setGlobalsState(g)
       setHistory(h); setSettingsState(s)
+      setSpacesState(await db.getSpaces())
       if (transport instanceof CookieTransport) {
         transport.jar.load(await db.getCookies() as never[])
         let timer: ReturnType<typeof setTimeout> | undefined
@@ -300,7 +303,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   const clearHistory = useCallback(async () => { await db.clearHistory(); setHistory([]) }, [])
 
   const addCollection = useCallback(async (name: string) => {
-    const c = newCollection(name); await db.putCollection(c)
+    const c = { ...newCollection(name), workspaceId: settingsRef.current.activeSpaceId }; await db.putCollection(c)
     setCollections((cs) => [...cs, c].sort(byName))
     return c
   }, [])
@@ -346,7 +349,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   }, [folders, requests, toTrash])
 
   const addEnvironment = useCallback(async (name: string) => {
-    const e = newEnvironment(name); await db.putEnvironment(e)
+    const e = { ...newEnvironment(name), workspaceId: settingsRef.current.activeSpaceId }; await db.putEnvironment(e)
     setEnvironments((es) => [...es, e].sort(byName))
     return e
   }, [])
@@ -372,7 +375,15 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   }, [])
   const setGlobals = useCallback(async (g: KV[]) => { setGlobalsState(g); await db.putGlobals(g) }, [])
 
-  const importWorkspace = useCallback(async (w: Workspace) => {
+  const importWorkspace = useCallback(async (w0: Workspace) => {
+    // Imports land in the workspace you're looking at (unless they name one that exists here).
+    const here = settingsRef.current.activeSpaceId
+    const known = (id?: string) => !!id && spaces.some((x) => x.id === id)
+    const w: Workspace = {
+      ...w0,
+      collections: w0.collections.map((c) => (known(c.workspaceId) && c.workspaceId !== DEFAULT_SPACE.id ? c : { ...c, workspaceId: here })),
+      environments: w0.environments.map((e) => (known(e.workspaceId) && e.workspaceId !== DEFAULT_SPACE.id ? e : { ...e, workspaceId: here })),
+    }
     await db.putMany(w)
     setCollections((cs) => [...cs, ...w.collections].sort(byName))
     setFolders((fs) => [...fs, ...w.folders])
@@ -382,7 +393,43 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
       const merged = [...globals, ...w.globals.filter((g) => !globals.some((x) => x.key === g.key))]
       await setGlobals(merged)
     }
-  }, [globals, setGlobals])
+  }, [globals, setGlobals, spaces])
+
+  // ---------- workspaces ----------
+  const activeSpaceId = spaces.some((x) => x.id === settings.activeSpaceId) ? settings.activeSpaceId : DEFAULT_SPACE.id
+  const visibleCollections = useMemo(() => collections.filter((c) => spaceOf(c) === activeSpaceId), [collections, activeSpaceId])
+  const visibleEnvironments = useMemo(() => environments.filter((e) => spaceOf(e) === activeSpaceId), [environments, activeSpaceId])
+  const saveSpaces = useCallback(async (next: Space[]) => { setSpacesState(next); await db.putSpaces(next) }, [])
+  /** Shows another workspace, and picks up the environment last used there. */
+  const switchSpace = useCallback((id: string) => {
+    const s = settingsRef.current
+    const remembered = s.spaceEnv[id] ?? null
+    const env = remembered && environments.some((e) => e.id === remembered && spaceOf(e) === id) ? remembered : null
+    setSettings({ activeSpaceId: id, activeEnvId: env, spaceEnv: { ...s.spaceEnv, [s.activeSpaceId]: s.activeEnvId } })
+    setView({ kind: 'request' })
+  }, [environments, setSettings])
+  const addSpace = useCallback(async (name: string) => {
+    const sp = { id: uid(), name }
+    await saveSpaces([...spaces, sp])
+    return sp
+  }, [spaces, saveSpaces])
+  const renameSpace = useCallback((id: string, name: string) => saveSpaces(spaces.map((x) => (x.id === id ? { ...x, name } : x))), [spaces, saveSpaces])
+  /** Only empty workspaces can be removed (move or delete their collections and environments first). */
+  const removeSpace = useCallback(async (id: string) => {
+    if (id === DEFAULT_SPACE.id || collections.some((c) => spaceOf(c) === id) || environments.some((e) => spaceOf(e) === id)) return false
+    await saveSpaces(spaces.filter((x) => x.id !== id))
+    if (settingsRef.current.activeSpaceId === id) switchSpace(DEFAULT_SPACE.id)
+    return true
+  }, [collections, environments, spaces, saveSpaces, switchSpace])
+  const moveToSpace = useCallback(async (kind: 'collection' | 'environment', id: string, spaceId: string) => {
+    if (kind === 'collection') {
+      const c = collections.find((x) => x.id === id); if (c) await updateCollection({ ...c, workspaceId: spaceId })
+    } else {
+      const e = environments.find((x) => x.id === id); if (!e) return
+      await updateEnvironment({ ...e, workspaceId: spaceId })
+      if (settingsRef.current.activeEnvId === id) setSettings({ activeEnvId: null })
+    }
+  }, [collections, environments, updateCollection, updateEnvironment, setSettings])
 
   /**
    * Moves requests and folders under a parent (a collection's top level, or a folder), placed before `beforeId`
@@ -476,7 +523,10 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
 
   return {
     trash, undoDelete, backups, backupNow, restoreBackup, placeItems, removeRequests, replaceCollection,
-    ready, transport, collections, folders, requests, environments, globals, history, settings, logs,
+    spaces, activeSpaceId, switchSpace, addSpace, renameSpace, removeSpace, moveToSpace,
+    /** Everything, across workspaces (exports, backups, file sync). The plain lists below are this workspace's. */
+    allCollections: collections, allEnvironments: environments,
+    ready, transport, collections: visibleCollections, folders, requests, environments: visibleEnvironments, globals, history, settings, logs,
     tabs, activeId, active, draft, view, result: active.result, sending: active.sending, saved, dirty, isDirty,
     collection, environment, prepared, chain, runContext, pipeline: pipelineRef, variableNames,
     setDraft, setView, setSettings, setLogs, log, openRequest, startNew, closeTab, selectTab, saveDraft, renameRequest,

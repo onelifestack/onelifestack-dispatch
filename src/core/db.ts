@@ -252,3 +252,8 @@ export const getSchedules = async () => (await getMeta<Schedule[]>('schedules'))
 export const putSchedules = (s: Schedule[]) => put('meta', s, 'schedules')
 export const getScheduleRuns = async () => (await getMeta<ScheduleRun[]>('scheduleRuns')) ?? []
 export const putScheduleRuns = (r: ScheduleRun[]) => put('meta', r, 'scheduleRuns')
+
+// ---------- workspaces ----------
+import { DEFAULT_SPACE, type Space } from './types'
+export const getSpaces = async (): Promise<Space[]> => { const s = await getMeta<Space[]>('spaces'); return s?.length ? s : [DEFAULT_SPACE] }
+export const putSpaces = (s: Space[]) => put('meta', s, 'spaces')

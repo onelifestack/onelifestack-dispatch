@@ -170,6 +170,7 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
                     ['Mock server…', () => ws.setView({ kind: 'mock', collectionId: c.id })],
                     ['Rename', async () => { const n = await ask('Rename collection', c.name); if (n) await ws.updateCollection({ ...c, name: n }) }],
                     ['Export collection', () => onExportCollection(c)],
+                    ...ws.spaces.filter((x) => x.id !== ws.activeSpaceId).map((x) => [`Move to “${x.name}”`, () => void ws.moveToSpace('collection', c.id, x.id)] as [string, () => void]),
                     ...(onExportPostman ? [['Export as Postman collection', () => onExportPostman(c)] as [string, () => void]] : []),
                     ['Delete', async () => { if (await confirm(`Delete “${c.name}” and everything in it? You can undo this right after.`)) await ws.removeCollection(c.id) }, 'danger'],
                   ]} />
@@ -233,6 +234,7 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
                 ['Use', () => ws.setSettings({ activeEnvId: e.id })],
                 ['Duplicate', async () => { const c = await ws.duplicateEnvironment(e); ws.setView({ kind: 'environment', id: c.id }) }],
                 ['Rename', async () => { const n = await ask('Rename environment', e.name); if (n) await ws.updateEnvironment({ ...e, name: n }) }],
+                ...ws.spaces.filter((x) => x.id !== ws.activeSpaceId).map((x) => [`Move to “${x.name}”`, () => void ws.moveToSpace('environment', e.id, x.id)] as [string, () => void]),
                 ['Delete', async () => { if (await confirm(`Delete environment “${e.name}”? You can undo this right after.`)) await ws.removeEnvironment(e.id) }, 'danger'],
               ]} />
             </li>

@@ -17,6 +17,7 @@ import { importBruno, toPostmanCollection } from '../core/interop'
 import { pickFolder, readCollectionDir, useLinkedDirSync } from './linkedDirs'
 import { SchedulesView, useScheduler } from './Schedules'
 import { layeredVars, selectLayer } from '../core/layers'
+import { SpacesView } from './SpacesView'
 import { DocsView } from './DocsView'
 import { MockView } from './MockView'
 import { Markdown } from './Markdown'
@@ -179,7 +180,8 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
     }
   }
 
-  const workspace = () => ({ collections: ws.collections, folders: ws.folders, requests: ws.requests, environments: ws.environments, globals: ws.globals })
+  // Backups and exports cover every workspace.
+  const workspace = () => ({ collections: ws.allCollections, folders: ws.folders, requests: ws.requests, environments: ws.allEnvironments, globals: ws.globals })
   const onExport = async () => {
     try {
       if (await saveTextFile(`dispatch-backup-${new Date().toISOString().slice(0, 10)}.json`, exportWorkspace(workspace())))
@@ -214,6 +216,13 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
     <div className="app">
       <header className="top">
         <span className="brand"><img src="./icon.svg" alt="" width="26" height="26" />Dispatch</span>
+        <label className="spacePick">
+          <span className="sr">Workspace</span>
+          <select aria-label="Workspace" value={ws.activeSpaceId} onChange={(e) => { if (e.target.value === '__manage') ws.setView({ kind: 'spaces' }); else ws.switchSpace(e.target.value) }}>
+            {ws.spaces.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            <option value="__manage">Manage workspaces…</option>
+          </select>
+        </label>
         <button type="button" className="btn small" onClick={() => ws.startNew(ws.draft.collectionId, ws.draft.folderId)}>+ New request</button>
         <span className="grow" />
         <label className="envPick">
@@ -271,6 +280,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           : env ? <EnvironmentEditor key={env.id} ws={ws} confirm={confirm} environment={env} />
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
           : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
+          : viewed.kind === 'spaces' ? <SpacesView ws={ws} ask={ask} notify={notify} />
           : viewed.kind === 'schedules' ? <SchedulesView ws={ws} sched={sched} notify={notify} />
           : viewed.kind === 'settings' ? <SettingsView ws={ws} notify={notify} />
           : viewed.kind === 'cookies' ? <CookiesView ws={ws} notify={notify} />

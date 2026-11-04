@@ -148,8 +148,15 @@ export interface Collection {
   id: string; name: string; auth: Auth; variables: KV[]; scripts: Scripts; docs: string; updatedAt: number
   /** Desktop: a folder this collection is kept in as files ("" = not linked). */
   linkedDir: string
+  /** The workspace it belongs to. */
+  workspaceId: string
 }
-export interface Environment { id: string; name: string; variables: KV[]; updatedAt: number }
+export interface Environment { id: string; name: string; variables: KV[]; updatedAt: number; workspaceId?: string }
+
+/** A workspace: a group of collections and environments ("spaces" in code; Workspace names the backup data). */
+export interface Space { id: string; name: string }
+export const DEFAULT_SPACE: Space = { id: 'default', name: 'My workspace' }
+export const spaceOf = (x: { workspaceId?: string }) => x.workspaceId || DEFAULT_SPACE.id
 
 export interface PreparedFile { name: string; type: string; base64: string }
 /** A form-data part after variables were filled in. */
@@ -222,6 +229,9 @@ export interface Settings {
   clientCerts: ClientCert[]
   /** Desktop: extra CA certificates (PEM) to trust. */
   caCerts: string[]
+  /** The workspace shown, and the environment last used in each workspace. */
+  activeSpaceId: string
+  spaceEnv: Record<string, string | null>
 }
 
 export interface ClientCert {
@@ -236,7 +246,7 @@ export interface ClientCert {
 
 export const defaultSettings: Settings = {
   activeEnvId: null, theme: 'system', timeoutMs: 30_000, followRedirects: true, insecureTls: false, cookieJar: true,
-  proxyUrl: '', proxyBypass: 'localhost, 127.0.0.1', clientCerts: [], caCerts: [],
+  proxyUrl: '', proxyBypass: 'localhost, 127.0.0.1', clientCerts: [], caCerts: [], activeSpaceId: 'default', spaceEnv: {},
 }
 
 let counter = 0
@@ -285,7 +295,7 @@ export function newCollection(name = 'New collection'): Collection {
   return normalizeCollection({ id: uid(), name })
 }
 export function normalizeCollection(c: Partial<Collection> & { id: string }): Collection {
-  return { name: 'Collection', variables: [], docs: '', linkedDir: '', updatedAt: Date.now(), ...c, auth: { ...emptyAuth('none'), ...c.auth }, scripts: { ...emptyScripts(), ...c.scripts } }
+  return { name: 'Collection', variables: [], docs: '', linkedDir: '', workspaceId: DEFAULT_SPACE.id, updatedAt: Date.now(), ...c, auth: { ...emptyAuth('none'), ...c.auth }, scripts: { ...emptyScripts(), ...c.scripts } }
 }
 
 export function newFolder(collectionId: string, name = 'New folder', parentId: string | null = null): Folder {

@@ -445,4 +445,48 @@ describe('Dispatch app', () => {
     await waitFor(() => expect(t.sent).toHaveLength(2))
     expect(t.sent.map((p) => p.url)).toEqual(['https://lb.test/health', 'http://10.0.0.5:8080/health'])
   })
+
+  it('keeps collections and environments apart in workspaces', async () => {
+    await start()
+    const newCol = async (name: string) => {
+      fireEvent.click(side().getByRole('button', { name: '+ Collection' }))
+      const d = await screen.findByRole('dialog', { hidden: true })
+      fireEvent.change(within(d).getByLabelText('New collection'), { target: { value: name } })
+      fireEvent.click(within(d).getByRole('button', { name: 'OK', hidden: true }))
+      await side().findByRole('button', { name })
+    }
+    await newCol('Home API')
+    fireEvent.click(screen.getByRole('tab', { name: 'Environments' }))
+    fireEvent.click(side().getByRole('button', { name: '+ New' }))
+    let d = await screen.findByRole('dialog', { hidden: true })
+    fireEvent.change(within(d).getByLabelText('New environment'), { target: { value: 'Home env' } })
+    fireEvent.click(within(d).getByRole('button', { name: 'OK', hidden: true }))
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Environment' })).getByRole('button', { name: 'Use this environment' }))
+    // a second workspace
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), { target: { value: '__manage' } })
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Workspaces' })).getByRole('button', { name: '+ New workspace' }))
+    d = await screen.findByRole('dialog', { hidden: true })
+    fireEvent.change(within(d).getByLabelText('New workspace'), { target: { value: 'Work' } })
+    fireEvent.click(within(d).getByRole('button', { name: 'OK', hidden: true }))
+    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Workspace' }) as HTMLSelectElement).selectedOptions[0].textContent).toBe('Work'))
+    expect((screen.getByRole('combobox', { name: 'Environment' }) as HTMLSelectElement).value).toBe('')
+    fireEvent.click(screen.getByRole('tab', { name: 'Collections' }))
+    expect(side().queryByRole('button', { name: 'Home API' })).toBeNull()
+    await newCol('Work API')
+    // back home: its collection and environment return
+    const homeId = within(screen.getByRole('combobox', { name: 'Workspace' })).getByRole('option', { name: 'My workspace' }).getAttribute('value')!
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), { target: { value: homeId } })
+    expect(await side().findByRole('button', { name: 'Home API' })).toBeTruthy()
+    expect(side().queryByRole('button', { name: 'Work API' })).toBeNull()
+    expect((screen.getByRole('combobox', { name: 'Environment' }) as HTMLSelectElement).selectedOptions[0].textContent).toBe('Home env')
+    // move Home API to Work; the home workspace can't be removed, Work can't while it has collections
+    fireEvent.click(side().getByRole('menuitem', { name: 'Move to “Work”', hidden: true }))
+    await waitFor(() => expect(side().queryByRole('button', { name: 'Home API' })).toBeNull())
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), { target: { value: '__manage' } })
+    const view = await screen.findByRole('region', { name: 'Workspaces' })
+    const workRow = within(view).getByText('Work').closest('tr')!
+    expect(within(workRow).getAllByRole('cell')[1].textContent).toBe('2')
+    fireEvent.click(within(workRow).getByRole('button', { name: 'Remove' }))
+    expect(await screen.findByText(/Move or delete Work’s collections/)).toBeTruthy()
+  })
 })
