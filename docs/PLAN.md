@@ -9,7 +9,7 @@ Order (each step: code + tests + typecheck + build, then commit and push):
 1. [x] Data model v2 + DB migration: folders (nested), path variables, more body types (form-data with files,
        binary, XML/HTML raw, GraphQL), per-request settings, docs, examples, scripts fields, globals, secret vars.
 2. [x] Request tabs (several open requests, restored on reload) + nested folders in the sidebar.
-3. [ ] Scripts + tests: sandboxed pre-request/post-response JS in a Web Worker with a pm-style API
+3. [x] Scripts + tests: sandboxed pre-request/post-response JS in a Web Worker with a pm-style API
        (variables, request, response, test/expect, sendRequest, console), test results tab, console panel.
 4. [ ] Dynamic fake-data variables ({{$randomEmail}} etc.).
 5. [ ] Collection runner: folder/collection, iterations, CSV/JSON data files (data-driven), delay, stop on
@@ -31,3 +31,8 @@ Progress notes go under each step as it lands.
   `core/runtime.ts` (app, runner and CLI use it), tabs restored on reload, nested folders with auth/scripts/docs,
   globals, secret variables (blank in backups), path variables, all body types incl. files (fetch + Rust multipart),
   per-request settings, timings (TTFB/download). 48 tests.
+- Step 3: scripts run in a fresh Web Worker per script (fetch/XHR/WebSocket/IndexedDB removed first; 10 s limit),
+  pm API close to Postman's (scopes, request edits, response + to.have.*, test/expect via chai, sendRequest,
+  skipRequest, setNextRequest, legacy tests[]), collection → folders → request order, tests tab, console drawer,
+  snippets. Browser-checked: sendRequest works, direct fetch blocked. Also pulled in from step 11: HTML/image
+  preview (sandboxed iframe), JSONPath filter, cookies tab, save response to file, save as example, timings.

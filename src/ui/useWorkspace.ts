@@ -6,6 +6,8 @@ import { prepare } from '../core/prepare'
 import { type Transport, defaultTransport } from '../core/transport'
 import type { Workspace } from '../core/backup'
 import { type Execution, type Pipeline, type RunContext, execute, folderChain, prepareContext, sendOptions } from '../core/runtime'
+import { type ScriptEngine, scriptPipeline } from '../core/scriptPipeline'
+import { WorkerEngine } from '../core/workerEngine'
 
 export type View =
   | { kind: 'request' }
@@ -36,8 +38,16 @@ const LOG_LIMIT = 500
 const newTab = (draft: RequestDef = newRequest()): Tab => ({ id: uid(), draft, result: null, sending: false })
 
 /** All app state and actions. Saved data lives in IndexedDB; open tabs are drafts until saved. */
-export function useWorkspace(given?: Transport, pipeline: Pipeline = {}) {
-  const [transport] = useState<Transport>(() => given ?? defaultTransport())
+export interface WorkspaceOptions {
+  transport?: Transport
+  engine?: ScriptEngine
+  /** Extra hooks merged after scripts (auth signing...). */
+  extend?: (base: Pipeline, transport: Transport) => Pipeline
+}
+
+export function useWorkspace(opts: WorkspaceOptions = {}) {
+  const [transport] = useState<Transport>(() => opts.transport ?? defaultTransport())
+  const settingsRef = useRef<Settings>(defaultSettings)
   const [ready, setReady] = useState(false)
   const [collections, setCollections] = useState<Collection[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
@@ -51,7 +61,14 @@ export function useWorkspace(given?: Transport, pipeline: Pipeline = {}) {
   const [view, setView] = useState<View>({ kind: 'request' })
   const [logs, setLogs] = useState<LogLine[]>([])
   const aborts = useRef(new Map<string, AbortController>())
-  const pipelineRef = useRef(pipeline); pipelineRef.current = pipeline
+  const [pipeline] = useState<Pipeline>(() => {
+    const base = scriptPipeline({
+      engine: opts.engine ?? new WorkerEngine(), transport,
+      sendOptions: () => ({ timeoutMs: settingsRef.current.timeoutMs, followRedirects: settingsRef.current.followRedirects, insecureTls: settingsRef.current.insecureTls }),
+    })
+    return opts.extend ? opts.extend(base, transport) : base
+  })
+  const pipelineRef = useRef(pipeline)
 
   useEffect(() => {
     let live = true
@@ -79,6 +96,7 @@ export function useWorkspace(given?: Transport, pipeline: Pipeline = {}) {
     return () => clearTimeout(t)
   }, [tabs, activeId, ready])
 
+  settingsRef.current = settings
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0]
   const draft = active.draft
   const savedOf = useCallback((d: RequestDef) => requests.find((r) => r.id === d.id) ?? null, [requests])

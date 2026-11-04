@@ -165,12 +165,23 @@ async fn save_text_file(app: tauri::AppHandle, file_name: String, contents: Stri
     Ok(true)
 }
 
+/// Saves bytes (base64) through the save dialog, for binary responses.
+#[tauri::command]
+async fn save_base64_file(app: tauri::AppHandle, file_name: String, base64: String) -> Result<bool, String> {
+    let bytes = STANDARD.decode(base64).map_err(|_| "The data couldn’t be decoded.".to_string())?;
+    let picked = app.dialog().file().set_file_name(&file_name).blocking_save_file();
+    let Some(path) = picked else { return Ok(false) };
+    let path = path.into_path().map_err(|e| e.to_string())?;
+    std::fs::write(&path, bytes).map_err(|e| format!("Couldn’t save {}: {e}", path.display()))?;
+    Ok(true)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(InFlight::default())
-        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file])
+        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file])
         .run(tauri::generate_context!())
         .expect("error while running Dispatch");
 }

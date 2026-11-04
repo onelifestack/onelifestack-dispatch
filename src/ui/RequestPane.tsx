@@ -14,6 +14,26 @@ type Tab = 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'docs' | 'settin
 export interface AuthActions { getToken: (auth: Auth, apply: (a: Auth) => void) => void; gettingToken: boolean }
 interface Props { ws: WorkspaceApi; onSave: () => void; notify: (msg: string) => void; authActions?: AuthActions; scriptHelp?: React.ReactNode }
 
+/** One-click examples for the script editor. */
+const SNIPPETS: Record<'pre' | 'post', [string, string][]> = {
+  pre: [
+    ['Set an environment variable', 'pm.environment.set("key", "value")'],
+    ['Set a timestamp', 'pm.variables.set("now", new Date().toISOString())'],
+    ['Add a header', 'pm.request.headers.upsert({ key: "X-Request-Id", value: pm.variables.replaceIn("{{$guid}}") })'],
+    ['Fetch a token first', 'const res = await pm.sendRequest({\n  url: pm.environment.get("authUrl"),\n  method: "POST",\n  header: { "Content-Type": "application/json" },\n  body: { mode: "raw", raw: JSON.stringify({ user: pm.environment.get("user") }) },\n})\npm.environment.set("token", res.json().token)'],
+    ['Skip this request', 'if (!pm.environment.get("token")) pm.execution.skipRequest()'],
+  ],
+  post: [
+    ['Status is 200', 'pm.test("status is 200", () => {\n  pm.response.to.have.status(200)\n})'],
+    ['Response time under 500 ms', 'pm.test("responds in under 500 ms", () => {\n  pm.expect(pm.response.responseTime).to.be.below(500)\n})'],
+    ['Body has a field', 'pm.test("has an id", () => {\n  pm.expect(pm.response.json()).to.have.property("id")\n})'],
+    ['Header is present', 'pm.test("is JSON", () => {\n  pm.response.to.have.header("Content-Type")\n  pm.expect(pm.response.headers.get("Content-Type")).to.include("json")\n})'],
+    ['Save a value for later', 'pm.environment.set("id", pm.response.json().id)'],
+    ['Log the body', 'console.log(pm.response.json())'],
+    ['Next request (runner)', 'pm.execution.setNextRequest("Request name") // null stops the run'],
+  ],
+}
+
 const BODY_KINDS: [BodyKind, string][] = [
   ['none', 'None'], ['json', 'JSON'], ['text', 'Text'], ['xml', 'XML'], ['html', 'HTML'],
   ['urlencoded', 'Form (urlencoded)'], ['formdata', 'Form-data (files)'], ['binary', 'Binary file'], ['graphql', 'GraphQL'],
@@ -79,12 +99,24 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp }: Pro
           ? <button type="button" className="btn" onClick={ws.cancel}>Cancel</button>
           : <button type="submit" className="btn primary">Send <kbd>Ctrl ↵</kbd></button>}
       </form>
-      {ws.prepared.unresolved.length > 0 && (
-        <p className="warnLine small" role="status">
-          No value for {ws.prepared.unresolved.map((n) => <code key={n}>{`{{${n}}}`}</code>)}
-          {ws.environment ? ` in ${ws.environment.name}` : ' (no environment selected)'}.
-        </p>
-      )}
+      {(() => {
+        // Names a pre-request script sets (in this request, its folders or collection) aren't really missing.
+        const pre = [draft.scripts.pre, ...ws.chain.map((f) => f.scripts.pre), ws.collection?.scripts.pre ?? ''].join('\n')
+        const bySetter = (n: string) => new RegExp(`\\.set\\(\\s*['"\`]${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"\`]`).test(pre)
+        const missing = ws.prepared.unresolved.filter((n) => !bySetter(n))
+        const scripted = ws.prepared.unresolved.filter(bySetter)
+        return <>
+          {missing.length > 0 && (
+            <p className="warnLine small" role="status">
+              No value for {missing.map((n) => <code key={n}>{`{{${n}}}`}</code>)}
+              {ws.environment ? ` in ${ws.environment.name}` : ' (no environment selected)'}.
+            </p>
+          )}
+          {scripted.length > 0 && missing.length === 0 && (
+            <p className="infoLine small">{scripted.map((n) => <code key={n}>{`{{${n}}}`}</code>)} is set by a pre-request script.</p>
+          )}
+        </>
+      })()}
       <div className="tabs scrollTabs" role="tablist" aria-label="Request parts">
         {tabs.map(([id, label, badge]) => (
           <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
@@ -149,7 +181,17 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp }: Pro
               placeholder={scriptTab === 'pre'
                 ? '// Runs before the request is sent.\npm.environment.set("now", Date.now())'
                 : '// Runs after the response arrives.\npm.test("status is 200", () => {\n  pm.expect(pm.response.code).to.equal(200)\n})'} />
+            <div className="snippets" aria-label="Snippets">
+              <span className="small muted">Snippets:</span>
+              {SNIPPETS[scriptTab].map(([label, code]) => (
+                <button key={label} type="button" className="chip" onClick={() => {
+                  const cur = draft.scripts[scriptTab]
+                  set({ scripts: { ...draft.scripts, [scriptTab]: cur.trim() ? `${cur.replace(/\s*$/, '')}\n\n${code}\n` : `${code}\n` } })
+                }}>{label}</button>
+              ))}
+            </div>
             {scriptHelp}
+            <p className="muted small">Scripts run sandboxed with no access to your saved data. <code>pm</code> covers variables, request, response, <code>pm.test</code>/<code>pm.expect</code> (chai), <code>pm.sendRequest</code> and <code>console</code>; output shows in the Console.</p>
           </div>
         )}
         {tab === 'docs' && (

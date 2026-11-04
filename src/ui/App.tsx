@@ -10,6 +10,8 @@ import { nameFromUrl } from '../core/curl'
 import { withScheme } from '../core/url'
 import { isDesktop, type Transport } from '../core/transport'
 import type { Collection } from '../core/types'
+import type { Pipeline } from '../core/runtime'
+import type { ScriptEngine } from '../core/scriptPipeline'
 
 const readText = (file: File) => new Promise<string>((resolve, reject) => {
   const r = new FileReader()
@@ -29,6 +31,45 @@ export async function saveTextFile(fileName: string, text: string, type = 'appli
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
   return true
+}
+
+/** Saves text or base64 bytes as a file (desktop: native dialog; browser: download). */
+export async function saveAnyFile(fileName: string, data: { text?: string; base64?: string }, type: string): Promise<boolean> {
+  if (data.text !== undefined) return saveTextFile(fileName, data.text, type)
+  if (isDesktop()) {
+    const { invoke } = await import('@tauri-apps/api/core')
+    return invoke<boolean>('save_base64_file', { fileName, base64: data.base64 ?? '' })
+  }
+  const a = document.createElement('a')
+  a.href = `data:${type};base64,${data.base64 ?? ''}`
+  a.download = fileName
+  a.click()
+  return true
+}
+
+function Console({ ws, onClose }: { ws: WorkspaceApi; onClose: () => void }) {
+  const end = useRef<HTMLDivElement>(null)
+  useEffect(() => { end.current?.scrollIntoView?.({ block: 'end' }) }, [ws.logs.length])
+  return (
+    <section className="console" aria-label="Console">
+      <div className="consoleHead">
+        <strong>Console</strong><span className="muted small">script output and network log</span><span className="grow" />
+        <button type="button" className="btn small ghost" onClick={() => ws.setLogs([])}>Clear</button>
+        <button type="button" className="btn small ghost" aria-label="Close console" onClick={onClose}>×</button>
+      </div>
+      <div className="consoleBody mono" role="log">
+        {ws.logs.map((l, i) => (
+          <div key={i} className={`logLine ${l.level}`}>
+            <span className="muted">{new Date(l.at).toLocaleTimeString()}</span>
+            {l.source && <span className="logSrc">{l.source}</span>}
+            <span className="logText">{l.text}</span>
+          </div>
+        ))}
+        {!ws.logs.length && <p className="muted small">Nothing yet. <code>console.log()</code> in a script, or send a request.</p>}
+        <div ref={end} />
+      </div>
+    </section>
+  )
 }
 
 /** Other importers (OpenAPI, HAR) register here so App doesn't need to know them. */
@@ -61,14 +102,16 @@ export interface AppExtras {
   /** Extra panels by view kind (runner, load test...). */
   views?: Partial<Record<'runner' | 'load', (ws: WorkspaceApi, notify: (m: string) => void) => React.ReactNode>>
   importers?: Importer[]
+  extend?: (base: Pipeline, transport: Transport) => Pipeline
 }
 
-export function App({ transport, extras = {} }: { transport?: Transport; extras?: AppExtras }) {
-  const ws = useWorkspace(transport)
+export function App({ transport, engine, extras = {} }: { transport?: Transport; engine?: ScriptEngine; extras?: AppExtras }) {
+  const ws = useWorkspace({ transport, engine, extend: extras.extend })
   const { ask, confirm, askSave, askPlace, node: dialog } = useDialogs()
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const fileInput = useRef<HTMLInputElement>(null)
+  const [consoleOpen, setConsoleOpen] = useState(false)
 
   const notify = useCallback((msg: string) => {
     setToast(msg); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(null), msg.length > 80 ? 8000 : 3500)
@@ -197,11 +240,15 @@ export function App({ transport, extras = {} }: { transport?: Transport; extras?
               <TabBar ws={ws} onClose={(id) => void closeTab(id)} />
               <div className="split">
                 <RequestPane ws={ws} onSave={save} notify={notify} />
-                <ResponsePane ws={ws} notify={notify} />
+                <ResponsePane ws={ws} notify={notify} saveFile={saveAnyFile} />
               </div>
             </>}
       </main>
+      {consoleOpen && <Console ws={ws} onClose={() => setConsoleOpen(false)} />}
       <footer className="statusBar small">
+        <button type="button" className="linkBtn" aria-expanded={consoleOpen} onClick={() => setConsoleOpen(!consoleOpen)}>
+          Console{ws.logs.some((l) => l.level === 'error') ? ' ⚠' : ''} ({ws.logs.length})
+        </button>
         <span>{ws.transport.unrestricted ? 'Desktop: sends directly, no CORS limits' : 'Browser: servers must allow this page (CORS)'}</span>
         <span className="grow" />
         <span>{ws.environment ? `Environment: ${ws.environment.name}` : 'No environment'}</span>

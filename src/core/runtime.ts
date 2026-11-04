@@ -35,6 +35,12 @@ export interface Execution {
   logs: LogLine[]
   /** Variables changed by scripts, to be saved: environment/collection/globals. */
   changes: VariableChanges
+  /** pm.execution.setNextRequest() (runner): undefined = not called, null = stop. */
+  nextRequest?: string | null
+  /** A pre-request script threw; the request isn't sent. */
+  scriptError?: string
+  /** A pre-request script skipped the request. */
+  skipped?: boolean
 }
 
 export interface VariableChanges {
@@ -78,6 +84,7 @@ export async function execute(req: RequestDef, ctx: RunContext, transport: Trans
   const out: Execution = { sent: prepare(req, prepareContext(ctx, req)), response: null, error: null, tests: [], logs: [], changes: noChanges() }
   try {
     const finalReq = pipeline.beforeSend ? await pipeline.beforeSend(req, ctx, out) : req
+    if (out.scriptError) throw new SendError(`Not sent: the pre-request script failed. ${out.scriptError}`)
     let sent = prepare(finalReq, prepareContext(ctx, finalReq))
     if (pipeline.sign) sent = await pipeline.sign(sent, finalReq, ctx)
     out.sent = sent
@@ -95,6 +102,7 @@ export async function execute(req: RequestDef, ctx: RunContext, transport: Trans
     out.response = response
     if (pipeline.afterResponse) await pipeline.afterResponse(finalReq, ctx, out)
   } catch (e) {
+    if (e instanceof Error && e.name === 'SkipRequest') out.skipped = true
     out.error = e instanceof SendError ? e.message : `The request failed: ${e instanceof Error ? e.message : String(e)}`
   }
   return out
