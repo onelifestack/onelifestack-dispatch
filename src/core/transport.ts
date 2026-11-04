@@ -1,4 +1,4 @@
-import type { HttpResponse, PreparedRequest } from './types'
+import type { ClientCert, HttpResponse, PreparedRequest } from './types'
 import type { CookieJar } from './cookies'
 
 export function base64ToBytes(b64: string): Uint8Array {
@@ -28,7 +28,35 @@ export function fetchBody(p: PreparedRequest): BodyInit | undefined {
   return p.body ?? undefined
 }
 
-export interface SendOptions { timeoutMs: number; followRedirects: boolean; insecureTls: boolean; signal?: AbortSignal }
+export interface SendOptions {
+  timeoutMs: number
+  followRedirects: boolean
+  insecureTls: boolean
+  signal?: AbortSignal
+  /** Desktop only. */
+  proxyUrl?: string
+  proxyBypass?: string
+  clientCerts?: ClientCert[]
+  caCerts?: string[]
+}
+
+/** The client certificate for a URL: exact host (and port) first, then the most specific *.domain match. */
+export function certFor(url: string, certs: ClientCert[] | undefined): ClientCert | null {
+  if (!certs?.length) return null
+  let u: URL
+  try { u = new URL(url) } catch { return null }
+  const host = u.hostname.toLowerCase()
+  const port = u.port || (u.protocol === 'https:' ? '443' : '80')
+  const scored = certs.filter((c) => c.enabled && c.cert.trim() && c.key.trim()).map((c) => {
+    const [h, p] = c.host.trim().toLowerCase().split(':')
+    if (p && p !== port) return null
+    const portBonus = p ? 500 : 0 // a certificate pinned to this port beats one for any port
+    if (h === host) return { c, score: 1000 + portBonus + h.length }
+    if (h.startsWith('*.') && (host.endsWith(h.slice(1)) || host === h.slice(2))) return { c, score: portBonus + h.length }
+    return null
+  }).filter((x): x is { c: ClientCert; score: number } => !!x)
+  return scored.sort((a, b) => b.score - a.score)[0]?.c ?? null
+}
 
 export interface Transport {
   /** Shown in the status bar so it's clear how requests are sent. */
@@ -126,6 +154,9 @@ export class DesktopTransport implements Transport {
           body_base64: p.bodyFile?.base64 ?? null,
           multipart: p.multipart?.map((m) => ({ name: m.name, value: m.value ?? null, file_name: m.file?.name ?? null, content_type: m.file?.type ?? null, data_base64: m.file?.base64 ?? null })) ?? null,
           timeout_ms: opts.timeoutMs, follow_redirects: opts.followRedirects, insecure_tls: opts.insecureTls,
+          proxy: opts.proxyUrl || null, no_proxy: opts.proxyBypass || null,
+          client_cert_pem: certFor(p.url, opts.clientCerts)?.cert ?? null, client_key_pem: certFor(p.url, opts.clientCerts)?.key ?? null,
+          ca_certs_pem: (opts.caCerts ?? []).filter((c) => c.trim()),
         },
       })
       const bytes = base64ToBytes(r.body_base64)

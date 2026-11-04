@@ -1,4 +1,4 @@
-import type { Collection, Environment, Folder, HttpResponse, KV, LogLine, PreparedRequest, RequestDef, Settings, TestResult } from './types'
+import type { Auth, Collection, Environment, Folder, HttpResponse, KV, LogLine, PreparedRequest, RequestDef, Settings, TestResult } from './types'
 import { prepare, type PrepareContext } from './prepare'
 import { SendError, type SendOptions, type Transport } from './transport'
 
@@ -41,6 +41,10 @@ export interface Execution {
   scriptError?: string
   /** A pre-request script skipped the request. */
   skipped?: boolean
+  /** HTML from pm.visualizer.set() in a post-response script. */
+  visualizer?: { html: string }
+  /** OAuth 2 tokens refreshed while sending, to save back to where the auth lives. */
+  authUpdate?: { owner: 'request' | 'folder' | 'collection'; id: string; patch: Partial<Auth> }
 }
 
 export interface VariableChanges {
@@ -57,6 +61,7 @@ export function sendOptions(req: RequestDef, settings: Settings, signal?: AbortS
     followRedirects: req.settings.followRedirects ?? settings.followRedirects,
     insecureTls: req.settings.insecureTls ?? settings.insecureTls,
     signal,
+    proxyUrl: settings.proxyUrl, proxyBypass: settings.proxyBypass, clientCerts: settings.clientCerts, caCerts: settings.caCerts,
   }
 }
 
@@ -72,7 +77,7 @@ export interface Pipeline {
   /** Runs before preparing; may change the request and variables. */
   beforeSend?: (req: RequestDef, ctx: RunContext, out: Execution) => Promise<RequestDef>
   /** Async signing (JWT, AWS SigV4). */
-  sign?: (p: PreparedRequest, req: RequestDef, ctx: RunContext) => Promise<PreparedRequest>
+  sign?: (p: PreparedRequest, req: RequestDef, ctx: RunContext, out: Execution) => Promise<PreparedRequest>
   /** Answers auth challenges (Digest) by resending. */
   retry?: (p: PreparedRequest, res: HttpResponse, req: RequestDef, ctx: RunContext, send: (p: PreparedRequest) => Promise<HttpResponse>) => Promise<{ sent: PreparedRequest; response: HttpResponse } | null>
   /** Runs after the response (tests). */
@@ -86,7 +91,7 @@ export async function execute(req: RequestDef, ctx: RunContext, transport: Trans
     const finalReq = pipeline.beforeSend ? await pipeline.beforeSend(req, ctx, out) : req
     if (out.scriptError) throw new SendError(`Not sent: the pre-request script failed. ${out.scriptError}`)
     let sent = prepare(finalReq, prepareContext(ctx, finalReq))
-    if (pipeline.sign) sent = await pipeline.sign(sent, finalReq, ctx)
+    if (pipeline.sign) sent = await pipeline.sign(sent, finalReq, ctx, out)
     out.sent = sent
     if (!sent.url) throw new SendError('Enter a URL to send the request to.')
     try { new URL(sent.url) } catch {

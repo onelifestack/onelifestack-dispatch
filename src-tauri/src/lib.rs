@@ -1,7 +1,7 @@
 //! Dispatch desktop shell. The UI is the same web app; this side sends requests natively, so there are
 //! no browser CORS limits or forbidden headers, and it can (opt-in) accept self-signed certificates.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error as _;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -27,6 +27,19 @@ pub struct SendRequest {
     timeout_ms: u64,
     follow_redirects: bool,
     insecure_tls: bool,
+    /// Proxy URL (http://, https:// or socks5://), and hosts that skip it.
+    #[serde(default)]
+    proxy: Option<String>,
+    #[serde(default)]
+    no_proxy: Option<String>,
+    /// Client certificate and key (PEM) for mutual TLS.
+    #[serde(default)]
+    client_cert_pem: Option<String>,
+    #[serde(default)]
+    client_key_pem: Option<String>,
+    /// Extra CA certificates (PEM) to trust, e.g. a homelab CA.
+    #[serde(default)]
+    ca_certs_pem: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -69,13 +82,26 @@ fn describe(e: &reqwest::Error) -> String {
 
 async fn perform(req: SendRequest) -> Result<SendResponse, String> {
     let method = reqwest::Method::from_bytes(req.method.as_bytes()).map_err(|_| format!("Unknown method {}.", req.method))?;
-    let client = reqwest::Client::builder()
+    let mut cb = reqwest::Client::builder()
         .timeout(Duration::from_millis(req.timeout_ms))
         .redirect(if req.follow_redirects { reqwest::redirect::Policy::limited(10) } else { reqwest::redirect::Policy::none() })
         .danger_accept_invalid_certs(req.insecure_tls)
-        .user_agent(concat!("Dispatch/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| describe(&e))?;
+        .user_agent(concat!("Dispatch/", env!("CARGO_PKG_VERSION")));
+    if let Some(p) = req.proxy.as_deref().filter(|p| !p.trim().is_empty()) {
+        let mut proxy = reqwest::Proxy::all(p.trim()).map_err(|e| format!("The proxy address isn’t valid: {e}"))?;
+        if let Some(np) = req.no_proxy.as_deref().filter(|x| !x.trim().is_empty()) { proxy = proxy.no_proxy(reqwest::NoProxy::from_string(np)); }
+        cb = cb.proxy(proxy);
+    } else {
+        cb = cb.no_proxy();
+    }
+    if let (Some(cert), Some(key)) = (req.client_cert_pem.as_deref(), req.client_key_pem.as_deref()) {
+        let identity = reqwest::Identity::from_pem(format!("{cert}\n{key}").as_bytes()).map_err(|e| format!("The client certificate or key couldn’t be read: {}", describe(&e)))?;
+        cb = cb.identity(identity);
+    }
+    for pem in &req.ca_certs_pem {
+        for c in reqwest::Certificate::from_pem_bundle(pem.as_bytes()).map_err(|e| format!("A CA certificate couldn’t be read: {}", describe(&e)))? { cb = cb.add_root_certificate(c); }
+    }
+    let client = cb.build().map_err(|e| describe(&e))?;
 
     let mut builder = client.request(method, &req.url);
     for (k, v) in &req.headers {
@@ -130,6 +156,13 @@ async fn perform(req: SendRequest) -> Result<SendResponse, String> {
         time_ms: started.elapsed().as_millis() as u64,
         ttfb_ms,
     })
+}
+
+/// The send path for tests: a SendRequest as JSON in, the SendResponse as JSON out.
+pub async fn send_json(req: serde_json::Value) -> Result<serde_json::Value, String> {
+    let req: SendRequest = serde_json::from_value(req).map_err(|e| e.to_string())?;
+    let res = perform(req).await?;
+    serde_json::to_value(res).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -212,6 +245,144 @@ async fn oauth_listen(port: u16, path: String, timeout_secs: u64) -> Result<Stri
         }
     };
     tokio::time::timeout(Duration::from_secs(timeout_secs), wait).await.map_err(|_| "Timed out waiting for the login to finish.".to_string())?
+}
+
+// ---------- Server-sent events (desktop) ----------
+
+#[derive(Default)]
+struct SseStreams(Mutex<HashMap<u64, tauri::async_runtime::JoinHandle<()>>>);
+
+#[derive(Deserialize)]
+pub struct SseOpen { id: u64, url: String, headers: Vec<(String, String)>, insecure_tls: bool }
+
+#[derive(Serialize, Clone)]
+struct SseMsg { id: u64, kind: String, text: String, status: u16 }
+
+/// Opens an event stream; text arrives as "sse" events (kind: open, chunk, closed, error). The app parses it.
+#[tauri::command]
+fn sse_open(app: tauri::AppHandle, state: tauri::State<'_, SseStreams>, req: SseOpen) -> Result<(), String> {
+    use futures_util::StreamExt;
+    use tauri::Emitter;
+    let id = req.id;
+    let handle = tauri::async_runtime::spawn(async move {
+        let emit = |kind: &str, text: String, status: u16| { let _ = app.emit("sse", SseMsg { id, kind: kind.into(), text, status }); };
+        let client = match reqwest::Client::builder().danger_accept_invalid_certs(req.insecure_tls).build() { Ok(c) => c, Err(e) => { emit("error", describe(&e), 0); return; } };
+        let mut b = client.get(&req.url).header("Accept", "text/event-stream").header("Cache-Control", "no-cache");
+        for (k, v) in &req.headers { b = b.header(k, v); }
+        match b.send().await {
+            Err(e) => emit("error", describe(&e), 0),
+            Ok(res) => {
+                let status = res.status().as_u16();
+                emit("open", res.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_string(), status);
+                let mut stream = res.bytes_stream();
+                let mut pending: Vec<u8> = vec![];
+                while let Some(chunk) = stream.next().await {
+                    match chunk {
+                        Ok(bytes) => {
+                            pending.extend_from_slice(&bytes);
+                            // Only hand over complete UTF-8; keep a split character for the next chunk.
+                            let cut = match std::str::from_utf8(&pending) { Ok(_) => pending.len(), Err(e) => e.valid_up_to() };
+                            let text = String::from_utf8_lossy(&pending[..cut]).to_string();
+                            pending.drain(..cut);
+                            if !text.is_empty() { emit("chunk", text, status); }
+                        }
+                        Err(e) => { emit("error", describe(&e), status); return; }
+                    }
+                }
+                emit("closed", String::new(), status);
+            }
+        }
+    });
+    state.0.lock().unwrap().insert(id, handle);
+    Ok(())
+}
+
+#[tauri::command]
+fn sse_close(state: tauri::State<'_, SseStreams>, id: u64) {
+    if let Some(h) = state.0.lock().unwrap().remove(&id) { h.abort(); }
+}
+
+/// Shows a desktop notification (scheduled runs that fail).
+#[tauri::command]
+fn notify_desktop(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification().builder().title(title).body(body).show().map_err(|e| e.to_string())
+}
+
+// ---------- Collections as files ----------
+
+fn safe_join(root: &std::path::Path, rel: &str) -> Result<std::path::PathBuf, String> {
+    let rel = std::path::Path::new(rel);
+    if rel.is_absolute() || rel.components().any(|c| !matches!(c, std::path::Component::Normal(_))) {
+        return Err(format!("Refusing to write outside the collection folder: {}", rel.display()));
+    }
+    Ok(root.join(rel))
+}
+
+const OURS: [&str; 3] = [".req.yaml", "_folder.yaml", "dispatch.collection.yaml"];
+
+#[tauri::command]
+async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
+    app.dialog().file().blocking_pick_folder().and_then(|p| p.into_path().ok()).map(|p| p.display().to_string())
+}
+
+/// Every Dispatch file under `root` (skips .git and node_modules; files over 2 MB are left out).
+#[tauri::command]
+fn read_collection_dir(root: String) -> Result<Vec<(String, String)>, String> { collection_dir_read(root) }
+
+pub fn collection_dir_read(root: String) -> Result<Vec<(String, String)>, String> {
+    let root = std::path::PathBuf::from(&root);
+    if !root.join("dispatch.collection.yaml").exists() { return Err(format!("{} has no dispatch.collection.yaml.", root.display())); }
+    let mut out = vec![];
+    let mut stack = vec![root.clone()];
+    while let Some(dir) = stack.pop() {
+        for e in std::fs::read_dir(&dir).map_err(|e| format!("Couldn’t read {}: {e}", dir.display()))? {
+            let e = e.map_err(|e| e.to_string())?;
+            let p = e.path();
+            let name = e.file_name().to_string_lossy().to_string();
+            if p.is_dir() { if name != ".git" && name != "node_modules" { stack.push(p); } continue; }
+            if !OURS.iter().any(|s| name.ends_with(s)) { continue; }
+            if e.metadata().map(|m| m.len() > 2 * 1024 * 1024).unwrap_or(true) { continue; }
+            let rel = p.strip_prefix(&root).map_err(|e| e.to_string())?.to_string_lossy().replace('\\', "/");
+            let text = std::fs::read_to_string(&p).map_err(|e| format!("Couldn’t read {rel}: {e}"))?;
+            out.push((rel, text));
+        }
+    }
+    Ok(out)
+}
+
+/// Writes the files; with `prune`, also removes Dispatch files that aren't in the list (renames, moves,
+/// deletes) and then empty folders. Never touches other files.
+#[tauri::command]
+fn write_collection_dir(root: String, files: Vec<(String, String)>, prune: bool) -> Result<(), String> { collection_dir_write(root, files, prune) }
+
+pub fn collection_dir_write(root: String, files: Vec<(String, String)>, prune: bool) -> Result<(), String> {
+    let root = std::path::PathBuf::from(&root);
+    std::fs::create_dir_all(&root).map_err(|e| format!("Couldn’t create {}: {e}", root.display()))?;
+    let mut keep = HashSet::new();
+    for (rel, text) in &files {
+        let p = safe_join(&root, rel)?;
+        if let Some(parent) = p.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+        if std::fs::read_to_string(&p).ok().as_deref() != Some(text.as_str()) {
+            std::fs::write(&p, text).map_err(|e| format!("Couldn’t write {rel}: {e}"))?;
+        }
+        keep.insert(p);
+    }
+    if prune {
+        let mut dirs = vec![];
+        let mut stack = vec![root.clone()];
+        while let Some(dir) = stack.pop() {
+            for e in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+                let p = e.path();
+                let name = e.file_name().to_string_lossy().to_string();
+                if p.is_dir() { if name != ".git" && name != "node_modules" { dirs.push(p.clone()); stack.push(p); } continue; }
+                if OURS.iter().any(|s| name.ends_with(s)) && !keep.contains(&p) { let _ = std::fs::remove_file(&p); }
+            }
+        }
+        dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
+        for d in dirs { let _ = std::fs::remove_dir(&d); } // only succeeds when empty
+    }
+    Ok(())
 }
 
 // ---------- Mock server ----------
@@ -328,9 +499,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(InFlight::default())
+        .manage(SseStreams::default())
         .manage(std::sync::Arc::new(MockState::default()))
-        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call])
+        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call, pick_folder, read_collection_dir, write_collection_dir, notify_desktop, sse_open, sse_close])
         .run(tauri::generate_context!())
         .expect("error while running Dispatch");
 }

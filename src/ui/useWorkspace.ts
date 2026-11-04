@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as db from '../core/db'
 import type { Collection, Environment, Folder, HistoryEntry, HttpResponse, KV, LogLine, PreparedRequest, RequestDef, Settings, TestResult } from '../core/types'
-import { defaultSettings, newCollection, newEnvironment, newFolder, newRequest, normalizeRequest, uid } from '../core/types'
+import { bySort, defaultSettings, newCollection, newEnvironment, newFolder, newRequest, normalizeRequest, uid } from '../core/types'
 import { prepare } from '../core/prepare'
 import { CookieTransport, type Transport, defaultTransport } from '../core/transport'
 import { CookieJar } from '../core/cookies'
@@ -9,6 +9,7 @@ import type { Workspace } from '../core/backup'
 import { type Execution, type Pipeline, type RunContext, execute, folderChain, prepareContext, sendOptions } from '../core/runtime'
 import { type ScriptEngine, scriptPipeline } from '../core/scriptPipeline'
 import { WorkerEngine } from '../core/workerEngine'
+import { FAKE } from '../core/fake'
 import { authPipeline } from '../core/auth'
 
 export type View =
@@ -21,12 +22,17 @@ export type View =
   | { kind: 'load'; requestId: string | null }
   | { kind: 'docs'; collectionId: string }
   | { kind: 'mock'; collectionId: string }
+  | { kind: 'backups' }
+  | { kind: 'settings' }
+  | { kind: 'cookies' }
+  | { kind: 'schedules' }
 
 export interface Result {
   sent: PreparedRequest
   response: HttpResponse | null
   error: string | null
   tests: TestResult[]
+  visualizer?: { html: string }
 }
 
 export interface Tab {
@@ -68,6 +74,9 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   const [activeId, setActiveId] = useState<string>(() => tabs[0].id)
   const [view, setView] = useState<View>({ kind: 'request' })
   const [logs, setLogs] = useState<LogLine[]>([])
+  /** Recently deleted things, newest last, so a delete can be undone. */
+  const [trash, setTrash] = useState<{ label: string; data: Workspace }[]>([])
+  const [backups, setBackups] = useState<db.BackupInfo[]>([])
   const aborts = useRef(new Map<string, AbortController>())
   const [pipeline] = useState<Pipeline>(() => {
     const sendOpts = () => ({ timeoutMs: settingsRef.current.timeoutMs, followRedirects: settingsRef.current.followRedirects, insecureTls: settingsRef.current.insecureTls })
@@ -81,11 +90,24 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     void (async () => {
       const [c, f, r, e, g, h, s, saved] = await Promise.all([
         db.listCollections(), db.listFolders(), db.listRequests(), db.listEnvironments(), db.getGlobals(), db.listHistory(), db.getSettings(),
-        db.getMeta<{ tabs: RequestDef[]; active: number }>('tabs'),
+        db.getOpenTabs(),
       ])
       if (!live) return
       setCollections(c.sort(byName)); setFolders(f); setRequests(r); setEnvironments(e.sort(byName)); setGlobalsState(g)
       setHistory(h); setSettingsState(s)
+      if (transport instanceof CookieTransport) {
+        transport.jar.load(await db.getCookies() as never[])
+        let timer: ReturnType<typeof setTimeout> | undefined
+        transport.jar.onChange = () => { clearTimeout(timer); timer = setTimeout(() => { void db.putCookies(transport.jar.entries()) }, 300) }
+      }
+      // A daily backup, taken quietly when the app opens.
+      void (async () => {
+        let list = await db.listBackups()
+        if (!list.length || Date.now() - list[0].at > 24 * 3600_000) {
+          if (c.length || r.length || e.length) { await db.addBackup({ collections: c, folders: f, requests: r, environments: e, globals: g }, 'daily'); list = await db.listBackups() }
+        }
+        if (live) setBackups(list)
+      })()
       if (saved?.tabs?.length) {
         const restored = saved.tabs.map((d) => newTab(normalizeRequest(d)))
         setTabs(restored); setActiveId(restored[Math.min(saved.active, restored.length - 1)]?.id ?? restored[0].id)
@@ -98,7 +120,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   // Open tabs survive a reload (drafts included).
   useEffect(() => {
     if (!ready) return
-    const t = setTimeout(() => { void db.putMeta('tabs', { tabs: tabs.map((x) => x.draft), active: Math.max(0, tabs.findIndex((x) => x.id === activeId)) }) }, 400)
+    const t = setTimeout(() => { void db.putOpenTabs(tabs.map((x) => x.draft), Math.max(0, tabs.findIndex((x) => x.id === activeId))) }, 400)
     return () => clearTimeout(t)
   }, [tabs, activeId, ready])
 
@@ -118,6 +140,13 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     collection: collections.find((c) => c.id === d.collectionId) ?? null,
     folders, environment, globals, ...extra,
   }), [collections, folders, environment, globals])
+  /** Variable names for "{{" completion: what's in scope for the open request, then the fake-data generators. */
+  const variableNames = useCallback(() => {
+    const out = new Map<string, string>()
+    const add = (rows: KV[] | undefined, from: string) => rows?.forEach((v) => { if (v.enabled && v.key.trim()) out.set(v.key.trim(), v.secret ? `${from} · secret` : `${from} · ${v.value.slice(0, 30)}`) })
+    add(globals, 'globals'); add(collection?.variables, 'collection'); add(environment?.variables, environment?.name ?? 'environment')
+    return [...[...out].map(([name, detail]) => ({ name, detail })), ...Object.keys(FAKE).map((name) => ({ name, detail: 'generated' }))]
+  }, [globals, collection, environment])
   const prepared = useMemo(() => prepare(draft, prepareContext(runContext(draft), draft)), [draft, runContext])
   const chain = useMemo(() => folderChain(folders, draft.folderId), [folders, draft.folderId])
 
@@ -191,12 +220,18 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     setTabs((ts) => ts.map((t) => (t.draft.id === r.id ? { ...t, draft: { ...t.draft, collectionId, folderId } } : t)))
   }, [persistRequest])
 
+  const toTrash = useCallback((label: string, data: Partial<Workspace>) => {
+    setTrash((t) => [...t, { label, data: { collections: [], folders: [], requests: [], environments: [], ...data } }].slice(-20))
+  }, [])
+
   const removeRequest = useCallback(async (id: string) => {
+    const r = requests.find((x) => x.id === id)
     await db.deleteRequest(id)
-    setRequests((rs) => rs.filter((r) => r.id !== id))
+    setRequests((rs) => rs.filter((x) => x.id !== id))
+    if (r) toTrash(`“${r.name}”`, { requests: [r] })
     // Open tabs keep the request as an unsaved draft.
     setTabs((ts) => ts.map((t) => (t.draft.id === id ? { ...t, draft: { ...t.draft, id: uid() } } : t)))
-  }, [])
+  }, [requests, toTrash])
 
   const duplicateRequest = useCallback(async (r: RequestDef) => {
     const copy: RequestDef = { ...structuredClone(r), id: uid(), name: `${r.name} copy`, updatedAt: Date.now() }
@@ -218,6 +253,21 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     if (glob) { setGlobalsState(glob); await db.putGlobals(glob) }
   }, [])
 
+  /** Saves OAuth tokens refreshed during a send back to the request, folder or collection that owns the auth. */
+  const applyAuthUpdate = useCallback(async (u: NonNullable<Execution['authUpdate']>) => {
+    if (u.owner === 'request') {
+      setTabs((ts) => ts.map((t) => (t.draft.id === u.id ? { ...t, draft: { ...t.draft, auth: { ...t.draft.auth, ...u.patch } } } : t)))
+      const savedReq = requests.find((r) => r.id === u.id)
+      if (savedReq) { const next = { ...savedReq, auth: { ...savedReq.auth, ...u.patch } }; await db.putRequest(next); setRequests((rs) => rs.map((r) => (r.id === u.id ? next : r))) }
+    } else if (u.owner === 'folder') {
+      const f = folders.find((x) => x.id === u.id)
+      if (f) { const next = { ...f, auth: { ...f.auth, ...u.patch } }; setFolders((fs) => fs.map((x) => (x.id === u.id ? next : x))); await db.putFolder(next) }
+    } else {
+      const c = collections.find((x) => x.id === u.id)
+      if (c) { const next = { ...c, auth: { ...c.auth, ...u.patch } }; setCollections((cs) => cs.map((x) => (x.id === u.id ? next : x))); await db.putCollection(next) }
+    }
+  }, [requests, folders, collections])
+
   const send = useCallback(async () => {
     const tab = active
     if (tab.sending) return
@@ -226,18 +276,19 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     const ctx = runContext(tab.draft)
     const x = await execute(tab.draft, ctx, transport, sendOptions(tab.draft, settings, ctrl.signal), pipelineRef.current)
     aborts.current.delete(tab.id)
-    patchTab(tab.id, { sending: false, result: { sent: x.sent, response: x.response, error: x.error, tests: x.tests } })
+    patchTab(tab.id, { sending: false, result: { sent: x.sent, response: x.response, error: x.error, tests: x.tests, visualizer: x.visualizer } })
     log([...x.logs, {
       level: x.error ? 'error' : 'info', at: Date.now(), source: 'network',
       text: `${x.sent.method} ${x.sent.url} → ${x.response ? `${x.response.status} ${x.response.statusText} · ${x.response.timeMs} ms` : x.error}`,
     }])
     await applyChanges(x, ctx)
+    if (x.authUpdate) await applyAuthUpdate(x.authUpdate)
     let entry: HistoryEntry = { id: uid(), at: Date.now(), request: structuredClone(tab.draft), sent: x.sent, response: x.response, error: x.error, tests: x.tests }
     // Large bodies would bloat history; keep the first 256 KB and drop binary data.
     if (entry.response) entry = { ...entry, response: { ...entry.response, body: entry.response.body.slice(0, 262_144), base64: undefined } }
     await db.addHistory(entry)
     setHistory((h) => [entry, ...h].slice(0, db.HISTORY_LIMIT))
-  }, [active, patchTab, runContext, transport, settings, log, applyChanges])
+  }, [active, patchTab, runContext, transport, settings, log, applyChanges, applyAuthUpdate])
 
   const cancel = useCallback(() => aborts.current.get(active.id)?.abort(), [active.id])
 
@@ -260,13 +311,16 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     await db.putCollection(next)
   }, [])
   const removeCollection = useCallback(async (id: string) => {
+    const c = collections.find((x) => x.id === id)
+    const gone = c ? { collections: [c], folders: folders.filter((f) => f.collectionId === id), requests: requests.filter((r) => r.collectionId === id) } : null
     await db.deleteCollection(id)
     setCollections((cs) => cs.filter((c) => c.id !== id))
     setFolders((fs) => fs.filter((f) => f.collectionId !== id))
     setRequests((rs) => rs.filter((r) => r.collectionId !== id))
     setTabs((ts) => ts.map((t) => (t.draft.collectionId === id ? { ...t, draft: { ...t.draft, id: uid(), collectionId: null, folderId: null } } : t)))
     setView((v) => (v.kind === 'collection' && v.id === id ? { kind: 'request' } : v))
-  }, [])
+    if (c && gone) toTrash(`“${c.name}”`, gone)
+  }, [collections, folders, requests, toTrash])
 
   const addFolder = useCallback(async (collectionId: string, name: string, parentId: string | null = null) => {
     const f = newFolder(collectionId, name, parentId); await db.putFolder(f)
@@ -281,12 +335,15 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   const removeFolder = useCallback(async (id: string) => {
     const ids = new Set([id])
     for (let grew = true; grew;) { grew = false; for (const f of folders) if (f.parentId && ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); grew = true } }
+    const top = folders.find((f) => f.id === id)
+    const gone = { folders: folders.filter((f) => ids.has(f.id)), requests: requests.filter((r) => r.folderId && ids.has(r.folderId)) }
     await db.deleteFolders([...ids])
     setFolders((fs) => fs.filter((f) => !ids.has(f.id)))
     setRequests((rs) => rs.filter((r) => !r.folderId || !ids.has(r.folderId)))
     setTabs((ts) => ts.map((t) => (t.draft.folderId && ids.has(t.draft.folderId) ? { ...t, draft: { ...t.draft, id: uid(), folderId: null } } : t)))
     setView((v) => (v.kind === 'folder' && ids.has(v.id) ? { kind: 'request' } : v))
-  }, [folders])
+    if (top) toTrash(`“${top.name}”`, gone)
+  }, [folders, requests, toTrash])
 
   const addEnvironment = useCallback(async (name: string) => {
     const e = newEnvironment(name); await db.putEnvironment(e)
@@ -299,11 +356,13 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     await db.putEnvironment(next)
   }, [])
   const removeEnvironment = useCallback(async (id: string) => {
+    const e = environments.find((x) => x.id === id)
     await db.deleteEnvironment(id)
     setEnvironments((es) => es.filter((e) => e.id !== id))
     setSettingsState((s) => { if (s.activeEnvId !== id) return s; const n = { ...s, activeEnvId: null }; void db.putSettings(n); return n })
     setView((v) => (v.kind === 'environment' && v.id === id ? { kind: 'request' } : v))
-  }, [])
+    if (e) toTrash(`“${e.name}”`, { environments: [e] })
+  }, [environments, toTrash])
   const setGlobals = useCallback(async (g: KV[]) => { setGlobalsState(g); await db.putGlobals(g) }, [])
 
   const importWorkspace = useCallback(async (w: Workspace) => {
@@ -318,10 +377,101 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     }
   }, [globals, setGlobals])
 
+  /**
+   * Moves requests and folders under a parent (a collection's top level, or a folder), placed before `beforeId`
+   * (a sibling request or folder) or at the end. Siblings are renumbered so the order is exact. Folders carry their
+   * contents along, also to another collection. A folder can't move into itself or its own subfolders.
+   */
+  const placeItems = useCallback(async (items: { kind: 'request' | 'folder'; id: string }[], parent: { collectionId: string; folderId: string | null }, beforeId: string | null = null) => {
+    const descendants = (fid: string) => {
+      const ids = new Set([fid])
+      for (let grew = true; grew;) { grew = false; for (const f of folders) if (f.parentId && ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); grew = true } }
+      return ids
+    }
+    if (parent.folderId && items.some((i) => i.kind === 'folder' && descendants(i.id).has(parent.folderId!))) return false
+    const moving = new Set(items.map((i) => i.id))
+    let nextFolders = folders.map((f) => ({ ...f }))
+    let nextRequests = requests.map((r) => ({ ...r }))
+    // Re-parent.
+    for (const it of items) {
+      if (it.kind === 'request') nextRequests = nextRequests.map((r) => (r.id === it.id ? { ...r, collectionId: parent.collectionId, folderId: parent.folderId } : r))
+      else {
+        const ids = descendants(it.id)
+        nextFolders = nextFolders.map((f) => (f.id === it.id ? { ...f, collectionId: parent.collectionId, parentId: parent.folderId } : ids.has(f.id) ? { ...f, collectionId: parent.collectionId } : f))
+        nextRequests = nextRequests.map((r) => (r.folderId && ids.has(r.folderId) ? { ...r, collectionId: parent.collectionId } : r))
+      }
+    }
+    // Renumber the new siblings with the moved items placed before `beforeId`.
+    const siblings = [
+      ...nextFolders.filter((f) => f.collectionId === parent.collectionId && f.parentId === parent.folderId).map((f) => ({ kind: 'folder' as const, id: f.id, sort: f.sort, name: f.name })),
+      ...nextRequests.filter((r) => r.collectionId === parent.collectionId && (r.folderId ?? null) === parent.folderId).map((r) => ({ kind: 'request' as const, id: r.id, sort: r.sort, name: r.name })),
+    ].sort(bySort)
+    const rest = siblings.filter((x) => !moving.has(x.id))
+    const moved = items.map((i) => siblings.find((x) => x.id === i.id)!).filter(Boolean)
+    const at = beforeId ? rest.findIndex((x) => x.id === beforeId) : -1
+    const ordered = at >= 0 ? [...rest.slice(0, at), ...moved, ...rest.slice(at)] : [...rest, ...moved]
+    ordered.forEach((x, i) => {
+      if (x.kind === 'folder') nextFolders = nextFolders.map((f) => (f.id === x.id ? { ...f, sort: i + 1 } : f))
+      else nextRequests = nextRequests.map((r) => (r.id === x.id ? { ...r, sort: i + 1 } : r))
+    })
+    const changedF = nextFolders.filter((f, i) => JSON.stringify(f) !== JSON.stringify(folders[i]))
+    const changedR = nextRequests.filter((r, i) => JSON.stringify(r) !== JSON.stringify(requests[i]))
+    setFolders(nextFolders); setRequests(nextRequests)
+    setTabs((ts) => ts.map((t) => { const r = changedR.find((x) => x.id === t.draft.id); return r ? { ...t, draft: { ...t.draft, collectionId: r.collectionId, folderId: r.folderId, sort: r.sort } } : t }))
+    await db.putMany({ folders: changedF, requests: changedR })
+    return true
+  }, [folders, requests])
+
+  /** Replaces a collection's contents (e.g. reloaded from its folder); adds it if it's new. */
+  const replaceCollection = useCallback(async (w: Workspace) => {
+    const c = w.collections[0]
+    await db.deleteCollection(c.id)
+    await db.putMany({ collections: [c], folders: w.folders, requests: w.requests })
+    setCollections((cs) => [...cs.filter((x) => x.id !== c.id), c].sort(byName))
+    setFolders((fs) => [...fs.filter((f) => f.collectionId !== c.id), ...w.folders])
+    setRequests((rs) => [...rs.filter((r) => r.collectionId !== c.id), ...w.requests])
+    setTabs((ts) => ts.map((t) => { const r = w.requests.find((x) => x.id === t.draft.id); return r ? { ...t, draft: structuredClone(r) } : t }))
+  }, [])
+
+  /** Deletes several requests with one undo. */
+  const removeRequests = useCallback(async (ids: string[]) => {
+    const gone = requests.filter((r) => ids.includes(r.id))
+    for (const id of ids) await db.deleteRequest(id)
+    setRequests((rs) => rs.filter((r) => !ids.includes(r.id)))
+    setTabs((ts) => ts.map((t) => (ids.includes(t.draft.id) ? { ...t, draft: { ...t.draft, id: uid() } } : t)))
+    if (gone.length) toTrash(gone.length === 1 ? `“${gone[0].name}”` : `${gone.length} requests`, { requests: gone })
+  }, [requests, toTrash])
+
+  /** Puts back the most recent delete. */
+  const undoDelete = useCallback(async () => {
+    const last = trash[trash.length - 1]
+    if (!last) return null
+    setTrash((t) => t.slice(0, -1))
+    await importWorkspace(last.data)
+    return last.label
+  }, [trash, importWorkspace])
+
+  const snapshot = useCallback((): db.BackupData => ({ collections, folders, requests, environments, globals }), [collections, folders, requests, environments, globals])
+  const backupNow = useCallback(async (reason: db.BackupInfo['reason'] = 'manual') => {
+    await db.addBackup(snapshot(), reason); setBackups(await db.listBackups())
+  }, [snapshot])
+  /** Replaces everything with a backup, after backing up what's there now. */
+  const restoreBackup = useCallback(async (id: string) => {
+    const data = await db.getBackup(id)
+    if (!data) return false
+    await db.addBackup(snapshot(), 'before-restore')
+    await db.replaceAll(data)
+    setCollections(data.collections.sort(byName)); setFolders(data.folders); setRequests(data.requests)
+    setEnvironments(data.environments.sort(byName)); setGlobalsState(data.globals)
+    setBackups(await db.listBackups()); setView({ kind: 'request' })
+    return true
+  }, [snapshot])
+
   return {
+    trash, undoDelete, backups, backupNow, restoreBackup, placeItems, removeRequests, replaceCollection,
     ready, transport, collections, folders, requests, environments, globals, history, settings, logs,
     tabs, activeId, active, draft, view, result: active.result, sending: active.sending, saved, dirty, isDirty,
-    collection, environment, prepared, chain, runContext, pipeline: pipelineRef,
+    collection, environment, prepared, chain, runContext, pipeline: pipelineRef, variableNames,
     setDraft, setView, setSettings, setLogs, log, openRequest, startNew, closeTab, selectTab, saveDraft, renameRequest,
     moveRequest, removeRequest, duplicateRequest, send, cancel, applyChanges, openHistory, clearHistory,
     addCollection, updateCollection, removeCollection, addFolder, updateFolder, removeFolder,

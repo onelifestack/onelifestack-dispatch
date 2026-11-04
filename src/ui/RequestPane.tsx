@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from 'react'
+import type { GraphQLSchema } from 'graphql'
 import type { Auth, BodyKind, Method, RequestDef } from '../core/types'
 import { METHODS } from '../core/types'
 import { paramsFromUrl, urlWithParams } from '../core/url'
@@ -48,6 +49,7 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp, rende
   const { draft, setDraft, sending } = ws
   const [tab, setTab] = useState<Tab>('params')
   const [scriptTab, setScriptTab] = useState<'pre' | 'post'>('pre')
+  const [gqlSchema, setGqlSchema] = useState<GraphQLSchema | null>(null)
   const set = (patch: Partial<RequestDef>) => setDraft((d) => ({ ...d, ...patch }))
   const setBody = (patch: Partial<RequestDef['body']>) => setDraft((d) => ({ ...d, body: { ...d.body, ...patch } }))
 
@@ -156,13 +158,14 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp, rende
               )}
             </label>
             {['json', 'text', 'xml', 'html'].includes(draft.body.kind) &&
-              <CodeArea label="Body" value={draft.body.text} rows={12} onChange={(text) => setBody({ text })}
+              <CodeArea label="Body" value={draft.body.text} rows={12} onChange={(text) => setBody({ text })} variables={ws.variableNames}
+                lang={draft.body.kind === 'json' ? 'json' : draft.body.kind === 'xml' ? 'xml' : draft.body.kind === 'html' ? 'html' : 'text'}
                 placeholder={draft.body.kind === 'json' ? '{\n  "name": "{{name}}"\n}' : draft.body.kind === 'xml' ? '<item>\n  <name>{{name}}</name>\n</item>' : ''} />}
             {draft.body.kind === 'graphql' && <div className="gqlGrid">
-              <CodeArea label="GraphQL query" value={draft.body.text} rows={12} onChange={(text) => setBody({ text })} placeholder={'query Me {\n  me { id name }\n}'} />
-              <CodeArea label="GraphQL variables" value={draft.body.graphqlVariables} rows={12} onChange={(graphqlVariables) => setBody({ graphqlVariables })} placeholder={'{\n  "id": "{{userId}}"\n}'} />
+              <CodeArea label="GraphQL query" lang="graphql" schema={gqlSchema} variables={ws.variableNames} value={draft.body.text} rows={12} onChange={(text) => setBody({ text })} placeholder={'query Me {\n  me { id name }\n}'} />
+              <CodeArea label="GraphQL variables" lang="json" variables={ws.variableNames} value={draft.body.graphqlVariables} rows={12} onChange={(graphqlVariables) => setBody({ graphqlVariables })} placeholder={'{\n  "id": "{{userId}}"\n}'} />
             </div>}
-            {draft.body.kind === 'graphql' && <Suspense fallback={<p className="muted small">Loading GraphQL tools…</p>}><GraphqlTools key={ws.prepared.url} ws={ws} notify={notify} /></Suspense>}
+            {draft.body.kind === 'graphql' && <Suspense fallback={<p className="muted small">Loading GraphQL tools…</p>}><GraphqlTools key={ws.prepared.url} ws={ws} notify={notify} onSchema={setGqlSchema} /></Suspense>}
             {problem && <p className="warnLine small" role="status">JSON problem: {problem}</p>}
             {draft.body.kind === 'urlencoded' && (
               <KVTable label="Form fields" keyPlaceholder="Field" rows={draft.body.fields} onChange={(fields) => setBody({ fields })} />
@@ -185,7 +188,7 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp, rende
               <button type="button" role="tab" aria-selected={scriptTab === 'pre'} className={`seg ${scriptTab === 'pre' ? 'on' : ''}`} onClick={() => setScriptTab('pre')}>Before request</button>
               <button type="button" role="tab" aria-selected={scriptTab === 'post'} className={`seg ${scriptTab === 'post' ? 'on' : ''}`} onClick={() => setScriptTab('post')}>After response (tests)</button>
             </div>
-            <CodeArea label={scriptTab === 'pre' ? 'Pre-request script' : 'Post-response script'} rows={14} value={draft.scripts[scriptTab]}
+            <CodeArea key={scriptTab} lang="javascript" variables={ws.variableNames} label={scriptTab === 'pre' ? 'Pre-request script' : 'Post-response script'} rows={14} value={draft.scripts[scriptTab]}
               onChange={(v) => set({ scripts: { ...draft.scripts, [scriptTab]: v } })}
               placeholder={scriptTab === 'pre'
                 ? '// Runs before the request is sent.\npm.environment.set("now", Date.now())'

@@ -6,6 +6,7 @@
 // GET  /orders/:id    -> one order, 404 if unknown
 // GET  /digest        -> HTTP Digest auth (user "ann", password "secret")
 // GET  /flaky         -> slow sometimes, fails about 1 in 20
+// GET  /events        -> server-sent events: a tick every second, 5 in all
 import { createServer } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
 
@@ -57,10 +58,22 @@ createServer(async (req, res) => {
     if (!ok) return json(res, 401, { error: 'digest required' }, { 'www-authenticate': `Digest realm="${realm}", nonce="${nonce}", qop="auth", algorithm=MD5` })
     return json(res, 200, { hello: p.username })
   }
+  if (url.pathname === '/events') {
+    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
+    res.write(': hello\n\n')
+    let n = 0
+    const t = setInterval(() => {
+      n++
+      res.write(`event: tick\nid: ${n}\ndata: ${JSON.stringify({ n, at: new Date().toISOString(), who: who ?? null })}\n\n`)
+      if (n === 5) { clearInterval(t); res.end() }
+    }, 300)
+    req.on('close', () => clearInterval(t))
+    return
+  }
   if (url.pathname === '/flaky') {
     const r = Math.random()
     setTimeout(() => (r < 0.05 ? json(res, 503, { error: 'busy' }) : json(res, 200, { ok: true })), 15 + Math.random() * 40 + (r > 0.95 ? 250 : 0))
     return
   }
-  json(res, 404, { error: 'not found', try: ['/login', '/orders', '/orders/:id', '/digest', '/flaky'] })
+  json(res, 404, { error: 'not found', try: ['/login', '/orders', '/orders/:id', '/digest', '/flaky', '/events'] })
 }).listen(port, () => console.log(`Demo API on http://localhost:${port}`))

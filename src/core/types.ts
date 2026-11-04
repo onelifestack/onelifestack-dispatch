@@ -69,7 +69,7 @@ export interface Auth {
   service: string
 }
 
-export type Protocol = 'http' | 'ws' | 'mqtt' | 'grpc'
+export type Protocol = 'http' | 'ws' | 'mqtt' | 'grpc' | 'sse' | 'socketio'
 
 export interface RequestSettings {
   /** null = use the app setting. */
@@ -91,6 +91,7 @@ export interface Example {
 
 export interface WsConfig { messages: KV[] }
 export interface MqttConfig { clientId: string; topics: KV[]; publishTopic: string; payload: string; qos: 0 | 1 | 2; retain: boolean }
+export interface SocketIoConfig { listen: string; emitEvent: string }
 export interface GrpcConfig { method: string; proto: string; useReflection: boolean; message: string; metadata: KV[]; tls: boolean }
 
 export interface RequestDef {
@@ -116,6 +117,7 @@ export interface RequestDef {
   ws: WsConfig
   mqtt: MqttConfig
   grpc: GrpcConfig
+  sio: SocketIoConfig
   /** Position among its siblings (requests and folders share one order); ties sort by name. */
   sort: number
   updatedAt: number
@@ -134,7 +136,11 @@ export interface Folder {
   updatedAt: number
 }
 
-export interface Collection { id: string; name: string; auth: Auth; variables: KV[]; scripts: Scripts; docs: string; updatedAt: number }
+export interface Collection {
+  id: string; name: string; auth: Auth; variables: KV[]; scripts: Scripts; docs: string; updatedAt: number
+  /** Desktop: a folder this collection is kept in as files ("" = not linked). */
+  linkedDir: string
+}
 export interface Environment { id: string; name: string; variables: KV[]; updatedAt: number }
 
 export interface PreparedFile { name: string; type: string; base64: string }
@@ -201,10 +207,28 @@ export interface Settings {
   insecureTls: boolean
   /** Keep cookies from responses and send them back (desktop). */
   cookieJar: boolean
+  /** Desktop: proxy for every request ("" = none), and hosts that skip it (comma separated). */
+  proxyUrl: string
+  proxyBypass: string
+  /** Desktop: client certificates (mutual TLS), picked by host. */
+  clientCerts: ClientCert[]
+  /** Desktop: extra CA certificates (PEM) to trust. */
+  caCerts: string[]
+}
+
+export interface ClientCert {
+  id: string
+  /** "api.example.com", "*.example.com", optionally with ":port". */
+  host: string
+  /** PEM certificate (chain) and private key. */
+  cert: string
+  key: string
+  enabled: boolean
 }
 
 export const defaultSettings: Settings = {
   activeEnvId: null, theme: 'system', timeoutMs: 30_000, followRedirects: true, insecureTls: false, cookieJar: true,
+  proxyUrl: '', proxyBypass: 'localhost, 127.0.0.1', clientCerts: [], caCerts: [],
 }
 
 let counter = 0
@@ -245,6 +269,7 @@ export function normalizeRequest(r: Partial<RequestDef> & { id: string }): Reque
     ws: { messages: [], ...r.ws },
     mqtt: { clientId: '', topics: [], publishTopic: '', payload: '', qos: 0, retain: false, ...r.mqtt },
     grpc: { method: '', proto: '', useReflection: true, message: '{}', metadata: [], tls: false, ...r.grpc },
+    sio: { listen: '', emitEvent: 'message', ...r.sio },
   }
 }
 
@@ -252,7 +277,7 @@ export function newCollection(name = 'New collection'): Collection {
   return normalizeCollection({ id: uid(), name })
 }
 export function normalizeCollection(c: Partial<Collection> & { id: string }): Collection {
-  return { name: 'Collection', variables: [], docs: '', updatedAt: Date.now(), ...c, auth: { ...emptyAuth('none'), ...c.auth }, scripts: { ...emptyScripts(), ...c.scripts } }
+  return { name: 'Collection', variables: [], docs: '', linkedDir: '', updatedAt: Date.now(), ...c, auth: { ...emptyAuth('none'), ...c.auth }, scripts: { ...emptyScripts(), ...c.scripts } }
 }
 
 export function newFolder(collectionId: string, name = 'New folder', parentId: string | null = null): Folder {

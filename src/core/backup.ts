@@ -2,6 +2,7 @@ import type { Auth, Collection, Environment, Example, Folder, KV, Method, Reques
 import { METHODS, emptyAuth, emptyBody, kv, newCollection, newEnvironment, newFolder, newRequest, normalizeCollection, normalizeFolder, normalizeRequest, uid } from './types'
 import { paramsFromUrl } from './url'
 import { importHar, importOpenApi, isHar, isOpenApi } from './openapi'
+import { importInsomnia, isInsomnia } from './interop'
 
 export interface Workspace { collections: Collection[]; folders: Folder[]; requests: RequestDef[]; environments: Environment[]; globals?: KV[] }
 
@@ -33,7 +34,7 @@ export function exportCollection(w: Workspace, collectionId: string): string {
 }
 
 export interface ImportResult extends Workspace {
-  source: 'dispatch' | 'postman-collection' | 'postman-environment' | 'openapi' | 'har'
+  source: 'dispatch' | 'postman-collection' | 'postman-environment' | 'openapi' | 'har' | 'insomnia' | 'bruno'
   warnings: string[]
 }
 
@@ -64,9 +65,10 @@ export function importData(data: any): ImportResult {
   if (data?.format === FORMAT) return importDispatch(data)
   if (isOpenApi(data)) return importOpenApi(data)
   if (isHar(data)) return importHar(data)
+  if (isInsomnia(data)) return importInsomnia(data)
   if ((data?.info?.schema && String(data.info.schema).includes('collection')) || (data?.info && Array.isArray(data?.item))) return importPostmanCollection(data)
   if (Array.isArray(data?.values) && (data?._postman_variable_scope === 'environment' || typeof data?.name === 'string')) return importPostmanEnvironment(data)
-  throw new Error('Unrecognised file. Import a Dispatch backup, a Postman collection (v2.1) or environment, an OpenAPI 3 / Swagger 2 spec, or a HAR file.')
+  throw new Error('Unrecognised file. Import a Dispatch backup, a Postman collection (v2.1) or environment, an Insomnia export, an OpenAPI 3 / Swagger 2 spec, or a HAR file. For Bruno, import the collection folder.')
 }
 
 function importDispatch(d: any): ImportResult {

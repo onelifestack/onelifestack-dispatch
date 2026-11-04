@@ -314,3 +314,58 @@ describe('format', () => {
     expect(prettyJson('{"a":1}')).toBe('{\n  "a": 1\n}'); expect(prettyJson('<html>')).toBeNull()
   })
 })
+
+import { certFor } from '../src/core/transport'
+import { CookieJar as Jar2 } from '../src/core/cookies'
+describe('network settings', () => {
+  const cert = (host: string, extra = {}) => ({ id: host, host, cert: 'C', key: 'K', enabled: true, ...extra })
+  it('picks the client certificate by host, port and wildcard', () => {
+    const certs = [cert('*.example.com'), cert('api.example.com'), cert('api.example.com:8443'), cert('off.test', { enabled: false })]
+    expect(certFor('https://api.example.com/x', certs)?.host).toBe('api.example.com')
+    expect(certFor('https://api.example.com:8443/x', certs)?.host).toBe('api.example.com:8443')
+    expect(certFor('https://other.example.com', certs)?.host).toBe('*.example.com')
+    expect(certFor('https://example.com', certs)?.host).toBe('*.example.com')
+    expect(certFor('https://off.test', certs)).toBeNull()
+    expect(certFor('https://nope.test', certs)).toBeNull()
+  })
+  it('lets the cookie manager add, edit and remove cookies, and reports changes', () => {
+    const jar = new Jar2(); let changes = 0; jar.onChange = () => changes++
+    jar.set({ host: 'a.test', name: 'sid', value: '1', path: '/', expiresAt: null })
+    jar.set({ host: 'a.test', name: 'sid', value: '2', path: '/', expiresAt: null })
+    expect(jar.entries()).toHaveLength(1); expect(jar.header('https://a.test/')).toBe('sid=2')
+    const saved = jar.entries(); const again = new Jar2(); again.load(saved)
+    expect(again.header('https://a.test/x')).toBe('sid=2')
+    jar.remove('a.test', 'sid'); expect(jar.entries()).toHaveLength(0)
+    expect(changes).toBe(3)
+  })
+})
+
+import { SseParser } from '../src/core/sse'
+describe('server-sent events', () => {
+  it('parses events across chunk boundaries, with ids, types, comments and multi-line data', () => {
+    const p = new SseParser()
+    expect(p.push(': keep-alive\nda')).toEqual([])
+    expect(p.push('ta: hello\n\nevent: tick\nid: 7\ndata: {"n":1}\ndata: more\r\n\r\n')).toEqual([
+      { event: 'message', data: 'hello', id: null, retry: null },
+      { event: 'tick', data: '{"n":1}\nmore', id: '7', retry: null },
+    ])
+    expect(p.lastEventId).toBe('7')
+    expect(p.push('retry: 3000\ndata:x\n\n')).toEqual([{ event: 'message', data: 'x', id: '7', retry: 3000 }])
+  })
+})
+
+import { diffLines, withContext } from '../src/core/diff'
+describe('diff', () => {
+  it('finds added, removed and unchanged lines', () => {
+    const d = diffLines('a\nb\nc\nd', 'a\nc\nd\ne')
+    expect(d).toEqual([{ type: 'same', text: 'a' }, { type: 'del', text: 'b' }, { type: 'same', text: 'c' }, { type: 'same', text: 'd' }, { type: 'add', text: 'e' }])
+    expect(diffLines('x', 'x')).toEqual([{ type: 'same', text: 'x' }])
+  })
+  it('collapses long unchanged runs', () => {
+    const a = Array.from({ length: 20 }, (_, i) => `l${i}`).join('\n')
+    const b = a.replace('l10', 'L10')
+    const c = withContext(diffLines(a, b), 1)
+    expect(c[0]).toEqual({ type: 'gap', count: 9 })
+    expect(c.filter((x) => x.type !== 'gap').map((x) => (x as { text: string }).text)).toEqual(['l9', 'l10', 'L10', 'l11'])
+  })
+})

@@ -8,16 +8,21 @@ import { CollectionEditor, EnvironmentEditor, FolderEditor, GlobalsEditor } from
 import { exportCollection, exportWorkspace, importFileAsync, type ImportResult } from '../core/backup'
 import { nameFromUrl } from '../core/curl'
 import { withScheme } from '../core/url'
-import { CookieTransport, type Transport } from '../core/transport'
+import type { Transport } from '../core/transport'
 import { saveAnyFile, saveTextFile } from './files'
 import { RunnerView } from './RunnerView'
 import { LoadView } from './LoadView'
 import { getOAuthToken } from './oauth'
+import { importBruno, toPostmanCollection } from '../core/interop'
+import { pickFolder, readCollectionDir, useLinkedDirSync } from './linkedDirs'
+import { SchedulesView, useScheduler } from './Schedules'
 import { DocsView } from './DocsView'
 import { MockView } from './MockView'
 import { Markdown } from './Markdown'
 import { ProtocolPicker, RealtimePane } from './RealtimePane'
 import { GrpcPane } from './GrpcPane'
+import { BackupsView } from './BackupsView'
+import { CookiesView, SettingsView } from './SettingsView'
 import type { Auth } from '../core/types'
 import type { Collection } from '../core/types'
 import type { Pipeline } from '../core/runtime'
@@ -67,7 +72,7 @@ function TabBar({ ws, onClose }: { ws: WorkspaceApi; onClose: (id: string) => vo
           <div key={t.id} className={`reqTab ${on ? 'on' : ''}`}>
             <button type="button" role="tab" aria-selected={on} className="reqTabMain" onClick={() => ws.selectTab(t.id)} title={t.draft.url || t.draft.name}
               onAuxClick={(e) => { if (e.button === 1) onClose(t.id) }}>
-              <span className={`mtag m-${t.draft.protocol === 'http' ? t.draft.method : 'proto'}`}>{t.draft.protocol !== 'http' ? ({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC' } as Record<string, string>)[t.draft.protocol] : t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>
+              <span className={`mtag m-${t.draft.protocol === 'http' ? t.draft.method : 'proto'}`}>{t.draft.protocol !== 'http' ? ({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO' } as Record<string, string>)[t.draft.protocol] : t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>
               <span className="reqTabName">{t.draft.name}</span>
               {t.sending && <span className="spin" aria-label="sending" />}
             </button>
@@ -90,9 +95,10 @@ export interface AppExtras {
 export function App({ transport, engine, extras = {} }: { transport?: Transport; engine?: ScriptEngine; extras?: AppExtras }) {
   const ws = useWorkspace({ transport, engine, extend: extras.extend })
   const { ask, confirm, askSave, askPlace, node: dialog } = useDialogs()
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ text: string; action?: { label: string; run: () => void } } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const fileInput = useRef<HTMLInputElement>(null)
+  const brunoInput = useRef<HTMLInputElement>(null)
   const [consoleOpen, setConsoleOpen] = useState(false)
   const [gettingToken, setGettingToken] = useState(false)
   const authActions = {
@@ -105,9 +111,21 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
     },
   }
 
-  const notify = useCallback((msg: string) => {
-    setToast(msg); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(null), msg.length > 80 ? 8000 : 3500)
+  const notify = useCallback((msg: string, action?: { label: string; run: () => void }) => {
+    setToast({ text: msg, action }); clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), action ? 9000 : msg.length > 80 ? 8000 : 3500)
   }, [])
+  useLinkedDirSync(ws, notify)
+  const sched = useScheduler(ws)
+  // Every delete can be undone from the toast.
+  const trashCount = useRef(0)
+  useEffect(() => {
+    if (ws.trash.length > trashCount.current) {
+      const last = ws.trash[ws.trash.length - 1]
+      notify(`Deleted ${last.label}.`, { label: 'Undo', run: () => { void ws.undoDelete().then((l) => { if (l) notify(`Restored ${l}.`) }) } })
+    }
+    trashCount.current = ws.trash.length
+  }, [ws.trash]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const root = document.documentElement
@@ -174,6 +192,12 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
   }
 
   const renderDocs = (md: string) => <Markdown text={md} />
+  const onExportPostman = async (c: Collection) => {
+    try {
+      if (await saveTextFile(`${c.name.replace(/[^\w.-]+/g, '-')}.postman_collection.json`, toPostmanCollection(c, ws.folders, ws.requests)))
+        notify(`Exported ${c.name} for Postman (secret values left out).`)
+    } catch (e) { notify(`Couldn’t export: ${String(e)}`) }
+  }
   const closeMenu = (e: React.MouseEvent) => { (e.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open') }
 
   if (!ws.ready) return <p className="loading">Opening…</p>
@@ -202,42 +226,46 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           <summary className="btn small ghost" aria-label="Menu">☰</summary>
           <div className="menuList right" role="menu">
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); fileInput.current?.click() }}>Import (backup, Postman, OpenAPI, HAR)…</button>
+            <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); brunoInput.current?.click() }}>Import a Bruno collection folder…</button>
+            {ws.transport.unrestricted && <button type="button" role="menuitem" onClick={async (e) => {
+              closeMenu(e)
+              try {
+                const dir = await pickFolder(); if (!dir) return
+                const r = await readCollectionDir(ws, dir)
+                await ws.replaceCollection(r)
+                notify(`Opened ${r.collections[0].name} from ${dir}; changes are saved back to the folder.${r.warnings.length ? ` ${r.warnings[0]}` : ''}`)
+              } catch (err) { notify(String(err)) }
+            }}>Open a collection folder…</button>}
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); void onExport() }}>Export backup</button>
+            <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); ws.setView({ kind: 'backups' }) }}>Local backups…</button>
             <hr />
-            <label className="menuRow">Theme
-              <select value={ws.settings.theme} onChange={(e) => ws.setSettings({ theme: e.target.value as 'system' | 'light' | 'dark' })}>
-                <option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option>
-              </select>
-            </label>
-            <label className="menuRow">Timeout (s)
-              <input type="number" min={1} max={600} value={Math.round(ws.settings.timeoutMs / 1000)}
-                onChange={(e) => ws.setSettings({ timeoutMs: Math.min(600, Math.max(1, Number(e.target.value) || 30)) * 1000 })} />
-            </label>
-            <label className="menuRow"><input type="checkbox" checked={ws.settings.followRedirects} onChange={(e) => ws.setSettings({ followRedirects: e.target.checked })} /> Follow redirects</label>
-            {ws.transport.unrestricted && <>
-              <label className="menuRow"><input type="checkbox" checked={ws.settings.insecureTls} onChange={(e) => ws.setSettings({ insecureTls: e.target.checked })} /> Allow self-signed certificates</label>
-              <label className="menuRow"><input type="checkbox" checked={ws.settings.cookieJar} onChange={(e) => ws.setSettings({ cookieJar: e.target.checked })} /> Keep cookies between requests</label>
-              {ws.transport instanceof CookieTransport && (
-                <button type="button" role="menuitem" onClick={(e) => {
-                  closeMenu(e)
-                  const jar = (ws.transport as CookieTransport).jar
-                  const list = jar.list()
-                  ws.log([{ level: 'info', at: Date.now(), source: 'cookies', text: list.length ? `Cleared ${list.length} cookie${list.length > 1 ? 's' : ''}: ${list.map((c) => `${c.name} (${c.domain})`).join(', ')}` : 'The cookie jar was already empty.' }])
-                  jar.clear(); notify(list.length ? `Cleared ${list.length} cookie${list.length > 1 ? 's' : ''}.` : 'No cookies to clear.')
-                }}>Clear cookies</button>
-              )}
-            </>}
+            <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); ws.setView({ kind: 'settings' }) }}>Settings…</button>
+            {ws.transport.unrestricted && <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); ws.setView({ kind: 'cookies' }) }}>Cookies…</button>}
           </div>
         </details>
-        <input ref={fileInput} type="file" accept="application/json,.json,.yaml,.yml,.har" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void onImport(f) }} />
+        <input ref={brunoInput} type="file" hidden {...{ webkitdirectory: '', directory: '' }} multiple aria-label="Bruno collection folder" onChange={async (e) => {
+          const list = [...(e.target.files ?? [])].filter((f) => /\.(bru|json)$/.test(f.name)); e.target.value = ''
+          if (!list.length) return
+          try {
+            const files = await Promise.all(list.map(async (f) => ({ path: (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name, text: await readText(f) })))
+            const r = importBruno(files)
+            await ws.importWorkspace(r)
+            notify(`Imported ${r.requests.length} requests and ${r.environments.length} environments from Bruno.${r.warnings.length ? ` ${r.warnings.slice(0, 2).join(' ')}` : ''}`)
+          } catch (err) { notify(err instanceof Error ? err.message : String(err)) }
+        }} />
+        <input ref={fileInput} type="file" aria-label="Import file" accept="application/json,.json,.yaml,.yml,.har" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void onImport(f) }} />
       </header>
-      <Sidebar ws={ws} dialogs={dialogs} onExportCollection={(c) => void onExportCollection(c)} />
+      <Sidebar ws={ws} dialogs={dialogs} onExportCollection={(c) => void onExportCollection(c)} onExportPostman={(c) => void onExportPostman(c)} />
       <main className="work">
         {col ? <CollectionEditor key={col.id} ws={ws} confirm={confirm} collection={col} authActions={authActions} renderDocs={renderDocs} />
           : folder ? <FolderEditor key={folder.id} ws={ws} confirm={confirm} folder={folder} authActions={authActions} renderDocs={renderDocs} />
           : env ? <EnvironmentEditor key={env.id} ws={ws} confirm={confirm} environment={env} />
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
           : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
+          : viewed.kind === 'schedules' ? <SchedulesView ws={ws} sched={sched} notify={notify} />
+          : viewed.kind === 'settings' ? <SettingsView ws={ws} notify={notify} />
+          : viewed.kind === 'cookies' ? <CookiesView ws={ws} notify={notify} />
+          : viewed.kind === 'backups' ? <BackupsView ws={ws} notify={notify} confirm={confirm} />
           : viewed.kind === 'docs' ? <DocsView key={viewed.collectionId} ws={ws} notify={notify} collectionId={viewed.collectionId} />
           : viewed.kind === 'mock' ? <MockView key={viewed.collectionId} ws={ws} notify={notify} collectionId={viewed.collectionId} />
           : viewed.kind === 'load' ? <LoadView key={viewed.requestId ?? 'tab'} ws={ws} notify={notify} requestId={viewed.requestId} />
@@ -273,7 +301,13 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
         <span>{ws.environment ? `Environment: ${ws.environment.name}` : 'No environment'}</span>
         <span>Saved on this device only</span>
       </footer>
-      {toast && <div className="toast" role="status" onClick={() => setToast(null)}>{toast}</div>}
+      {toast && (
+        <div className="toast" role="status">
+          <span>{toast.text}</span>
+          {toast.action && <button type="button" className="toastAction" onClick={() => { toast.action!.run(); setToast(null) }}>{toast.action.label}</button>}
+          <button type="button" className="toastClose" aria-label="Dismiss" onClick={() => setToast(null)}>×</button>
+        </div>
+      )}
       {dialog}
     </div>
   )

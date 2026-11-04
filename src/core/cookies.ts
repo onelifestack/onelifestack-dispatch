@@ -30,7 +30,8 @@ export function parseSetCookie(header: string): Cookie {
   return c
 }
 
-interface Stored extends Cookie { host: string; expiresAt: number | null }
+export interface StoredCookie extends Cookie { host: string; expiresAt: number | null }
+type Stored = StoredCookie
 
 /**
  * A simple cookie jar (RFC 6265 basics: domain/path match, expiry, secure). The desktop app keeps cookies in Rust;
@@ -51,8 +52,9 @@ export class CookieJar {
       const path = c.path ?? (u.pathname.replace(/\/[^/]*$/, '') || '/')
       const expiresAt = c.maxAge != null ? now + c.maxAge * 1000 : c.expires ? Date.parse(c.expires) : null
       this.cookies = this.cookies.filter((x) => !(x.name === c.name && x.host === host && (x.path ?? '/') === path))
-      if (expiresAt !== null && expiresAt <= now) continue // deletion
+      if (expiresAt !== null && expiresAt <= now) { this.changed(); continue } // deletion
       this.cookies.push({ ...c, host, path, expiresAt })
+      this.changed()
     }
   }
 
@@ -69,5 +71,22 @@ export class CookieJar {
   }
 
   list(): Cookie[] { return this.cookies.map(({ host, expiresAt: _e, ...c }) => ({ ...c, domain: c.domain ?? host })) }
-  clear() { this.cookies = [] }
+  clear() { this.cookies = []; this.changed() }
+
+  /** Every stored cookie with its host and expiry, for the cookie manager and for saving. */
+  entries(): StoredCookie[] { return this.cookies.map((c) => ({ ...c })) }
+  /** Adds or replaces a cookie (same host, name and path). */
+  set(c: StoredCookie) {
+    this.cookies = this.cookies.filter((x) => !(x.name === c.name && x.host === c.host && (x.path ?? '/') === (c.path ?? '/')))
+    this.cookies.push({ ...c, path: c.path || '/' })
+    this.changed()
+  }
+  remove(host: string, name: string, path = '/') {
+    this.cookies = this.cookies.filter((x) => !(x.name === name && x.host === host && (x.path ?? '/') === path))
+    this.changed()
+  }
+  load(list: StoredCookie[]) { this.cookies = list.filter((c) => c && c.name && c.host) }
+  /** Called after every change (the app saves the jar). */
+  onChange?: () => void
+  private changed() { this.onChange?.() }
 }

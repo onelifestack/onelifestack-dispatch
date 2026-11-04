@@ -232,8 +232,8 @@ export function authPipeline(base: Pipeline, transport: Transport, sendOpts?: ()
   }
   return {
     ...base,
-    async sign(p, req, ctx) {
-      let out = base.sign ? await base.sign(p, req, ctx) : p
+    async sign(p, req, ctx, ex) {
+      let out = base.sign ? await base.sign(p, req, ctx, ex) : p
       const a = resolved(req, ctx)
       if (!a) return out
       const noAuthHeader = !out.headers.some(([k]) => k.toLowerCase() === 'authorization')
@@ -245,6 +245,18 @@ export function authPipeline(base: Pipeline, transport: Transport, sendOpts?: ()
         // Expired: refresh for this send (the auth tab's "Get new token" saves a new one).
         const t = await refreshToken(a, transport, sendOpts?.() ?? { timeoutMs: 30_000, followRedirects: true, insecureTls: false })
         out = { ...out, headers: [...out.headers.filter(([k]) => k.toLowerCase() !== 'authorization'), ['Authorization', `Bearer ${t.accessToken}`]] }
+        // Save the new token where the auth lives, and let later requests in this run reuse it.
+        const patch = { accessToken: t.accessToken, refreshToken: t.refreshToken, expiresAt: t.expiresAt }
+        const folder = folderChain(ctx.folders, req.folderId).find((f) => f.auth.kind !== 'inherit')
+        if (req.auth.kind !== 'inherit') ex.authUpdate = { owner: 'request', id: req.id, patch }
+        else if (folder) {
+          ex.authUpdate = { owner: 'folder', id: folder.id, patch }
+          ctx.folders = ctx.folders.map((f) => (f.id === folder.id ? { ...f, auth: { ...f.auth, ...patch } } : f))
+        } else if (ctx.collection) {
+          ex.authUpdate = { owner: 'collection', id: ctx.collection.id, patch }
+          ctx.collection = { ...ctx.collection, auth: { ...ctx.collection.auth, ...patch } }
+        }
+        ex.logs.push({ level: 'info', at: Date.now(), source: 'auth', text: 'OAuth 2 token expired; got a new one with the refresh token.' })
       }
       return out
     },

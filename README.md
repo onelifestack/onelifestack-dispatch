@@ -6,7 +6,23 @@ Linux, Windows and macOS), as a web app built from the same code, and as a comma
 No account, no sync, no telemetry. Collections, environments and history stay in this device's storage. The only
 network traffic is the requests you send.
 
-## Features (v0.2)
+## Features (v0.3)
+
+**New in v0.3**
+- Code editor (CodeMirror): syntax colours, `{{variable}}` and `pm.` autocomplete, GraphQL completion from the
+  schema, foldable JSON responses.
+- Secrets (secret variables, passwords, tokens, keys, Authorization/Cookie headers) encrypted at rest with a
+  non-exportable device key; OAuth tokens saved after automatic refresh.
+- Undo for every delete; daily local backups with restore.
+- Sidebar drag and drop, multi-select, search across bodies/headers/docs (Ctrl+K).
+- Desktop: client certificates (mTLS), extra CA certificates, proxy, cookie manager.
+- Script compatibility: `require` lodash, moment, crypto-js, uuid, ajv, handlebars; `jsonSchema` checks;
+  `pm.visualizer` with a Visualize tab.
+- Export to Postman; import from Insomnia and Bruno.
+- Collections as files (desktop): a folder of YAML files for git, written as you work; the CLI runs folders.
+- Scheduled runs with failure notifications.
+- Server-sent events and Socket.IO.
+- Response history per request with side-by-side compare.
 
 **Requests**
 - HTTP with params (kept in sync with the URL), `:path` variables, headers, and bodies: JSON, text, XML, HTML,
@@ -64,8 +80,8 @@ For gRPC see `examples/grpc/README.md`.
 
 ## Not yet
 
-Request-level history diff, team sync (deliberately: local-first), AI assistance (needs a separate decision),
-Socket.IO, server-sent events, gRPC-Web and gRPC in the browser, OAuth 2 token saving after automatic refresh.
+Code signing and auto-updates (need the owner's certificates and key; see docs/RELEASING.md), optional
+OneLifeStack sync (needs a design), gRPC in the browser, AI assistance (needs a separate decision).
 
 ## Build
 

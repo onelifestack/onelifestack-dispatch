@@ -14,7 +14,8 @@ export class InlineEngine implements ScriptEngine {
   constructor(private readonly compile?: Compile, private readonly timeoutMs = SCRIPT_TIMEOUT_MS) {}
   run(input: ScriptInput, host: ScriptHost): Promise<ScriptOutput> {
     // The script runtime (with chai) loads on first use, keeping it out of the app's startup bundle.
-    const go = import('./scripts').then((m) => m.runScript(input, host, this.compile ?? m.compileWithFunction))
+    const go = Promise.all([import('./scripts'), import('./scriptLibs')])
+      .then(async ([m, l]) => m.runScript(input, host, this.compile ?? m.compileWithFunction, await l.loadLibs(l.neededLibs(input.code))))
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeout = new Promise<ScriptOutput>((resolve) => {
       timer = setTimeout(() => resolve({
@@ -126,6 +127,7 @@ export function scriptPipeline(o: ScriptPipelineOptions): Pipeline {
       vars = r.vars; request = r.request
       if (r.skip) skip = true
       if (r.nextRequest !== undefined) out.nextRequest = r.nextRequest
+      if (r.visualizer) out.visualizer = r.visualizer
       if (r.error && phase === 'post') out.tests.push({ name: `${s.source} script error`, passed: false, error: r.error })
       if (r.error && phase === 'pre') out.scriptError = `${s.source}: ${r.error}`
     }

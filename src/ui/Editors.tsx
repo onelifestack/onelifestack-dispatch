@@ -8,6 +8,8 @@ import type { AuthActions } from './RequestPane'
 import { effectiveAuth } from '../core/prepare'
 import { folderChain } from '../core/runtime'
 import { newRequest } from '../core/types'
+import { toPostmanEnvironment } from '../core/interop'
+import { saveTextFile } from './files'
 
 /**
  * Edits save as you type, like settings, so there's no separate Save step to forget. Local state keeps typing
@@ -26,8 +28,8 @@ function ScriptsEditor({ scripts, onChange, scope }: { scripts: Scripts; onChang
     <h2>Scripts</h2>
     <p className="muted small">Run for every request in this {scope}: before-request scripts run outer first (collection, folders, request); after-response scripts in the same order.</p>
     <div className="gqlGrid">
-      <CodeArea label={`${scope} pre-request script`} rows={8} value={scripts.pre} onChange={(pre) => onChange({ ...scripts, pre })} placeholder="// before every request" />
-      <CodeArea label={`${scope} post-response script`} rows={8} value={scripts.post} onChange={(post) => onChange({ ...scripts, post })} placeholder="// after every response" />
+      <CodeArea lang="javascript" label={`${scope} pre-request script`} rows={8} value={scripts.pre} onChange={(pre) => onChange({ ...scripts, pre })} placeholder="// before every request" />
+      <CodeArea lang="javascript" label={`${scope} post-response script`} rows={8} value={scripts.post} onChange={(post) => onChange({ ...scripts, post })} placeholder="// after every response" />
     </div>
   </>
 }
@@ -56,6 +58,7 @@ export function CollectionEditor({ ws, confirm, collection, authActions, renderD
         <button type="button" className="btn" onClick={() => ws.setView({ kind: 'docs', collectionId: c.id })}>View docs</button>
         <button type="button" className="btn" onClick={() => ws.setView({ kind: 'mock', collectionId: c.id })}>Mock server</button>
       </div>
+      {ws.transport.unrestricted && <FilesSection ws={ws} c={c} setC={setC} />}
       <DocsEditor docs={c.docs} onChange={(docs) => setC({ ...c, docs })} render={renderDocs} />
       <h2>Auth</h2>
       <p className="muted small">Requests and folders set to “Inherit from parent” use this.</p>
@@ -72,6 +75,38 @@ export function CollectionEditor({ ws, confirm, collection, authActions, renderD
       </div>
     </section>
   )
+}
+
+/** Desktop: keep the collection as files in a folder (for git). */
+function FilesSection({ ws, c, setC }: { ws: WorkspaceApi; c: Collection; setC: (c: Collection) => void }) {
+  const [note, setNote] = useState<string | null>(null)
+  return <>
+    <h2>Files</h2>
+    {c.linkedDir ? <>
+      <p className="small">Saved as files in <code>{c.linkedDir}</code>. Changes are written there as you work, ready to commit with git.</p>
+      <div className="actions">
+        <button type="button" className="btn small" onClick={async () => {
+          const { readCollectionDir } = await import('./linkedDirs')
+          try { const r = await readCollectionDir(ws, c.linkedDir); await ws.replaceCollection(r); setNote(`Reloaded ${r.requests.length} requests from the folder.${r.warnings.length ? ` ${r.warnings.join(' ')}` : ''}`) } catch (e) { setNote(String(e)) }
+        }}>Reload from folder</button>
+        <button type="button" className="btn small ghost" onClick={() => { setC({ ...c, linkedDir: '' }); setNote('Unlinked; the files stay where they are.') }}>Unlink</button>
+      </div>
+    </> : <>
+      <p className="muted small">Keep this collection as a folder of YAML files (one per request) so it can live in a git repo and be reviewed in pull requests. Literal secrets are never written; use <code>{'{{variables}}'}</code>.</p>
+      <div className="actions">
+        <button type="button" className="btn small" onClick={async () => {
+          const { pickFolder, writeCollectionDir } = await import('./linkedDirs')
+          try {
+            const dir = await pickFolder(); if (!dir) return
+            const left = await writeCollectionDir(ws, c, dir)
+            setC({ ...c, linkedDir: dir })
+            setNote(left.length ? `Saved. Literal secrets in ${left.join(', ')} weren’t written to the files; move them into variables.` : 'Saved to the folder.')
+          } catch (e) { setNote(String(e)) }
+        }}>Save to a folder…</button>
+      </div>
+    </>}
+    {note && <p className="small muted">{note}</p>}
+  </>
 }
 
 export function FolderEditor({ ws, confirm, folder, authActions, renderDocs }: Common & { folder: Folder }) {
@@ -120,6 +155,7 @@ export function EnvironmentEditor({ ws, confirm, environment }: Common & { envir
       <h2>Variables</h2>
       <KVTable label="Environment variables" keyPlaceholder="Variable" allowSecrets rows={e.variables} onChange={(variables) => setE({ ...e, variables })} />
       <div className="actions">
+        <button type="button" className="btn" onClick={async () => { await saveTextFile(`${e.name.replace(/[^\w.-]+/g, '-')}.postman_environment.json`, toPostmanEnvironment(e)) }}>Export as Postman environment</button>
         <button type="button" className="btn danger" onClick={async () => { if (await confirm(`Delete environment “${e.name}”?`)) await ws.removeEnvironment(e.id) }}>Delete environment</button>
       </div>
     </section>

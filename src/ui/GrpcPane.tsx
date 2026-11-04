@@ -95,7 +95,7 @@ export function GrpcPane({ ws, notify }: { ws: WorkspaceApi; notify: (m: string)
           </label>
           {method && <p className="tiny muted mono">{method.input} → {method.output}{method.client_streaming ? ' · send a JSON array: one item per message' : ''}</p>}
           <div className="row-h"><span className="small muted">Message (JSON, {'{{variables}}'} work)</span>{method && <button type="button" className="btn small ghost" onClick={() => set({ message: method.template })}>Use template</button>}</div>
-          <CodeArea label="gRPC message" rows={10} value={g.message} onChange={(message) => set({ message })} />
+          <CodeArea label="gRPC message" lang="json" variables={ws.variableNames} rows={10} value={g.message} onChange={(message) => set({ message })} />
           <h3 className="subhead">Metadata</h3>
           <KVTable label="gRPC metadata" keyPlaceholder="Key" rows={g.metadata} onChange={(metadata) => set({ metadata })} />
         </div>

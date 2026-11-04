@@ -148,3 +148,44 @@ describe('json filter and cookies', () => {
     expect(jar.header('https://api.test/me', 3)).toBeNull()
   })
 })
+
+import { loadLibs, neededLibs } from '../src/core/scriptLibs'
+describe('script libraries (Postman sandbox compatibility)', () => {
+  const runWith = async (code: string) => runScript(base(code), noHost, compileWithFunction, await loadLibs(neededLibs(code)))
+  it('loads only what a script asks for', () => {
+    expect(neededLibs(`const m = require('moment'); require("crypto-js")`)).toEqual(['moment', 'crypto-js'])
+    expect(neededLibs(`pm.response.to.have.jsonSchema({})`)).toEqual(['ajv'])
+    expect(neededLibs(`pm.visualizer.set('<b>{{x}}</b>', {x: 1})`)).toEqual(['handlebars'])
+    expect(neededLibs(`_.pick(a, 'b')`)).toEqual(['lodash'])
+    expect(neededLibs(`pm.test('x', () => {})`)).toEqual([])
+  })
+  it('runs lodash, moment, crypto-js and uuid', async () => {
+    const o = await runWith(`
+      const _l = require('lodash'); const moment = require('moment'); const CryptoJS = require('crypto-js'); const { v4 } = require('uuid')
+      pm.environment.set('sum', _l.sum([1, 2, 3]))
+      pm.environment.set('picked', JSON.stringify(_.pick({ a: 1, b: 2 }, 'a')))
+      pm.environment.set('year', moment('2026-11-04T10:00:00Z').utc().format('YYYY'))
+      pm.environment.set('hmac', CryptoJS.HmacSHA256('msg', 'key').toString(CryptoJS.enc.Hex))
+      pm.environment.set('uuid', v4())`)
+    expect(o.error).toBeUndefined()
+    expect(o.vars.environment).toMatchObject({ sum: '6', picked: '{"a":1}', year: '2026', hmac: '2d93cbc1be167bcb1637a4a23cbff01a7878f0c50ee833954ea5221bb1b8c628' })
+    expect(o.vars.environment.uuid).toMatch(/^[0-9a-f-]{36}$/)
+  })
+  it('checks a JSON schema with readable failures', async () => {
+    const o = await runWith(`
+      pm.test('good', () => pm.response.to.have.jsonSchema({ type: 'object', required: ['id'], properties: { id: { type: 'integer' } } }))
+      pm.test('bad', () => pm.response.to.have.jsonSchema({ type: 'object', required: ['name'], properties: { id: { type: 'string' } } }))`)
+    expect(o.tests.map((t) => t.passed)).toEqual([true, false])
+    expect(o.tests[1].error).toMatch(/must have required property 'name'/)
+    expect(o.tests[1].error).toMatch(/\/id must be string/)
+  })
+  it('renders a visualizer template with the data', async () => {
+    const o = await runWith(`pm.visualizer.set('<ul>{{#each items}}<li>{{n}}</li>{{/each}}</ul>', { items: pm.response.json().items })`)
+    expect(o.visualizer?.html).toContain('<ul><li>1</li><li>2</li></ul>')
+    expect(o.visualizer?.html).toContain('window.pm={getData')
+  })
+  it('explains unknown modules', async () => {
+    const o = await runWith(`require('left-pad')`)
+    expect(o.error).toMatch(/isn’t available.*lodash, moment/)
+  })
+})

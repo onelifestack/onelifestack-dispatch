@@ -5,6 +5,7 @@
  * through the app (postMessage), which uses the normal transport.
  */
 import { type PmRequestData, type PmResponseData, type ScriptInput, compileWithFunction, runScript } from './scripts'
+import { loadLibs, neededLibs } from './scriptLibs'
 
 declare const self: DedicatedWorkerGlobalScope
 
@@ -24,12 +25,13 @@ self.onmessage = async (ev: MessageEvent) => {
     if (msg.error !== undefined) w?.reject(new Error(msg.error)); else w?.resolve(msg.response!)
     return
   }
+  const libs = await loadLibs(neededLibs(msg.input.code))
   const output = await runScript(msg.input, {
     sendRequest: (request: PmRequestData) => new Promise<PmResponseData>((resolve, reject) => {
       const id = nextId++
       waiting.set(id, { resolve, reject })
       self.postMessage({ type: 'send', id, request })
     }),
-  }, compileWithFunction)
+  }, compileWithFunction, libs)
   self.postMessage({ type: 'done', output })
 }

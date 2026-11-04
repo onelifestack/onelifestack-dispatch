@@ -128,7 +128,7 @@ describe('Dispatch app', () => {
       info: { name: 'Pets', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
       item: [{ name: 'List pets', request: { method: 'GET', url: 'https://pets.test/pets' } }],
     })], 'pets.json', { type: 'application/json' })
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    const input = document.querySelector('input[aria-label="Import file"]') as HTMLInputElement
     await act(async () => { fireEvent.change(input, { target: { files: [file] } }) })
     expect(await screen.findByText(/Imported 1 collection, 1 request/)).toBeTruthy()
     expect(side().getByRole('button', { name: 'Pets' })).toBeTruthy()
@@ -263,5 +263,126 @@ describe('Dispatch app', () => {
     await within(view).findByText('Results', {}, { timeout: 3000 })
     expect(t.sent).toHaveLength(12)
     expect(within(view).getByText(/✓ Passed/)).toBeTruthy()
+  })
+
+  it('undoes a deleted collection, and restores a local backup', async () => {
+    await start()
+    typeUrl('https://keep.test/a')
+    fireEvent.click(screen.getByRole('button', { name: /^Save Ctrl/ }))
+    let d = await screen.findByRole('dialog', { hidden: true })
+    fireEvent.change(within(d).getByLabelText('New collection name'), { target: { value: 'Keep me' } })
+    fireEvent.click(within(d).getByRole('button', { name: 'Save', hidden: true }))
+    await screen.findByText('Saved.')
+    // delete via the collection editor, then undo
+    fireEvent.click(side().getByRole('button', { name: 'Keep me' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete collection' }))
+    d = await screen.findByRole('dialog', { hidden: true })
+    fireEvent.click(within(d).getByRole('button', { name: 'Delete', hidden: true }))
+    await screen.findByText(/Deleted “Keep me”/)
+    expect(side().queryByRole('button', { name: 'Keep me' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(await side().findByRole('button', { name: 'Keep me' })).toBeTruthy()
+    expect(side().getByRole('button', { name: /keep\.test\/a/ })).toBeTruthy()
+    // back up, add another collection, restore → it's gone again
+    fireEvent.click(screen.getByRole('menuitem', { name: /Local backups/, hidden: true }))
+    const view = await screen.findByRole('region', { name: 'Backups' })
+    fireEvent.click(within(view).getByRole('button', { name: 'Back up now' }))
+    await screen.findByText('Backup made.')
+    fireEvent.click(side().getByRole('button', { name: '+ Collection' }))
+    d = await screen.findByRole('dialog', { hidden: true })
+    fireEvent.change(within(d).getByLabelText('New collection'), { target: { value: 'Later' } })
+    fireEvent.click(within(d).getByRole('button', { name: 'OK', hidden: true }))
+    await side().findByRole('button', { name: 'Later' })
+    fireEvent.click(screen.getByRole('menuitem', { name: /Local backups/, hidden: true }))
+    const v2 = await screen.findByRole('region', { name: 'Backups' })
+    fireEvent.click(within(v2).getAllByRole('button', { name: 'Restore' })[0])
+    d = await screen.findByRole('dialog', { hidden: true })
+    fireEvent.click(within(d).getByRole('button', { name: 'OK', hidden: true }))
+    await screen.findByText('Backup restored.')
+    expect(side().queryByRole('button', { name: 'Later' })).toBeNull()
+    expect(side().getByRole('button', { name: 'Keep me' })).toBeTruthy()
+  })
+
+  it('moves and reorders with drag and drop, multi-selects, and searches bodies', async () => {
+    await start()
+    const file = new File([JSON.stringify({
+      info: { name: 'Shop', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
+      item: [
+        { name: 'A', request: { method: 'GET', url: 'https://s.test/a' } },
+        { name: 'B', request: { method: 'POST', url: 'https://s.test/b', body: { mode: 'raw', raw: '{"needle": 1}' } } },
+        { name: 'C', request: { method: 'GET', url: 'https://s.test/c' } },
+        { name: 'Box', item: [] },
+      ],
+    })], 'shop.json', { type: 'application/json' })
+    await act(async () => { fireEvent.change(document.querySelector('input[aria-label="Import file"]')!, { target: { files: [file] } }) })
+    await screen.findByText(/Imported 1 collection/)
+    const names = () => [...document.querySelectorAll('.tree .rowName')].map((e) => e.textContent)
+    expect(names()).toEqual(['A', 'B', 'C', 'Box'])
+    const dt = { setData: () => {}, effectAllowed: '', dropEffect: '' }
+    const row = (n: string) => side().getByRole('button', { name: new RegExp(`^(GET|POST) ${n}$`) }).closest('li')!
+    // drag C before A
+    fireEvent.dragStart(row('C'), { dataTransfer: dt })
+    fireEvent.dragOver(row('A'), { dataTransfer: dt })
+    await act(async () => { fireEvent.drop(row('A'), { dataTransfer: dt }) })
+    expect(names()).toEqual(['C', 'A', 'B', 'Box'])
+    // drag A into the Box folder
+    fireEvent.dragStart(row('A'), { dataTransfer: dt })
+    const box = side().getByRole('button', { name: 'Box' }).closest('.row')!
+    fireEvent.dragOver(box, { dataTransfer: dt })
+    await act(async () => { fireEvent.drop(box, { dataTransfer: dt }) })
+    expect(names()).toEqual(['C', 'B', 'Box', 'A'])
+    // search by body text
+    fireEvent.change(side().getByLabelText('Filter requests'), { target: { value: 'needle' } })
+    expect(names()).toEqual(['B'])
+    fireEvent.change(side().getByLabelText('Filter requests'), { target: { value: '' } })
+    // ctrl-click two, delete together, undo once
+    fireEvent.click(side().getByRole('button', { name: /^GET C$/ }), { ctrlKey: true })
+    fireEvent.click(side().getByRole('button', { name: /^POST B$/ }), { ctrlKey: true })
+    expect(screen.getByRole('toolbar', { name: 'Selected requests' }).textContent).toMatch(/2 selected/)
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Selected requests' })).getByRole('button', { name: 'Delete' }))
+    const d = await screen.findByRole('dialog', { hidden: true })
+    fireEvent.click(within(d).getByRole('button', { name: 'Delete', hidden: true }))
+    await screen.findByText('Deleted 2 requests.')
+    expect(names()).toEqual(['Box', 'A'])
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(names()).toEqual(['C', 'B', 'Box', 'A']))
+  })
+
+  it('creates a schedule and runs it now', async () => {
+    await start()
+    typeUrl('https://api.test/health')
+    fireEvent.click(screen.getByRole('button', { name: /^Save Ctrl/ }))
+    const d = await screen.findByRole('dialog', { hidden: true })
+    fireEvent.click(within(d).getByRole('button', { name: 'Save', hidden: true }))
+    await screen.findByText('Saved.')
+    fireEvent.click(side().getByRole('button', { name: /Schedules/ }))
+    const view = await screen.findByRole('region', { name: 'Schedules' })
+    fireEvent.click(within(view).getByRole('button', { name: '+ New schedule' }))
+    fireEvent.change(await within(view).findByLabelText('Every (minutes)'), { target: { value: '5' } })
+    fireEvent.click(within(view).getByRole('button', { name: 'Run now' }))
+    expect(await screen.findByText('My API check passed.')).toBeTruthy()
+    expect(t.sent.map((p) => p.url)).toEqual(['https://api.test/health'])
+    expect(within(view).getByText(/1 requests, 0 passed, 0 failed/)).toBeTruthy()
+    expect(within(view).getByText('passing')).toBeTruthy()
+  })
+
+  it('lists earlier responses for a request and compares them', async () => {
+    await start()
+    typeUrl('https://api.test/stock')
+    t.next = { status: 200, statusText: 'OK', headers: [['content-type', 'application/json']], body: '{"apples":3,"pears":1}', binary: false, size: 22, timeMs: 5 }
+    fireEvent.click(screen.getByRole('button', { name: /^Send/ }))
+    await screen.findByText('200 OK')
+    t.next = { status: 200, statusText: 'OK', headers: [['content-type', 'application/json']], body: '{"apples":2,"pears":1}', binary: false, size: 22, timeMs: 6 }
+    fireEvent.click(screen.getByRole('button', { name: /^Send/ }))
+    await screen.findByText('6 ms')
+    const pane = screen.getByRole('region', { name: 'Response' })
+    fireEvent.click(within(pane).getByRole('tab', { name: /History/ }))
+    const table = within(pane).getByRole('table', { name: 'Earlier responses' })
+    expect(within(table).getAllByRole('row')).toHaveLength(1)
+    fireEvent.click(within(table).getByRole('button', { name: 'Compare' }))
+    const diff = within(pane).getByLabelText('Differences')
+    expect(diff.textContent).toContain('−   "apples": 3,')
+    expect(diff.textContent).toContain('+   "apples": 2,')
+    expect(within(pane).getByText(/time 5 ms → 6 ms/)).toBeTruthy()
   })
 })
