@@ -184,6 +184,7 @@ export const BROWSER_CANDIDATES: Record<'linux' | 'windows' | 'mac', string[]> =
 
 /** Arguments for a clean, separate browser (its own profile; no first-run screens). */
 export const browserArgs = (profileDir: string, show: boolean) => [
-  '--remote-debugging-port=0', `--user-data-dir=${profileDir}`, '--no-first-run', '--no-default-browser-check',
+  // The desktop app connects from its webview, which sends an Origin header; Chrome/Edge (111+) reject that unless allowed.
+  '--remote-debugging-port=0', '--remote-allow-origins=http://tauri.localhost,tauri://localhost,http://localhost', `--user-data-dir=${profileDir}`, '--no-first-run', '--no-default-browser-check',
   '--disable-background-networking', '--disable-sync', '--password-store=basic', ...(show ? [] : ['--headless=new']), 'about:blank',
 ]
