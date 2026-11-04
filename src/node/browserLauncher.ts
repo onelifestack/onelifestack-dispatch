@@ -27,7 +27,7 @@ export const nodeLauncher: BrowserLauncher = {
     const profile = mkdtempSync(join(tmpdir(), 'dispatch-browser-'))
     // DISPATCH_BROWSER_ARGS adds arguments (e.g. --no-sandbox for an unpackaged Chromium in a test container).
     const extra = (process.env.DISPATCH_BROWSER_ARGS ?? '').split(' ').filter(Boolean)
-    const p = spawn(exe, [...extra, ...browserArgs(profile, show)], { stdio: ['ignore', 'ignore', 'pipe'] })
+    const p = spawn(exe, [...extra, ...browserArgs(profile, show)], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true })
     const cleanup = async () => { p.kill(); await new Promise((r) => setTimeout(r, 200)); try { rmSync(profile, { recursive: true, force: true }) } catch { /* in use */ } }
     let buf = ''
     const t = setTimeout(() => { void cleanup(); reject(new Error('The browser didn’t start in time.')) }, 15_000)

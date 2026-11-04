@@ -161,7 +161,7 @@ export async function runFlow(f: Flow, w: FlowWorld, transport: Transport, pipel
           if (x.response) last = x.response
           const bad = !!x.error || (x.response?.status ?? 0) >= 400 || x.tests.some((t) => !t.passed)
           port = bad ? 'failed' : 'ok'
-          const detail = x.error ?? `${x.sent.method} ${x.sent.url} → ${x.response?.status} ${x.response?.statusText} · ${x.response?.timeMs} ms${x.tests.length ? ` · ${x.tests.filter((t) => t.passed).length}/${x.tests.length} tests` : ''}`
+          const detail = x.error ?? `${req.protocol === 'browser' ? 'Browser login' : `${x.sent.method} ${x.sent.url}`} → ${x.response?.status} ${x.response?.statusText} · ${x.response?.timeMs} ms${x.tests.length ? ` · ${x.tests.filter((t) => t.passed).length}/${x.tests.length} tests` : ''}`
           finish(bad ? 'failed' : 'ok', port, detail, { status_code: x.response?.status, tests: x.tests })
           if (bad && !next(n, 'failed').length) throw new Stop(`${n.label} failed: ${detail}`)
           break

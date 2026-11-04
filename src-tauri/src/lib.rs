@@ -253,6 +253,33 @@ async fn oauth_listen(port: u16, path: String, timeout_secs: u64) -> Result<Stri
 #[derive(Default)]
 struct Browsers(Mutex<HashMap<u64, (tokio::process::Child, std::path::PathBuf)>>);
 
+/// On Windows, finds `npx` as `npx.cmd` etc. (PATHEXT); `Command::new` alone only looks for `.exe`.
+fn resolve_command(command: &str) -> String {
+    #[cfg(windows)]
+    {
+        let p = std::path::Path::new(command);
+        if p.extension().is_none() && !command.contains('/') && !command.contains('\\') {
+            let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
+            if let Some(paths) = std::env::var_os("PATH") {
+                for dir in std::env::split_paths(&paths) {
+                    for ext in exts.split(';').filter(|e| !e.is_empty()) {
+                        let f = dir.join(format!("{command}{}", ext.to_ascii_lowercase()));
+                        if f.is_file() { return f.display().to_string(); }
+                    }
+                }
+            }
+        }
+    }
+    command.to_string()
+}
+
+/// Child processes of the GUI app must not open console windows on Windows.
+fn no_console(cmd: &mut tokio::process::Command) -> &mut tokio::process::Command {
+    #[cfg(windows)]
+    { cmd.creation_flags(0x0800_0000); } // CREATE_NO_WINDOW
+    cmd
+}
+
 fn find_exe(candidates: &[String]) -> Option<String> {
     for c in candidates {
         if c.contains('/') || c.contains('\\') { if std::path::Path::new(c).exists() { return Some(c.clone()); } continue; }
@@ -270,7 +297,7 @@ async fn browser_launch(state: tauri::State<'_, Browsers>, id: u64, path: String
     let profile = std::env::temp_dir().join(format!("dispatch-browser-{id}"));
     let _ = std::fs::create_dir_all(&profile);
     let args: Vec<String> = args.into_iter().map(|a| a.replace("{PROFILE}", &profile.display().to_string())).collect();
-    let mut child = tokio::process::Command::new(&exe).args(&args).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped()).kill_on_drop(true)
+    let mut child = no_console(&mut tokio::process::Command::new(&exe)).args(&args).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped()).kill_on_drop(true)
         .spawn().map_err(|e| format!("Couldn’t start {exe}: {e}"))?;
     let stderr = child.stderr.take().ok_or("No stderr")?;
     let mut lines = BufReader::new(stderr).lines();
@@ -313,7 +340,8 @@ struct McpLine { id: u64, kind: String, text: String }
 async fn mcp_stdio_start(app: tauri::AppHandle, state: tauri::State<'_, McpProcs>, id: u64, command: String, args: Vec<String>, env: Vec<(String, String)>, cwd: Option<String>) -> Result<(), String> {
     use tauri::Emitter;
     use tokio::io::{AsyncBufReadExt, BufReader};
-    let mut cmd = tokio::process::Command::new(&command);
+    let mut cmd = tokio::process::Command::new(resolve_command(&command));
+    no_console(&mut cmd);
     cmd.args(&args).envs(env).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).kill_on_drop(true);
     if let Some(dir) = cwd.filter(|d| !d.trim().is_empty()) { cmd.current_dir(dir); }
     let mut child = cmd.spawn().map_err(|e| format!("Couldn’t start “{command}”: {e}"))?;

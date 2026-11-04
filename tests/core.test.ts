@@ -153,6 +153,9 @@ describe('prepare', () => {
 describe('curl', () => {
   it('splits shell words', () => {
     expect(shellWords(`curl 'a b' "c \\"d\\"" e\\ f \\\n -H $'x\\ny'`)).toEqual(['curl', 'a b', 'c "d"', 'e f', '-H', 'x\ny'])
+    // Windows paths keep their backslashes (MCP stdio commands, pasted Windows commands).
+    expect(shellWords(String.raw`node C:\Users\me\dist-cli\dispatch-run.mjs mcp "C:\Temp\my files\x.json" -e "Demo local"`))
+      .toEqual(['node', String.raw`C:\Users\me\dist-cli\dispatch-run.mjs`, 'mcp', String.raw`C:\Temp\my files\x.json`, '-e', 'Demo local'])
   })
   it('imports -F form fields as form-data', () => {
     const { request: r, warnings } = fromCurl(`curl https://a.test/up -F name=x -F 'file=@/tmp/a.png;type=image/png'`)
