@@ -42,7 +42,7 @@ export class McpClient {
     return answer.result
   }
 
-  async initialize(clientVersion = '0.4.0') {
+  async initialize(clientVersion = '0.4.1') {
     const r = await this.call('initialize', { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: 'Dispatch', version: clientVersion } })
     this.serverInfo = r?.serverInfo ?? {}
     this.capabilities = r?.capabilities ?? {}

@@ -1,4 +1,4 @@
-# Testing Dispatch 0.4.0 on Windows
+# Testing Dispatch 0.4.1 on Windows
 
 Instructions for a tester (a person or an AI agent) on a Windows 10/11 machine. Work through each section, record
 **PASS / FAIL / BLOCKED** for every numbered check, and write the results into a report (template at the end).
@@ -45,7 +45,7 @@ cd onelifestack-dispatch           # stay on main: it has the demo login page an
 npm ci
 npm run build:cli          # builds dist-cli\dispatch-run.mjs
 mkdir ..\installers
-gh release download v0.4.0 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
+gh release download v0.4.1 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
 ```
 
 The release is a **draft**, so it's only visible to accounts with access to the repo. If `gh release download`
@@ -71,7 +71,7 @@ What the demo API offers:
 
 ## 1. Install, first launch, uninstall
 
-1.1. Run `Dispatch_0.4.0_x64-setup.exe`. SmartScreen will warn because the installer isn't code-signed yet: click
+1.1. Run `Dispatch_0.4.1_x64-setup.exe`. SmartScreen will warn because the installer isn't code-signed yet: click
      "More info" → "Run anyway". Record the exact warning text. The install must finish without errors.
 
 1.2. Start Dispatch from the Start menu. A window titled Dispatch opens and shows the request editor (URL field,
@@ -255,17 +255,19 @@ Run these from the repo folder in PowerShell.
 
 6.4. **MCP (stdio), Dispatch talking to itself:**
    1. New request → protocol **MCP** → transport "Local command (stdio)".
-   2. Command, using **forward slashes** in the paths:
+   2. Command (forward slashes; 6.4b tries backslashes):
       `node C:/Users/<you>/dispatch-test/onelifestack-dispatch/dist-cli/dispatch-run.mjs mcp C:/Users/<you>/dispatch-test/onelifestack-dispatch/examples/browser-login.dispatch.json -e "Demo local"`.
    3. Connect and approve the "Run this command?" prompt. No console window should pop up. Tools `list_requests`, `send_request`, `run_collection` and `run_flow` appear.
    4. Call `run_flow` with name "Login then orders". The result starts with `Passed`.
    5. Disconnect. Check Task Manager: no `node.exe` left over from this.
 
-6.4b. **Known issues in 0.4.0** (already fixed on a branch; confirm they happen so the fix can be verified later):
-   - The same command with **backslashes** (`C:\Users\...`) fails, because 0.4.0 drops unquoted backslashes.
-   - A command starting with `npx` (e.g. `npx -y @modelcontextprotocol/server-everything`) fails with "Couldn't
-     start npx", because Windows' `npx` is `npx.cmd`.
-   - A console window may flash up when an MCP server or a browser login starts.
+6.4b. **Windows fixes in 0.4.1**: check each one; they were found by reading the code and have never run on Windows.
+   - The command from 6.4 with **backslashes** in the paths (`node C:\Users\<you>\...\dispatch-run.mjs mcp ...`)
+     also connects. In 0.4.0 the backslashes were dropped.
+   - A command starting with `npx` starts. Try `npx -y @modelcontextprotocol/server-everything` (needs internet);
+     tools such as `echo` appear. In 0.4.0 this failed with "Couldn't start npx", because Windows' `npx` is
+     `npx.cmd`.
+   - No console window flashes up when an MCP server (6.4) or a browser login (3.3, 3.4) starts.
 
    Record exactly what you see for each.
 
@@ -312,10 +314,13 @@ Run these from the repo folder in PowerShell.
 
 ## Report template
 
-Save as `windows-test-report.md` and give it back to the owner.
+Post the report as a comment on the GitHub issue that pointed you here, with screenshots attached to the
+comment (drag them into the comment box, or `gh issue comment <number> --repo onelifestack/onelifestack-dispatch
+--body-file windows-test-report.md` and add the images in the web UI). Open a separate issue for each serious
+failure, titled `[Windows] <problem>`, and link it from the report.
 
 ```markdown
-# Dispatch 0.4.0 — Windows test report
+# Dispatch 0.4.1 — Windows test report
 
 - Date / tester:
 - Windows version (winver) and build:

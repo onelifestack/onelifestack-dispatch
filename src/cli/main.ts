@@ -25,7 +25,7 @@ import { buildRoutes, fillMockBody, matchRoute } from '../core/mock'
 import { serveMcp } from './mcpServer'
 import { runFlow } from '../core/flows'
 
-const VERSION = '0.4.0'
+const VERSION = '0.4.1'
 const color = process.stdout.isTTY && !process.env.NO_COLOR
 const c = (code: number) => (s: string) => (color ? `\x1b[${code}m${s}\x1b[0m` : s)
 const green = c(32), red = c(31), dim = c(2), bold = c(1), yellow = c(33)
