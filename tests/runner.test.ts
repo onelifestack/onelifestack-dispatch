@@ -120,3 +120,27 @@ describe('runner', () => {
     expect(inner.sent[1].headers).toContainEqual(['Cookie', 'sid=s1'])
   })
 })
+
+import { isDue, newSchedule, runFailed, runSchedule } from '../src/core/schedules'
+describe('schedules', () => {
+  it('knows when a schedule is due', () => {
+    const s = { ...newSchedule('c', 'x'), everyMinutes: 10 }
+    expect(isDue(s, 0)).toBe(true)
+    expect(isDue({ ...s, lastRunAt: 0 }, 9 * 60_000)).toBe(false)
+    expect(isDue({ ...s, lastRunAt: 0 }, 10 * 60_000)).toBe(true)
+    expect(isDue({ ...s, enabled: false }, 0)).toBe(false)
+  })
+  it('summarises a run with its failures', async () => {
+    const col = newCollection('Mon')
+    const ok = newRequest({ name: 'ok', url: 'https://m.test/ok', collectionId: col.id, sort: 1, scripts: { pre: '', post: `pm.test('200', () => pm.response.to.have.status(200))` } })
+    const bad = newRequest({ name: 'bad', url: 'https://m.test/bad', collectionId: col.id, sort: 2, scripts: { pre: '', post: `pm.test('200', () => pm.response.to.have.status(200))` } })
+    const t = new Fake((p) => (p.url.endsWith('/bad') ? { status: 500, statusText: 'Error' } : {}))
+    const w = { collections: [col], folders: [], requests: [ok, bad], environments: [], globals: [], settings: defaultSettings }
+    const r = await runSchedule(newSchedule(col.id, 'Mon'), w, t, scriptPipeline({ engine: new InlineEngine(), transport: t, sendOptions: () => ({ ...defaultSettings }) }))
+    expect(r).toMatchObject({ requests: 2, testsPassed: 1, testsFailed: 1 })
+    expect(runFailed(r)).toBe(true)
+    expect(r.failures[0]).toMatchObject({ name: 'bad' }); expect(r.failures[0].reason).toMatch(/expected status 200 but got 500/)
+    const gone = await runSchedule(newSchedule('missing', 'Gone'), w, t, {})
+    expect(gone.failures[0].reason).toMatch(/no longer exists/)
+  })
+})

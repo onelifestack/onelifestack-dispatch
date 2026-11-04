@@ -25,6 +25,7 @@ export type View =
   | { kind: 'backups' }
   | { kind: 'settings' }
   | { kind: 'cookies' }
+  | { kind: 'schedules' }
 
 export interface Result {
   sent: PreparedRequest

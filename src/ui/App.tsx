@@ -15,6 +15,7 @@ import { LoadView } from './LoadView'
 import { getOAuthToken } from './oauth'
 import { importBruno, toPostmanCollection } from '../core/interop'
 import { pickFolder, readCollectionDir, useLinkedDirSync } from './linkedDirs'
+import { SchedulesView, useScheduler } from './Schedules'
 import { DocsView } from './DocsView'
 import { MockView } from './MockView'
 import { Markdown } from './Markdown'
@@ -115,6 +116,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
     toastTimer.current = setTimeout(() => setToast(null), action ? 9000 : msg.length > 80 ? 8000 : 3500)
   }, [])
   useLinkedDirSync(ws, notify)
+  const sched = useScheduler(ws)
   // Every delete can be undone from the toast.
   const trashCount = useRef(0)
   useEffect(() => {
@@ -260,6 +262,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           : env ? <EnvironmentEditor key={env.id} ws={ws} confirm={confirm} environment={env} />
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
           : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
+          : viewed.kind === 'schedules' ? <SchedulesView ws={ws} sched={sched} notify={notify} />
           : viewed.kind === 'settings' ? <SettingsView ws={ws} notify={notify} />
           : viewed.kind === 'cookies' ? <CookiesView ws={ws} notify={notify} />
           : viewed.kind === 'backups' ? <BackupsView ws={ws} notify={notify} confirm={confirm} />

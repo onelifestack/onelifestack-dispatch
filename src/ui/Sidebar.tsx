@@ -186,6 +186,7 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
         <div className="sideFoot">
           <button type="button" className="btn small ghost" onClick={() => ws.setView({ kind: 'runner', collectionId: null, folderId: null })}>▶ Runner</button>
           <button type="button" className="btn small ghost" onClick={() => ws.setView({ kind: 'load', requestId: null })}>⚡ Load test</button>
+          <button type="button" className="btn small ghost" onClick={() => ws.setView({ kind: 'schedules' })}>⏱ Schedules</button>
         </div>
       </>}
 

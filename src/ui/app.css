@@ -421,3 +421,8 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 .certCard { border: 1px solid var(--outline); border-radius: 10px; padding: .6rem; margin-bottom: .5rem; display: grid; gap: .5rem; }
 .certPair { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
 .resultTable input.mono { width: 100%; padding: .2rem .35rem; }
+.schedCard { border: 1px solid var(--outline); border-radius: 12px; padding: .7rem .8rem; margin: .7rem 0; display: grid; gap: .5rem; background: var(--surface); }
+.schedName { font-weight: 700; border-color: transparent; background: transparent; }
+.schedGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .5rem; align-items: end; }
+.badPill { background: var(--danger-soft); color: var(--danger); }
+.sideFoot { flex-wrap: wrap; }

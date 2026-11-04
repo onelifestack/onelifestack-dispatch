@@ -245,3 +245,10 @@ export async function replaceAll(data: BackupData) {
   t.objectStore('meta').put(sealed.globals, 'globals')
   await done(t)
 }
+
+// ---------- schedules ----------
+import type { Schedule, ScheduleRun } from './schedules'
+export const getSchedules = async () => (await getMeta<Schedule[]>('schedules')) ?? []
+export const putSchedules = (s: Schedule[]) => put('meta', s, 'schedules')
+export const getScheduleRuns = async () => (await getMeta<ScheduleRun[]>('scheduleRuns')) ?? []
+export const putScheduleRuns = (r: ScheduleRun[]) => put('meta', r, 'scheduleRuns')
