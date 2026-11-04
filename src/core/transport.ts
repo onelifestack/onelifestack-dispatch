@@ -1,5 +1,32 @@
 import type { HttpResponse, PreparedRequest } from './types'
 
+export function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return bytes
+}
+
+export function bytesToBase64(bytes: Uint8Array): string {
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(bin)
+}
+
+/** The request body as fetch wants it. */
+export function fetchBody(p: PreparedRequest): BodyInit | undefined {
+  if (p.multipart) {
+    const fd = new FormData()
+    for (const part of p.multipart) {
+      if (part.file) fd.append(part.name, new Blob([base64ToBytes(part.file.base64)], { type: part.file.type }), part.file.name || 'file')
+      else fd.append(part.name, part.value ?? '')
+    }
+    return fd
+  }
+  if (p.bodyFile) return new Blob([base64ToBytes(p.bodyFile.base64)], { type: p.bodyFile.type })
+  return p.body ?? undefined
+}
+
 export interface SendOptions { timeoutMs: number; followRedirects: boolean; insecureTls: boolean; signal?: AbortSignal }
 
 export interface Transport {
@@ -47,15 +74,18 @@ export class FetchTransport implements Transport {
       const res = await this.fetchImpl(p.url, {
         method: p.method,
         headers: p.headers,
-        body: p.body ?? undefined,
+        body: fetchBody(p),
         redirect: opts.followRedirects ? 'follow' : 'manual',
         signal: ctrl.signal,
       })
+      const ttfb = performance.now()
       const bytes = new Uint8Array(await res.arrayBuffer())
-      const timeMs = Math.round(performance.now() - started)
+      const end = performance.now()
+      const decoded = decodeBody(bytes)
       return {
         status: res.status, statusText: res.statusText, headers: [...res.headers.entries()],
-        ...decodeBody(bytes), size: bytes.byteLength, timeMs,
+        ...decoded, base64: decoded.binary ? bytesToBase64(bytes) : undefined, size: bytes.byteLength,
+        timeMs: Math.round(end - started), timings: { ttfbMs: Math.round(ttfb - started), downloadMs: Math.round(end - ttfb) },
       }
     } catch (e) {
       if (ctrl.signal.aborted) {
@@ -74,7 +104,7 @@ export class FetchTransport implements Transport {
 }
 
 interface NativeResponse {
-  status: number; status_text: string; headers: [string, string][]; body_base64: string; time_ms: number
+  status: number; status_text: string; headers: [string, string][]; body_base64: string; time_ms: number; ttfb_ms: number
 }
 
 /** Sends from the Rust side of the desktop app: no CORS, any header, optional self-signed TLS. */
@@ -92,15 +122,16 @@ export class DesktopTransport implements Transport {
       const r = await invoke<NativeResponse>('send_request', {
         req: {
           id, method: p.method, url: p.url, headers: p.headers, body: p.body,
+          body_base64: p.bodyFile?.base64 ?? null,
+          multipart: p.multipart?.map((m) => ({ name: m.name, value: m.value ?? null, file_name: m.file?.name ?? null, content_type: m.file?.type ?? null, data_base64: m.file?.base64 ?? null })) ?? null,
           timeout_ms: opts.timeoutMs, follow_redirects: opts.followRedirects, insecure_tls: opts.insecureTls,
         },
       })
-      const bin = atob(r.body_base64)
-      const bytes = new Uint8Array(bin.length)
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      const bytes = base64ToBytes(r.body_base64)
+      const decoded = decodeBody(bytes)
       return {
-        status: r.status, statusText: r.status_text, headers: r.headers, ...decodeBody(bytes),
-        size: bytes.byteLength, timeMs: r.time_ms,
+        status: r.status, statusText: r.status_text, headers: r.headers, ...decoded, base64: decoded.binary ? r.body_base64 : undefined,
+        size: bytes.byteLength, timeMs: r.time_ms, timings: { ttfbMs: r.ttfb_ms, downloadMs: Math.max(0, r.time_ms - r.ttfb_ms) },
       }
     } catch (e) {
       throw new SendError(typeof e === 'string' ? e : e instanceof Error ? e.message : 'The request failed.')

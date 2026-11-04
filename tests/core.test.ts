@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { emptyAuth, kv, newCollection, newEnvironment, newRequest } from '../src/core/types'
+import { emptyAuth, emptyBody, kv, newCollection, newEnvironment, newFolder, newRequest } from '../src/core/types'
 import { interpolate, namesIn, scopeOf } from '../src/core/vars'
 import { paramsFromUrl, parseQuery, splitUrl, urlWithParams, withScheme } from '../src/core/url'
-import { jsonProblem, prepare } from '../src/core/prepare'
+import { effectiveAuth, jsonProblem, pathVarNames, pathVarsFromUrl, prepare } from '../src/core/prepare'
+import { folderChain } from '../src/core/runtime'
 import { fromCurl, shellWords, toCurl } from '../src/core/curl'
 import { exportWorkspace, importFile } from '../src/core/backup'
 import { decodeBody, FetchTransport, SendError } from '../src/core/transport'
@@ -56,7 +57,7 @@ describe('prepare', () => {
   const env = { ...newEnvironment(), variables: [kv('base', 'https://api.test'), kv('tok', 'secret')] }
   it('applies variables, headers and a JSON body', () => {
     const req = newRequest({ method: 'POST', url: '{{base}}/items', headers: [kv('X-A', '{{tok}}'), kv('X-Off', '1', false)],
-      body: { kind: 'json', text: '{"a":1}', fields: [] } })
+      body: { ...emptyBody('json'), text: '{"a":1}', fields: [] } })
     const p = prepare(req, { environment: env })
     expect(p.url).toBe('https://api.test/items')
     expect(p.headers).toEqual([['X-A', 'secret'], ['Content-Type', 'application/json']])
@@ -64,11 +65,11 @@ describe('prepare', () => {
     expect(p.unresolved).toEqual([])
   })
   it('does not override a content type the user set', () => {
-    const req = newRequest({ method: 'POST', headers: [kv('content-type', 'application/vnd.x+json')], body: { kind: 'json', text: '{}', fields: [] } })
+    const req = newRequest({ method: 'POST', headers: [kv('content-type', 'application/vnd.x+json')], body: { ...emptyBody('json'), text: '{}', fields: [] } })
     expect(prepare(req).headers).toEqual([['content-type', 'application/vnd.x+json']])
   })
   it('encodes urlencoded bodies', () => {
-    const req = newRequest({ method: 'POST', body: { kind: 'urlencoded', text: '', fields: [kv('a', 'x y&z'), kv('b', '{{tok}}')] } })
+    const req = newRequest({ method: 'POST', body: { ...emptyBody('urlencoded'), text: '', fields: [kv('a', 'x y&z'), kv('b', '{{tok}}')] } })
     expect(prepare(req, { environment: env }).body).toBe('a=x%20y%26z&b=secret')
   })
   it('handles basic, bearer and api key auth', () => {
@@ -88,7 +89,48 @@ describe('prepare', () => {
     expect(prepare(newRequest({ url: '{{nope}}/x' })).unresolved).toEqual(['nope'])
   })
   it('sends no body with HEAD', () => {
-    expect(prepare(newRequest({ method: 'HEAD', body: { kind: 'text', text: 'x', fields: [] } })).body).toBeNull()
+    expect(prepare(newRequest({ method: 'HEAD', body: { ...emptyBody('text'), text: 'x', fields: [] } })).body).toBeNull()
+  })
+  it('fills :path variables and ignores ports', () => {
+    expect(pathVarNames('https://h:8080/users/:id/posts/:postId?x=:no')).toEqual(['id', 'postId'])
+    expect(pathVarNames('{{base}}/a/:id')).toEqual(['id'])
+    const req = newRequest({ url: 'https://h:8080/users/:id/x', pathVars: [kv('id', '{{uid}} 1')] })
+    expect(prepare(req, { environment: { ...newEnvironment(), variables: [kv('uid', 'u')] } }).url).toBe('https://h:8080/users/u%201/x')
+    const rows = pathVarsFromUrl('https://h/:a/:b', [kv('a', '1')])
+    expect(rows.map((r) => [r.key, r.value])).toEqual([['a', '1'], ['b', '']])
+  })
+  it('builds GraphQL, XML, form-data and binary bodies', () => {
+    const gql = prepare(newRequest({ method: 'POST', body: { ...emptyBody('graphql'), text: 'query { me { id } }', graphqlVariables: '{"a": 1}' } }))
+    expect(JSON.parse(gql.body!)).toEqual({ query: 'query { me { id } }', variables: { a: 1 } })
+    expect(gql.headers).toContainEqual(['Content-Type', 'application/json'])
+    expect(prepare(newRequest({ method: 'POST', body: { ...emptyBody('xml'), text: '<a/>' } })).headers).toContainEqual(['Content-Type', 'application/xml'])
+    const file = { name: 'a.png', type: 'image/png', size: 3, base64: 'AQID' }
+    const fd = prepare(newRequest({ method: 'POST', body: { ...emptyBody('formdata'), fields: [kv('t', '{{x}}'), kv('f', '', true, { type: 'file', file }), kv('off', '1', false)] } }),
+      { globals: [kv('x', 'X')] })
+    expect(fd.multipart).toEqual([{ name: 't', value: 'X' }, { name: 'f', file: { name: 'a.png', type: 'image/png', base64: 'AQID' } }])
+    expect(fd.headers.find(([k]) => k.toLowerCase() === 'content-type')).toBeUndefined()
+    const bin = prepare(newRequest({ method: 'PUT', body: { ...emptyBody('binary'), file } }))
+    expect(bin.bodyFile?.base64).toBe('AQID'); expect(bin.headers).toContainEqual(['Content-Type', 'image/png'])
+  })
+  it('inherits auth through nested folders', () => {
+    const col = { ...newCollection(), auth: { ...emptyAuth('bearer'), token: 'col' } }
+    const top = { ...newFolder(col.id, 'top'), auth: { ...emptyAuth('basic'), username: 'u' } }
+    const mid = newFolder(col.id, 'mid', top.id)
+    const req = newRequest({ collectionId: col.id, folderId: mid.id })
+    const chain = folderChain([mid, top], mid.id)
+    expect(chain.map((f) => f.name)).toEqual(['mid', 'top'])
+    expect(effectiveAuth(req, col, chain)?.kind).toBe('basic')
+    expect(effectiveAuth(req, col, [])?.kind).toBe('bearer')
+  })
+  it('layers globals < collection < environment < data < locals', () => {
+    const req = newRequest({ url: 'https://h/{{a}}{{b}}{{c}}{{d}}{{e}}' })
+    const p = prepare(req, {
+      globals: [kv('a', 'g'), kv('b', 'g'), kv('c', 'g'), kv('d', 'g'), kv('e', 'g')],
+      collection: { ...newCollection(), variables: [kv('b', 'c'), kv('c', 'c'), kv('d', 'c'), kv('e', 'c')] },
+      environment: { ...newEnvironment(), variables: [kv('c', 'e'), kv('d', 'e'), kv('e', 'e')] },
+      data: { d: 'd', e: 'd' }, locals: new Map([['e', 'l']]),
+    })
+    expect(p.url).toBe('https://h/gcedl')
   })
   it('checks JSON, tolerating variables', () => {
     expect(jsonProblem('{"a": {{n}}}')).toBeNull()
@@ -99,6 +141,12 @@ describe('prepare', () => {
 describe('curl', () => {
   it('splits shell words', () => {
     expect(shellWords(`curl 'a b' "c \\"d\\"" e\\ f \\\n -H $'x\\ny'`)).toEqual(['curl', 'a b', 'c "d"', 'e f', '-H', 'x\ny'])
+  })
+  it('imports -F form fields as form-data', () => {
+    const { request: r, warnings } = fromCurl(`curl https://a.test/up -F name=x -F 'file=@/tmp/a.png;type=image/png'`)
+    expect(r.method).toBe('POST'); expect(r.body.kind).toBe('formdata')
+    expect(r.body.fields.map((f) => [f.key, f.type, f.value])).toEqual([['name', 'text', 'x'], ['file', 'file', '']])
+    expect(warnings[0]).toMatch(/a\.png/)
   })
   it('imports a typical JSON POST', () => {
     const { request: r, warnings } = fromCurl(`curl -X POST 'https://api.test/v1/items?limit=5' \\
@@ -127,7 +175,7 @@ describe('curl', () => {
   })
   it('exports and round-trips', () => {
     const p = prepare(newRequest({ method: 'POST', url: 'https://a.test/x', headers: [kv('X-Q', "it's")],
-      body: { kind: 'json', text: '{"a":1}', fields: [] } }))
+      body: { ...emptyBody('json'), text: '{"a":1}', fields: [] } }))
     const c = toCurl(p)
     expect(c).toContain(`-H 'X-Q: it'\\''s'`)
     const back = fromCurl(c).request
@@ -139,7 +187,7 @@ describe('curl', () => {
 describe('backup and Postman import', () => {
   it('round-trips a workspace with fresh ids and remapped collections', () => {
     const col = newCollection('C'); const req = newRequest({ collectionId: col.id, url: 'https://a' }); const env = newEnvironment('E')
-    const back = importFile(exportWorkspace({ collections: [col], requests: [req], environments: [env] }))
+    const back = importFile(exportWorkspace({ collections: [col], folders: [], requests: [req], environments: [env] }))
     expect(back.source).toBe('dispatch')
     expect(back.collections[0].id).not.toBe(col.id)
     expect(back.requests[0].collectionId).toBe(back.collections[0].id)
@@ -156,25 +204,46 @@ describe('backup and Postman import', () => {
         ] },
         { name: 'Create', request: { method: 'POST', header: [{ key: 'Content-Type', value: 'application/json' }],
           body: { mode: 'raw', raw: '{"a":1}', options: { raw: { language: 'json' } } }, url: '{{base}}/orders', auth: { type: 'noauth' } },
-          event: [{ listen: 'test' }] },
-        { name: 'Upload', request: { method: 'POST', url: 'x', body: { mode: 'formdata', formdata: [] } } },
-        { name: 'OAuth', request: { method: 'GET', url: 'x', auth: { type: 'oauth2' } } },
+          event: [{ listen: 'test', script: { exec: ['pm.test("ok", () => {})'] } }],
+          response: [{ name: 'Made', code: 201, header: [{ key: 'X', value: '1' }], body: '{"id":1}' }] },
+        { name: 'Upload', request: { method: 'POST', url: 'x', body: { mode: 'formdata', formdata: [{ key: 'f', type: 'file', src: '/a.png' }, { key: 't', value: 'v' }] } } },
+        { name: 'Hawk', request: { method: 'GET', url: 'x', auth: { type: 'hawk' } } },
+        { name: 'User', request: { method: 'GET', url: { raw: 'https://a/users/:id', variable: [{ key: 'id', value: '7' }] } } },
       ],
     }
     const r = importFile(JSON.stringify(pm))
     expect(r.source).toBe('postman-collection')
     expect(r.collections[0]).toMatchObject({ name: 'Shop', auth: { kind: 'bearer', token: '{{tok}}' } })
     expect(r.collections[0].variables[0]).toMatchObject({ key: 'base', value: 'https://shop.test' })
-    const [list, create] = r.requests
-    expect(list.name).toBe('Orders / List')
-    expect(list.auth).toMatchObject({ kind: 'apikey', key: 'X-Key', value: 'k' })
+    const [list, create, upload, , user] = r.requests
+    expect(r.folders).toHaveLength(1)
+    expect(r.folders[0]).toMatchObject({ name: 'Orders', collectionId: r.collections[0].id, parentId: null, auth: { kind: 'apikey', key: 'X-Key', value: 'k' } })
+    expect(list.name).toBe('List')
+    expect(list.folderId).toBe(r.folders[0].id)
+    expect(list.auth.kind).toBe('inherit')
     expect(list.params.map((p) => [p.key, p.enabled])).toEqual([['page', true], ['debug', false]])
     expect(create.auth.kind).toBe('none')
     expect(create.body).toMatchObject({ kind: 'json', text: '{"a":1}' })
     expect(r.requests.every((q) => q.collectionId === r.collections[0].id)).toBe(true)
-    expect(r.warnings.join(' ')).toMatch(/scripts/)
-    expect(r.warnings.join(' ')).toMatch(/formdata/)
-    expect(r.warnings.join(' ')).toMatch(/oauth2/)
+    expect(create.scripts.post).toBe('pm.test("ok", () => {})')
+    expect(create.examples[0]).toMatchObject({ name: 'Made', status: 201, body: '{"id":1}', headers: [['X', '1']] })
+    expect(upload.body.kind).toBe('formdata')
+    expect(upload.body.fields.map((f) => [f.key, f.type])).toEqual([['f', 'file'], ['t', 'text']])
+    expect(user.pathVars.map((p) => [p.key, p.value])).toEqual([['id', '7']])
+    expect(r.warnings.join(' ')).toMatch(/form-data files/)
+    expect(r.warnings.join(' ')).toMatch(/hawk/)
+  })
+  it('keeps nested folders when round-tripping a backup, and blanks secrets', () => {
+    const col = newCollection('C'); const parent = newFolder(col.id, 'P'); const child = newFolder(col.id, 'Ch', parent.id)
+    const req = newRequest({ collectionId: col.id, folderId: child.id })
+    const env = { ...newEnvironment('E'), variables: [kv('token', 'shh', true, { secret: true }), kv('host', 'h')] }
+    const text = exportWorkspace({ collections: [col], folders: [child, parent], requests: [req], environments: [env] })
+    expect(text).not.toContain('shh')
+    const back = importFile(text)
+    const p2 = back.folders.find((f) => f.name === 'P')!; const c2 = back.folders.find((f) => f.name === 'Ch')!
+    expect(c2.parentId).toBe(p2.id)
+    expect(back.requests[0].folderId).toBe(c2.id)
+    expect(back.environments[0].variables.map((v) => [v.key, v.value, !!v.secret])).toEqual([['token', '', true], ['host', 'h', false]])
   })
   it('imports a Postman environment', () => {
     const r = importFile(JSON.stringify({ name: 'Prod', _postman_variable_scope: 'environment',
@@ -201,6 +270,19 @@ describe('transport', () => {
     expect(seen?.method).toBe('POST'); expect(seen?.body).toBe('b')
     expect(res).toMatchObject({ status: 201, body: '{"ok":true}', binary: false, size: 11 })
     expect(res.headers).toContainEqual(['content-type', 'application/json'])
+  })
+  it('sends form-data and binary bodies, and reports timings', async () => {
+    const seen: RequestInit[] = []
+    const t = new FetchTransport(async (_u, init) => { seen.push(init!); return new Response(new Uint8Array([0, 1, 2, 3])) })
+    const opts = { timeoutMs: 1000, followRedirects: true, insecureTls: false }
+    const res = await t.send({ method: 'POST', url: 'https://a', headers: [], body: null, unresolved: [],
+      multipart: [{ name: 't', value: 'v' }, { name: 'f', file: { name: 'a.bin', type: 'application/octet-stream', base64: 'AQID' } }] }, opts)
+    const fd = seen[0].body as FormData
+    expect(fd.get('t')).toBe('v')
+    expect((fd.get('f') as File).name).toBe('a.bin')
+    expect(res.binary).toBe(true); expect(res.base64).toBe('AAECAw=='); expect(res.timings?.ttfbMs).toBeGreaterThanOrEqual(0)
+    await t.send({ method: 'PUT', url: 'https://a', headers: [], body: null, unresolved: [], bodyFile: { name: 'x', type: 'image/png', base64: 'AQID' } }, opts)
+    expect((seen[1].body as Blob).size).toBe(3)
   })
   it('explains network/CORS failures and timeouts', async () => {
     const fail = new FetchTransport(async () => { throw new TypeError('Failed to fetch') })

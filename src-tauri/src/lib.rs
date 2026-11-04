@@ -18,9 +18,22 @@ pub struct SendRequest {
     url: String,
     headers: Vec<(String, String)>,
     body: Option<String>,
+    /// Binary body.
+    body_base64: Option<String>,
+    /// Form-data parts.
+    multipart: Option<Vec<Part>>,
     timeout_ms: u64,
     follow_redirects: bool,
     insecure_tls: bool,
+}
+
+#[derive(Deserialize)]
+pub struct Part {
+    name: String,
+    value: Option<String>,
+    file_name: Option<String>,
+    content_type: Option<String>,
+    data_base64: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -30,6 +43,7 @@ pub struct SendResponse {
     headers: Vec<(String, String)>,
     body_base64: String,
     time_ms: u64,
+    ttfb_ms: u64,
 }
 
 /// Requests in flight, so the UI can cancel one by id.
@@ -67,7 +81,24 @@ async fn perform(req: SendRequest) -> Result<SendResponse, String> {
         let value = reqwest::header::HeaderValue::from_str(v).map_err(|_| format!("The value of header “{k}” has characters that can’t be sent."))?;
         builder = builder.header(name, value);
     }
-    if let Some(body) = req.body {
+    if let Some(parts) = req.multipart {
+        let mut form = reqwest::multipart::Form::new();
+        for p in parts {
+            if let Some(data) = p.data_base64 {
+                let bytes = STANDARD.decode(data).map_err(|_| format!("The file for “{}” couldn’t be read.", p.name))?;
+                let mut part = reqwest::multipart::Part::bytes(bytes).file_name(p.file_name.unwrap_or_else(|| "file".into()));
+                if let Some(ct) = p.content_type {
+                    part = part.mime_str(&ct).map_err(|_| format!("“{ct}” isn’t a valid content type."))?;
+                }
+                form = form.part(p.name, part);
+            } else {
+                form = form.text(p.name, p.value.unwrap_or_default());
+            }
+        }
+        builder = builder.multipart(form);
+    } else if let Some(data) = req.body_base64 {
+        builder = builder.body(STANDARD.decode(data).map_err(|_| "The body file couldn’t be read.".to_string())?);
+    } else if let Some(body) = req.body {
         builder = builder.body(body);
     }
 
@@ -81,6 +112,7 @@ async fn perform(req: SendRequest) -> Result<SendResponse, String> {
             describe(&e)
         }
     })?;
+    let ttfb_ms = started.elapsed().as_millis() as u64;
     let status = res.status();
     let headers = res
         .headers()
@@ -94,6 +126,7 @@ async fn perform(req: SendRequest) -> Result<SendResponse, String> {
         headers,
         body_base64: STANDARD.encode(&bytes),
         time_ms: started.elapsed().as_millis() as u64,
+        ttfb_ms,
     })
 }
 

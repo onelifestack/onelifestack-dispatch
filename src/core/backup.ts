@@ -1,17 +1,40 @@
-import type { Auth, Collection, Environment, KV, Method, RequestDef } from './types'
-import { METHODS, emptyAuth, kv, newCollection, newEnvironment, newRequest, uid } from './types'
+import type { Auth, Collection, Environment, Example, Folder, KV, Method, RequestDef, Scripts } from './types'
+import { METHODS, emptyAuth, emptyBody, kv, newCollection, newEnvironment, newFolder, newRequest, normalizeCollection, normalizeFolder, normalizeRequest, uid } from './types'
 import { paramsFromUrl } from './url'
 
-export interface Workspace { collections: Collection[]; requests: RequestDef[]; environments: Environment[] }
+export interface Workspace { collections: Collection[]; folders: Folder[]; requests: RequestDef[]; environments: Environment[]; globals?: KV[] }
 
 export const FORMAT = 'onelifestack-dispatch'
 
+/** Secret variable values never leave the device in a backup; the rows stay so you can refill them. */
+const blankSecrets = (vars: KV[]) => vars.map((v) => (v.secret ? { ...v, value: '' } : v))
+
 /** A JSON backup of everything saved. History is left out: it can hold responses with secrets. */
 export function exportWorkspace(w: Workspace): string {
-  return JSON.stringify({ format: FORMAT, version: 1, exportedAt: new Date().toISOString(), ...w }, null, 2)
+  return JSON.stringify({
+    format: FORMAT, version: 2, exportedAt: new Date().toISOString(),
+    collections: w.collections.map((c) => ({ ...c, variables: blankSecrets(c.variables) })),
+    folders: w.folders,
+    requests: w.requests,
+    environments: w.environments.map((e) => ({ ...e, variables: blankSecrets(e.variables) })),
+    globals: blankSecrets(w.globals ?? []),
+  }, null, 2)
 }
 
-export interface ImportResult extends Workspace { source: 'dispatch' | 'postman-collection' | 'postman-environment'; warnings: string[] }
+/** Exports one collection (with its folders and requests) as a Dispatch file. */
+export function exportCollection(w: Workspace, collectionId: string): string {
+  return exportWorkspace({
+    collections: w.collections.filter((c) => c.id === collectionId),
+    folders: w.folders.filter((f) => f.collectionId === collectionId),
+    requests: w.requests.filter((r) => r.collectionId === collectionId),
+    environments: [],
+  })
+}
+
+export interface ImportResult extends Workspace {
+  source: 'dispatch' | 'postman-collection' | 'postman-environment' | 'openapi' | 'har'
+  warnings: string[]
+}
 
 /**
  * Reads a Dispatch backup, a Postman collection (v2.0/v2.1) or a Postman environment.
@@ -29,18 +52,26 @@ export function importFile(text: string): ImportResult {
 function importDispatch(d: any): ImportResult {
   const ids = new Map<string, string>()
   const fresh = (old: string) => { if (!ids.has(old)) ids.set(old, uid()); return ids.get(old)! }
+  const remap = (old: string | null | undefined) => (old ? (ids.get(old) ?? null) : null)
   const now = Date.now()
-  const collections: Collection[] = (d.collections ?? []).map((c: Collection) => ({ ...c, id: fresh(c.id), updatedAt: now }))
-  const requests: RequestDef[] = (d.requests ?? []).map((r: RequestDef) => ({
-    ...newRequest(), ...r, id: uid(), collectionId: r.collectionId ? (ids.get(r.collectionId) ?? null) : null, updatedAt: now,
+  const collections: Collection[] = (d.collections ?? []).map((c: Collection) => normalizeCollection({ ...c, id: fresh(c.id), updatedAt: now }))
+  // Folders first get ids, then parents are remapped (a parent may come after its child in the file).
+  const rawFolders: Folder[] = d.folders ?? []
+  rawFolders.forEach((f) => fresh(f.id))
+  const folders: Folder[] = rawFolders
+    .filter((f) => ids.has(f.collectionId))
+    .map((f) => normalizeFolder({ ...f, id: ids.get(f.id)!, collectionId: ids.get(f.collectionId)!, parentId: remap(f.parentId), updatedAt: now }))
+  const requests: RequestDef[] = (d.requests ?? []).map((r: RequestDef) => normalizeRequest({
+    ...r, id: uid(), collectionId: remap(r.collectionId), folderId: remap(r.folderId), updatedAt: now,
   }))
   const environments: Environment[] = (d.environments ?? []).map((e: Environment) => ({ ...e, id: uid(), updatedAt: now }))
-  return { source: 'dispatch', collections, requests, environments, warnings: [] }
+  return { source: 'dispatch', collections, folders, requests, environments, globals: d.globals ?? [], warnings: [] }
 }
 
 const str = (v: unknown) => (v == null ? '' : String(v))
+const desc = (v: unknown) => (typeof v === 'string' ? v : typeof (v as any)?.content === 'string' ? (v as any).content : '')
 const toKv = (list: any[] | undefined): KV[] => (list ?? []).filter((x) => x && typeof x === 'object')
-  .map((x) => kv(str(x.key), str(x.value), !x.disabled))
+  .map((x) => kv(str(x.key), str(x.value), !x.disabled, x.description ? { description: desc(x.description) } : {}))
 
 function postmanAuth(a: any, warnings: string[], where: string): Auth {
   if (!a || !a.type) return emptyAuth('inherit')
@@ -53,12 +84,41 @@ function postmanAuth(a: any, warnings: string[], where: string): Auth {
   switch (a.type) {
     case 'noauth': return emptyAuth('none')
     case 'basic': return { ...emptyAuth('basic'), username: get('username'), password: get('password') }
+    case 'digest': return { ...emptyAuth('digest'), username: get('username'), password: get('password') }
     case 'bearer': return { ...emptyAuth('bearer'), token: get('token') }
     case 'apikey': return { ...emptyAuth('apikey'), key: get('key'), value: get('value'), in: get('in') === 'query' ? 'query' : 'header' }
+    case 'oauth2': {
+      const grant = get('grant_type')
+      return {
+        ...emptyAuth('oauth2'),
+        grant: grant === 'password_credentials' ? 'password' : grant === 'authorization_code' || grant === 'authorization_code_with_pkce' ? 'authorization_code' : 'client_credentials',
+        usePkce: grant !== 'authorization_code',
+        tokenUrl: get('accessTokenUrl'), authUrl: get('authUrl'), clientId: get('clientId'), clientSecret: get('clientSecret'),
+        scope: get('scope'), username: get('username'), password: get('password'),
+        redirectUri: get('redirect_uri') || emptyAuth().redirectUri,
+        clientAuth: get('client_authentication') === 'body' ? 'body' : 'header',
+        accessToken: get('accessToken'),
+      }
+    }
+    case 'jwt': {
+      const alg = get('algorithm')
+      if (alg && !['HS256', 'HS384', 'HS512'].includes(alg)) warnings.push(`${where}: JWT ${alg} isn’t supported yet (only HS256/384/512).`)
+      return { ...emptyAuth('jwt'), algorithm: (['HS256', 'HS384', 'HS512'].includes(alg) ? alg : 'HS256') as Auth['algorithm'], secret: get('secret'), payload: get('payload') || '{}', headerPrefix: get('headerPrefix') || 'Bearer' }
+    }
+    case 'awsv4': return { ...emptyAuth('awsv4'), accessKey: get('accessKey'), secretKey: get('secretKey'), sessionToken: get('sessionToken'), region: get('region') || 'us-east-1', service: get('service') || 'execute-api' }
     default:
       warnings.push(`${where}: ${a.type} auth isn’t supported yet; set it up again by hand.`)
       return emptyAuth('none')
   }
+}
+
+function postmanScripts(events: any[] | undefined): Scripts {
+  const code = (listen: string) => {
+    const e = (events ?? []).find((x) => x?.listen === listen)
+    const exec = e?.script?.exec
+    return Array.isArray(exec) ? exec.join('\n') : str(exec)
+  }
+  return { pre: code('prerequest'), post: code('test') }
 }
 
 function postmanUrl(u: any): string {
@@ -77,52 +137,66 @@ function importPostmanCollection(d: any): ImportResult {
   col.variables = toKv(d.variable)
   col.auth = postmanAuth(d.auth, warnings, col.name)
   if (col.auth.kind === 'inherit') col.auth = emptyAuth('none')
-  if (d.event?.length) warnings.push('Collection scripts aren’t supported yet and were skipped.')
+  col.scripts = postmanScripts(d.event)
+  col.docs = desc(d.info?.description)
+  const folders: Folder[] = []
   const requests: RequestDef[] = []
 
-  // Folders are flattened: "Folder / Sub / Request". Folder auth applies to requests that inherit.
-  const walk = (items: any[], prefix: string, folderAuth: Auth | null) => {
+  const walk = (items: any[], parent: Folder | null) => {
     for (const it of items ?? []) {
       if (Array.isArray(it.item)) {
-        const fa = it.auth ? postmanAuth(it.auth, warnings, it.name) : folderAuth
-        walk(it.item, `${prefix}${str(it.name)} / `, fa && fa.kind !== 'inherit' ? fa : folderAuth)
+        const f = newFolder(col.id, str(it.name) || 'Folder', parent?.id ?? null)
+        if (it.auth) f.auth = postmanAuth(it.auth, warnings, f.name)
+        f.scripts = postmanScripts(it.event)
+        f.docs = desc(it.description)
+        folders.push(f)
+        walk(it.item, f)
         continue
       }
       const r = it.request
       if (!r) continue
-      const name = `${prefix}${str(it.name) || 'Request'}`
+      const name = str(it.name) || 'Request'
       const method = str(typeof r === 'string' ? 'GET' : r.method || 'GET').toUpperCase() as Method
       if (!METHODS.includes(method)) { warnings.push(`${name}: method ${method} isn’t supported; skipped.`); continue }
       const url = postmanUrl(typeof r === 'string' ? r : r.url)
-      const req = newRequest({ name, method, url, collectionId: col.id })
+      const req = newRequest({ name, method, url, collectionId: col.id, folderId: parent?.id ?? null })
       req.params = paramsFromUrl(url, [])
-      const disabledQuery = (r.url?.query ?? []).filter((q: any) => q.disabled)
-      req.params.push(...disabledQuery.map((q: any) => kv(str(q.key), str(q.value), false)))
+      req.params.push(...(r.url?.query ?? []).filter((q: any) => q.disabled).map((q: any) => kv(str(q.key), str(q.value), false)))
+      req.pathVars = toKv(r.url?.variable)
       req.headers = toKv(r.header)
-      let auth = r.auth ? postmanAuth(r.auth, warnings, name) : emptyAuth('inherit')
-      if (auth.kind === 'inherit' && folderAuth) auth = folderAuth
-      req.auth = auth
+      req.auth = r.auth ? postmanAuth(r.auth, warnings, name) : emptyAuth('inherit')
+      req.scripts = postmanScripts(it.event)
+      req.docs = desc(r.description)
       const b = r.body
       if (b?.mode === 'raw') {
         const lang = str(b.options?.raw?.language)
         const ct = req.headers.find((h) => h.key.toLowerCase() === 'content-type')?.value ?? ''
-        const isJson = lang === 'json' || ct.includes('json')
-        req.body = { kind: isJson ? 'json' : 'text', text: str(b.raw), fields: [] }
+        const kind = lang === 'json' || ct.includes('json') ? 'json' : lang === 'xml' || ct.includes('xml') ? 'xml' : lang === 'html' ? 'html' : 'text'
+        req.body = { ...emptyBody(kind), text: str(b.raw) }
       } else if (b?.mode === 'urlencoded') {
-        req.body = { kind: 'urlencoded', text: '', fields: toKv(b.urlencoded) }
-      } else if (b?.mode && b.mode !== 'none') {
-        warnings.push(`${name}: ${b.mode} bodies aren’t supported yet; the body was skipped.`)
+        req.body = { ...emptyBody('urlencoded'), fields: toKv(b.urlencoded) }
+      } else if (b?.mode === 'formdata') {
+        req.body = { ...emptyBody('formdata'), fields: (b.formdata ?? []).map((x: any) => kv(str(x.key), x.type === 'file' ? '' : str(x.value), !x.disabled, { type: x.type === 'file' ? 'file' : 'text', file: null })) }
+        if ((b.formdata ?? []).some((x: any) => x.type === 'file')) warnings.push(`${name}: form-data files aren’t in the export; choose them again.`)
+      } else if (b?.mode === 'graphql') {
+        req.body = { ...emptyBody('graphql'), text: str(b.graphql?.query), graphqlVariables: str(b.graphql?.variables) }
+      } else if (b?.mode === 'file') {
+        req.body = emptyBody('binary')
+        warnings.push(`${name}: binary file bodies aren’t in the export; choose the file again.`)
       }
-      if (it.event?.length) warnings.push(`${name}: scripts aren’t supported yet and were skipped.`)
+      req.examples = (it.response ?? []).map((x: any): Example => ({
+        id: uid(), name: str(x.name) || 'Example', status: Number(x.code) || 200,
+        headers: (x.header ?? []).map((h: any) => [str(h.key), str(h.value)] as [string, string]), body: str(x.body),
+      }))
       requests.push(req)
     }
   }
-  walk(d.item ?? [], '', null)
-  return { source: 'postman-collection', collections: [col], requests, environments: [], warnings: [...new Set(warnings)] }
+  walk(d.item ?? [], null)
+  return { source: 'postman-collection', collections: [col], folders, requests, environments: [], warnings: [...new Set(warnings)] }
 }
 
 function importPostmanEnvironment(d: any): ImportResult {
   const env = newEnvironment(str(d.name) || 'Imported environment')
-  env.variables = (d.values ?? []).map((v: any) => kv(str(v.key), str(v.value), v.enabled !== false))
-  return { source: 'postman-environment', collections: [], requests: [], environments: [env], warnings: [] }
+  env.variables = (d.values ?? []).map((v: any) => kv(str(v.key), str(v.value), v.enabled !== false, v.type === 'secret' ? { secret: true } : {}))
+  return { source: 'postman-environment', collections: [], folders: [], requests: [], environments: [env], warnings: [] }
 }

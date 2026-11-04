@@ -196,3 +196,49 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
   .statusBar { flex-wrap: wrap; gap: .3rem 1rem; padding-inline: 16px; }
   kbd { display: none; }
 }
+
+/* v0.2: tabs, folders, new body types */
+.tabBar { display: flex; align-items: stretch; gap: 0; border-bottom: 1px solid var(--outline); background: var(--surface); overflow-x: auto; scrollbar-width: thin; }
+.reqTab { display: flex; align-items: center; border-right: 1px solid var(--outline); max-width: 220px; min-width: 120px; position: relative; }
+.reqTab.on { background: var(--bg); }
+.reqTab.on::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--primary); }
+.reqTabMain { flex: 1; min-width: 0; display: flex; align-items: center; gap: .35rem; border: 0; background: none; color: inherit; font: inherit; font-size: 12.5px; padding: .45rem .3rem .45rem .6rem; cursor: pointer; text-align: left; }
+.reqTabName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reqTab .mtag { width: auto; }
+.reqTabX { border: 0; background: none; color: var(--muted); cursor: pointer; width: 1.6rem; height: 1.6rem; border-radius: 6px; margin-right: .2rem; flex: none; }
+.reqTabX:hover { background: var(--primary-soft); color: var(--ink); }
+.reqTabX.dirty { color: var(--warn); font-size: 10px; }
+.reqTabX.dirty:hover { font-size: 14px; }
+.reqTabNew { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 .8rem; font-size: 18px; }
+.reqTabNew:hover { color: var(--ink); background: var(--primary-soft); }
+.spin { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--primary); border-right-color: transparent; animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+.openDot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); flex: none; }
+.folderIcon { color: var(--muted); font-size: 11px; }
+.sideFoot { display: flex; gap: .3rem; padding: .4rem .5rem; border-top: 1px solid var(--outline); }
+.sideFoot .btn { flex: 1; }
+.subhead { font-size: 12.5px; color: var(--muted); margin: 1rem 0 .3rem; }
+.field.inline { display: flex; align-items: center; gap: .6rem; margin-bottom: .6rem; }
+.gqlGrid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: .6rem; }
+@media (max-width: 900px) { .gqlGrid { grid-template-columns: 1fr; } }
+.segmented .seg { border: 1px solid var(--outline); background: var(--surface); color: var(--ink); border-radius: 99px; padding: .25rem .7rem; font: inherit; font-size: 12.5px; cursor: pointer; }
+.segmented .seg.on { border-color: var(--primary); background: var(--primary-soft); }
+.filePick { display: inline-flex; align-items: center; gap: .5rem; min-width: 0; }
+.filePick label.btn { position: relative; }
+.fileName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.kv .kv-type { width: 5.5rem; text-align: center; }
+.kv .kv-type select { width: 100%; padding: .3rem .3rem; }
+.kv input[readonly] { background: var(--sunken); }
+.tokenBox { display: flex; align-items: center; gap: .6rem; padding: .6rem .7rem; border: 1px dashed var(--outline); border-radius: 10px; flex-wrap: wrap; }
+.tokenText { word-break: break-all; }
+.warnText { color: var(--warn); }
+.toggle { display: flex; align-items: center; gap: .4rem; }
+.row-h { display: flex; align-items: center; gap: .6rem; justify-content: space-between; }
+.row-h h2 { margin-bottom: .3rem; }
+.scrollTabs { overflow-x: auto; scrollbar-width: none; }
+.markdown { line-height: 1.6; }
+.markdown h1, .markdown h2, .markdown h3 { margin: .8em 0 .3em; }
+.markdown pre { background: var(--sunken); padding: .6rem .8rem; border-radius: 8px; overflow: auto; }
+.markdown table { border-collapse: collapse; } .markdown td, .markdown th { border: 1px solid var(--outline); padding: .25rem .5rem; }
+.editor h1.titleInput { margin: 0 0 .3rem; }
