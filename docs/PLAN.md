@@ -12,7 +12,7 @@ Order (each step: code + tests + typecheck + build, then commit and push):
 3. [x] Scripts + tests: sandboxed pre-request/post-response JS in a Web Worker with a pm-style API
        (variables, request, response, test/expect, sendRequest, console), test results tab, console panel.
 4. [x] Dynamic fake-data variables ({{$randomEmail}} etc.).
-5. [ ] Collection runner: folder/collection, iterations, CSV/JSON data files (data-driven), delay, stop on
+5. [x] Collection runner: folder/collection, iterations, CSV/JSON data files (data-driven), delay, stop on
        failure, results + export. Suite runner = run several collections/folders in order.
 6. [ ] Performance/load testing: virtual users, duration/iterations, ramp-up, think time; p50/p90/p95/p99,
        throughput, error rate, latency-over-time chart; caps + confirmation.
@@ -37,3 +37,6 @@ Progress notes go under each step as it lands.
   snippets. Browser-checked: sendRequest works, direct fetch blocked. Also pulled in from step 11: HTML/image
   preview (sandboxed iframe), JSONPath filter, cookies tab, save response to file, save as example, timings.
 - Step 4: 70 {{$random…}} generators (Postman names, built-in word lists), "{{ }}" panel listing scope + generators.
+- Step 5: runner view (targets = suite, pick/reorder, iterations, delay, CSV/JSON data, stop on failure, keep
+  variable changes, live results + inspector, JSON/JUnit export); setNextRequest with loop guard; cookie jar
+  (CookieTransport) on desktop and in runs. Core in core/runner.ts + core/csv.ts so the CLI reuses it.

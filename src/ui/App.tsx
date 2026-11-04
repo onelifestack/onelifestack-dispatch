@@ -8,7 +8,9 @@ import { CollectionEditor, EnvironmentEditor, FolderEditor, GlobalsEditor } from
 import { exportCollection, exportWorkspace, importFile, type ImportResult } from '../core/backup'
 import { nameFromUrl } from '../core/curl'
 import { withScheme } from '../core/url'
-import { isDesktop, type Transport } from '../core/transport'
+import type { Transport } from '../core/transport'
+import { saveAnyFile, saveTextFile } from './files'
+import { RunnerView } from './RunnerView'
 import type { Collection } from '../core/types'
 import type { Pipeline } from '../core/runtime'
 import type { ScriptEngine } from '../core/scriptPipeline'
@@ -18,34 +20,6 @@ const readText = (file: File) => new Promise<string>((resolve, reject) => {
   r.onload = () => resolve(String(r.result)); r.onerror = () => reject(new Error('Couldn’t read that file.'))
   r.readAsText(file)
 })
-
-/** Saves text as a file: the native save dialog on desktop, a download in the browser. Returns false if cancelled. */
-export async function saveTextFile(fileName: string, text: string, type = 'application/json'): Promise<boolean> {
-  if (isDesktop()) {
-    const { invoke } = await import('@tauri-apps/api/core')
-    return invoke<boolean>('save_text_file', { fileName, contents: text })
-  }
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(new Blob([text], { type }))
-  a.download = fileName
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-  return true
-}
-
-/** Saves text or base64 bytes as a file (desktop: native dialog; browser: download). */
-export async function saveAnyFile(fileName: string, data: { text?: string; base64?: string }, type: string): Promise<boolean> {
-  if (data.text !== undefined) return saveTextFile(fileName, data.text, type)
-  if (isDesktop()) {
-    const { invoke } = await import('@tauri-apps/api/core')
-    return invoke<boolean>('save_base64_file', { fileName, base64: data.base64 ?? '' })
-  }
-  const a = document.createElement('a')
-  a.href = `data:${type};base64,${data.base64 ?? ''}`
-  a.download = fileName
-  a.click()
-  return true
-}
 
 function Console({ ws, onClose }: { ws: WorkspaceApi; onClose: () => void }) {
   const end = useRef<HTMLDivElement>(null)
@@ -235,6 +209,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           : folder ? <FolderEditor key={folder.id} ws={ws} confirm={confirm} folder={folder} />
           : env ? <EnvironmentEditor key={env.id} ws={ws} confirm={confirm} environment={env} />
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
+          : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
           : extraView ? extraView(ws, notify)
           : <>
               <TabBar ws={ws} onClose={(id) => void closeTab(id)} />

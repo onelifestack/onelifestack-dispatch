@@ -274,3 +274,32 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 .varRow { display: grid; grid-template-columns: auto 1fr auto; gap: .5rem; align-items: center; border: 0; background: none; color: inherit; text-align: left; padding: .3rem .4rem; border-radius: 6px; cursor: pointer; font: inherit; }
 .varRow:hover { background: var(--primary-soft); }
 .varRow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Runner and load test */
+.editor.wide { max-width: 1280px; }
+.runGrid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1.5rem; }
+@media (max-width: 1000px) { .runGrid { grid-template-columns: 1fr; } }
+.targetRow { display: flex; gap: .4rem; margin-bottom: .4rem; align-items: center; }
+.targetRow select { flex: 1; min-width: 0; }
+.pickList { list-style: none; margin: 0; padding: 0; border: 1px solid var(--outline); border-radius: 10px; max-height: 46vh; overflow: auto; }
+.pickList li { display: flex; align-items: center; gap: .5rem; padding: .35rem .6rem; border-bottom: 1px solid var(--outline); }
+.pickList li:last-child { border-bottom: 0; }
+.pickList li.off { opacity: .55; }
+.block { display: block; }
+.dataPreview { overflow: auto; max-height: 160px; }
+.progress { height: 6px; background: var(--sunken); border-radius: 99px; overflow: hidden; margin: .3rem 0 .6rem; }
+.progress > div { height: 100%; background: var(--primary); transition: width .2s; }
+.statRow { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .6rem; }
+.stat { font-size: 13px; } .stat b { font-size: 15px; }
+.runResults { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: start; }
+.runResults:has(.inspect) { grid-template-columns: minmax(0, 1fr) minmax(320px, 42%); }
+.resultTable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.resultTable th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; padding: .3rem .4rem; border-bottom: 1px solid var(--outline); }
+.resultTable td { padding: .35rem .4rem; border-bottom: 1px solid var(--outline); vertical-align: top; word-break: break-all; }
+.resultTable tr { cursor: pointer; }
+.resultTable tr:hover td { background: var(--sunken); }
+.resultTable tr.on td { background: var(--primary-soft); }
+.resultTable tr.bad td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.inspect { border: 1px solid var(--outline); border-radius: 10px; padding: .7rem; position: sticky; top: .5rem; max-height: 80vh; overflow: auto; background: var(--surface); }
+.inspect pre.out { max-height: 30vh; }
+@media (max-width: 1000px) { .runResults:has(.inspect) { grid-template-columns: 1fr; } }

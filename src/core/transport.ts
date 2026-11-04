@@ -1,4 +1,5 @@
 import type { HttpResponse, PreparedRequest } from './types'
+import type { CookieJar } from './cookies'
 
 export function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64)
@@ -142,3 +143,24 @@ export class DesktopTransport implements Transport {
 }
 
 export const defaultTransport = (): Transport => (isDesktop() ? new DesktopTransport() : new FetchTransport())
+
+/**
+ * Adds a cookie jar around a transport: cookies from responses are sent back on later requests to the same site.
+ * Used on desktop and in runs/CLI. (In the browser, the browser itself owns cookies, so this isn't used there.)
+ */
+export class CookieTransport implements Transport {
+  constructor(private readonly inner: Transport, readonly jar: CookieJar, private readonly enabled: () => boolean = () => true) {}
+  get label() { return this.inner.label }
+  get unrestricted() { return this.inner.unrestricted }
+  async send(p: PreparedRequest, opts: SendOptions): Promise<HttpResponse> {
+    const on = this.enabled()
+    let req = p
+    if (on && !p.headers.some(([k]) => k.toLowerCase() === 'cookie')) {
+      const c = this.jar.header(p.url)
+      if (c) req = { ...p, headers: [...p.headers, ['Cookie', c]] }
+    }
+    const res = await this.inner.send(req, opts)
+    if (on) this.jar.store(p.url, res.headers)
+    return res
+  }
+}

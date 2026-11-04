@@ -3,7 +3,8 @@ import * as db from '../core/db'
 import type { Collection, Environment, Folder, HistoryEntry, HttpResponse, KV, LogLine, PreparedRequest, RequestDef, Settings, TestResult } from '../core/types'
 import { defaultSettings, newCollection, newEnvironment, newFolder, newRequest, normalizeRequest, uid } from '../core/types'
 import { prepare } from '../core/prepare'
-import { type Transport, defaultTransport } from '../core/transport'
+import { CookieTransport, type Transport, defaultTransport } from '../core/transport'
+import { CookieJar } from '../core/cookies'
 import type { Workspace } from '../core/backup'
 import { type Execution, type Pipeline, type RunContext, execute, folderChain, prepareContext, sendOptions } from '../core/runtime'
 import { type ScriptEngine, scriptPipeline } from '../core/scriptPipeline'
@@ -46,8 +47,12 @@ export interface WorkspaceOptions {
 }
 
 export function useWorkspace(opts: WorkspaceOptions = {}) {
-  const [transport] = useState<Transport>(() => opts.transport ?? defaultTransport())
   const settingsRef = useRef<Settings>(defaultSettings)
+  // On desktop, cookies from responses go back on later requests (the browser does this itself on the web).
+  const [transport] = useState<Transport>(() => {
+    const t = opts.transport ?? defaultTransport()
+    return t.unrestricted && !opts.transport ? new CookieTransport(t, new CookieJar(), () => settingsRef.current.cookieJar) : t
+  })
   const [ready, setReady] = useState(false)
   const [collections, setCollections] = useState<Collection[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
