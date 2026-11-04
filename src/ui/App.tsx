@@ -13,6 +13,7 @@ import { saveAnyFile, saveTextFile } from './files'
 import { RunnerView } from './RunnerView'
 import { LoadView } from './LoadView'
 import { getOAuthToken } from './oauth'
+import { importBruno, toPostmanCollection } from '../core/interop'
 import { DocsView } from './DocsView'
 import { MockView } from './MockView'
 import { Markdown } from './Markdown'
@@ -95,6 +96,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
   const [toast, setToast] = useState<{ text: string; action?: { label: string; run: () => void } } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
   const fileInput = useRef<HTMLInputElement>(null)
+  const brunoInput = useRef<HTMLInputElement>(null)
   const [consoleOpen, setConsoleOpen] = useState(false)
   const [gettingToken, setGettingToken] = useState(false)
   const authActions = {
@@ -186,6 +188,12 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
   }
 
   const renderDocs = (md: string) => <Markdown text={md} />
+  const onExportPostman = async (c: Collection) => {
+    try {
+      if (await saveTextFile(`${c.name.replace(/[^\w.-]+/g, '-')}.postman_collection.json`, toPostmanCollection(c, ws.folders, ws.requests)))
+        notify(`Exported ${c.name} for Postman (secret values left out).`)
+    } catch (e) { notify(`Couldn’t export: ${String(e)}`) }
+  }
   const closeMenu = (e: React.MouseEvent) => { (e.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open') }
 
   if (!ws.ready) return <p className="loading">Opening…</p>
@@ -214,6 +222,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           <summary className="btn small ghost" aria-label="Menu">☰</summary>
           <div className="menuList right" role="menu">
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); fileInput.current?.click() }}>Import (backup, Postman, OpenAPI, HAR)…</button>
+            <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); brunoInput.current?.click() }}>Import a Bruno collection folder…</button>
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); void onExport() }}>Export backup</button>
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); ws.setView({ kind: 'backups' }) }}>Local backups…</button>
             <hr />
@@ -221,9 +230,19 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
             {ws.transport.unrestricted && <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); ws.setView({ kind: 'cookies' }) }}>Cookies…</button>}
           </div>
         </details>
-        <input ref={fileInput} type="file" accept="application/json,.json,.yaml,.yml,.har" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void onImport(f) }} />
+        <input ref={brunoInput} type="file" hidden {...{ webkitdirectory: '', directory: '' }} multiple aria-label="Bruno collection folder" onChange={async (e) => {
+          const list = [...(e.target.files ?? [])].filter((f) => /\.(bru|json)$/.test(f.name)); e.target.value = ''
+          if (!list.length) return
+          try {
+            const files = await Promise.all(list.map(async (f) => ({ path: (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name, text: await readText(f) })))
+            const r = importBruno(files)
+            await ws.importWorkspace(r)
+            notify(`Imported ${r.requests.length} requests and ${r.environments.length} environments from Bruno.${r.warnings.length ? ` ${r.warnings.slice(0, 2).join(' ')}` : ''}`)
+          } catch (err) { notify(err instanceof Error ? err.message : String(err)) }
+        }} />
+        <input ref={fileInput} type="file" aria-label="Import file" accept="application/json,.json,.yaml,.yml,.har" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void onImport(f) }} />
       </header>
-      <Sidebar ws={ws} dialogs={dialogs} onExportCollection={(c) => void onExportCollection(c)} />
+      <Sidebar ws={ws} dialogs={dialogs} onExportCollection={(c) => void onExportCollection(c)} onExportPostman={(c) => void onExportPostman(c)} />
       <main className="work">
         {col ? <CollectionEditor key={col.id} ws={ws} confirm={confirm} collection={col} authActions={authActions} renderDocs={renderDocs} />
           : folder ? <FolderEditor key={folder.id} ws={ws} confirm={confirm} folder={folder} authActions={authActions} renderDocs={renderDocs} />

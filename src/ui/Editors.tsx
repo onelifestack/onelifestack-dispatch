@@ -8,6 +8,8 @@ import type { AuthActions } from './RequestPane'
 import { effectiveAuth } from '../core/prepare'
 import { folderChain } from '../core/runtime'
 import { newRequest } from '../core/types'
+import { toPostmanEnvironment } from '../core/interop'
+import { saveTextFile } from './files'
 
 /**
  * Edits save as you type, like settings, so there's no separate Save step to forget. Local state keeps typing
@@ -120,6 +122,7 @@ export function EnvironmentEditor({ ws, confirm, environment }: Common & { envir
       <h2>Variables</h2>
       <KVTable label="Environment variables" keyPlaceholder="Variable" allowSecrets rows={e.variables} onChange={(variables) => setE({ ...e, variables })} />
       <div className="actions">
+        <button type="button" className="btn" onClick={async () => { await saveTextFile(`${e.name.replace(/[^\w.-]+/g, '-')}.postman_environment.json`, toPostmanEnvironment(e)) }}>Export as Postman environment</button>
         <button type="button" className="btn danger" onClick={async () => { if (await confirm(`Delete environment “${e.name}”?`)) await ws.removeEnvironment(e.id) }}>Delete environment</button>
       </div>
     </section>

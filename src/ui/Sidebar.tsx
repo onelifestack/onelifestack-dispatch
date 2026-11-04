@@ -12,7 +12,7 @@ export interface SidebarDialogs {
   pickPlace: (title: string, current: { collectionId: string | null; folderId: string | null }) => Promise<{ collectionId: string | null; folderId: string | null } | null>
 }
 
-interface Props { ws: WorkspaceApi; dialogs: SidebarDialogs; onExportCollection: (c: Collection) => void }
+interface Props { ws: WorkspaceApi; dialogs: SidebarDialogs; onExportCollection: (c: Collection) => void; onExportPostman?: (c: Collection) => void }
 
 const Method = ({ m }: { m: string }) => <span className={`mtag m-${m}`}>{m === 'DELETE' ? 'DEL' : m === 'OPTIONS' ? 'OPT' : m}</span>
 const byName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(b.name)
@@ -31,7 +31,7 @@ function Menu({ label, items }: { label: string; items: [string, () => void, ('d
   )
 }
 
-export function Sidebar({ ws, dialogs, onExportCollection }: Props) {
+export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Props) {
   const { ask, confirm, pickPlace } = dialogs
   const [tab, setTab] = useState<Tab>('collections')
   const [filter, setFilter] = useState('')
@@ -170,6 +170,7 @@ export function Sidebar({ ws, dialogs, onExportCollection }: Props) {
                     ['Mock server…', () => ws.setView({ kind: 'mock', collectionId: c.id })],
                     ['Rename', async () => { const n = await ask('Rename collection', c.name); if (n) await ws.updateCollection({ ...c, name: n }) }],
                     ['Export collection', () => onExportCollection(c)],
+                    ...(onExportPostman ? [['Export as Postman collection', () => onExportPostman(c)] as [string, () => void]] : []),
                     ['Delete', async () => { if (await confirm(`Delete “${c.name}” and everything in it? You can undo this right after.`)) await ws.removeCollection(c.id) }, 'danger'],
                   ]} />
                 </div>

@@ -128,7 +128,7 @@ describe('Dispatch app', () => {
       info: { name: 'Pets', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
       item: [{ name: 'List pets', request: { method: 'GET', url: 'https://pets.test/pets' } }],
     })], 'pets.json', { type: 'application/json' })
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    const input = document.querySelector('input[aria-label="Import file"]') as HTMLInputElement
     await act(async () => { fireEvent.change(input, { target: { files: [file] } }) })
     expect(await screen.findByText(/Imported 1 collection, 1 request/)).toBeTruthy()
     expect(side().getByRole('button', { name: 'Pets' })).toBeTruthy()
@@ -314,7 +314,7 @@ describe('Dispatch app', () => {
         { name: 'Box', item: [] },
       ],
     })], 'shop.json', { type: 'application/json' })
-    await act(async () => { fireEvent.change(document.querySelector('header input[type="file"]')!, { target: { files: [file] } }) })
+    await act(async () => { fireEvent.change(document.querySelector('input[aria-label="Import file"]')!, { target: { files: [file] } }) })
     await screen.findByText(/Imported 1 collection/)
     const names = () => [...document.querySelectorAll('.tree .rowName')].map((e) => e.textContent)
     expect(names()).toEqual(['A', 'B', 'C', 'Box'])
