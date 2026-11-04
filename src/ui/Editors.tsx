@@ -58,6 +58,7 @@ export function CollectionEditor({ ws, confirm, collection, authActions, renderD
         <button type="button" className="btn" onClick={() => ws.setView({ kind: 'docs', collectionId: c.id })}>View docs</button>
         <button type="button" className="btn" onClick={() => ws.setView({ kind: 'mock', collectionId: c.id })}>Mock server</button>
       </div>
+      {ws.transport.unrestricted && <FilesSection ws={ws} c={c} setC={setC} />}
       <DocsEditor docs={c.docs} onChange={(docs) => setC({ ...c, docs })} render={renderDocs} />
       <h2>Auth</h2>
       <p className="muted small">Requests and folders set to “Inherit from parent” use this.</p>
@@ -74,6 +75,38 @@ export function CollectionEditor({ ws, confirm, collection, authActions, renderD
       </div>
     </section>
   )
+}
+
+/** Desktop: keep the collection as files in a folder (for git). */
+function FilesSection({ ws, c, setC }: { ws: WorkspaceApi; c: Collection; setC: (c: Collection) => void }) {
+  const [note, setNote] = useState<string | null>(null)
+  return <>
+    <h2>Files</h2>
+    {c.linkedDir ? <>
+      <p className="small">Saved as files in <code>{c.linkedDir}</code>. Changes are written there as you work, ready to commit with git.</p>
+      <div className="actions">
+        <button type="button" className="btn small" onClick={async () => {
+          const { readCollectionDir } = await import('./linkedDirs')
+          try { const r = await readCollectionDir(ws, c.linkedDir); await ws.replaceCollection(r); setNote(`Reloaded ${r.requests.length} requests from the folder.${r.warnings.length ? ` ${r.warnings.join(' ')}` : ''}`) } catch (e) { setNote(String(e)) }
+        }}>Reload from folder</button>
+        <button type="button" className="btn small ghost" onClick={() => { setC({ ...c, linkedDir: '' }); setNote('Unlinked; the files stay where they are.') }}>Unlink</button>
+      </div>
+    </> : <>
+      <p className="muted small">Keep this collection as a folder of YAML files (one per request) so it can live in a git repo and be reviewed in pull requests. Literal secrets are never written; use <code>{'{{variables}}'}</code>.</p>
+      <div className="actions">
+        <button type="button" className="btn small" onClick={async () => {
+          const { pickFolder, writeCollectionDir } = await import('./linkedDirs')
+          try {
+            const dir = await pickFolder(); if (!dir) return
+            const left = await writeCollectionDir(ws, c, dir)
+            setC({ ...c, linkedDir: dir })
+            setNote(left.length ? `Saved. Literal secrets in ${left.join(', ')} weren’t written to the files; move them into variables.` : 'Saved to the folder.')
+          } catch (e) { setNote(String(e)) }
+        }}>Save to a folder…</button>
+      </div>
+    </>}
+    {note && <p className="small muted">{note}</p>}
+  </>
 }
 
 export function FolderEditor({ ws, confirm, folder, authActions, renderDocs }: Common & { folder: Folder }) {

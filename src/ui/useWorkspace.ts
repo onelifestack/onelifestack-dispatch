@@ -421,6 +421,17 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     return true
   }, [folders, requests])
 
+  /** Replaces a collection's contents (e.g. reloaded from its folder); adds it if it's new. */
+  const replaceCollection = useCallback(async (w: Workspace) => {
+    const c = w.collections[0]
+    await db.deleteCollection(c.id)
+    await db.putMany({ collections: [c], folders: w.folders, requests: w.requests })
+    setCollections((cs) => [...cs.filter((x) => x.id !== c.id), c].sort(byName))
+    setFolders((fs) => [...fs.filter((f) => f.collectionId !== c.id), ...w.folders])
+    setRequests((rs) => [...rs.filter((r) => r.collectionId !== c.id), ...w.requests])
+    setTabs((ts) => ts.map((t) => { const r = w.requests.find((x) => x.id === t.draft.id); return r ? { ...t, draft: structuredClone(r) } : t }))
+  }, [])
+
   /** Deletes several requests with one undo. */
   const removeRequests = useCallback(async (ids: string[]) => {
     const gone = requests.filter((r) => ids.includes(r.id))
@@ -456,7 +467,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   }, [snapshot])
 
   return {
-    trash, undoDelete, backups, backupNow, restoreBackup, placeItems, removeRequests,
+    trash, undoDelete, backups, backupNow, restoreBackup, placeItems, removeRequests, replaceCollection,
     ready, transport, collections, folders, requests, environments, globals, history, settings, logs,
     tabs, activeId, active, draft, view, result: active.result, sending: active.sending, saved, dirty, isDirty,
     collection, environment, prepared, chain, runContext, pipeline: pipelineRef, variableNames,

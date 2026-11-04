@@ -2,7 +2,9 @@
  * dispatch-run: runs Dispatch (or Postman) collections from the command line, for CI.
  * Uses the same core as the app: variables, auth, scripts and tests, data files, reports, load tests.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { filesToCollection } from '../core/fileFormat'
 import { basename } from 'node:path'
 import vm from 'node:vm'
 import { importFileAsync, type ImportResult } from '../core/backup'
@@ -27,7 +29,7 @@ const green = c(32), red = c(31), dim = c(2), bold = c(1), yellow = c(33)
 const HELP = `dispatch-run ${VERSION} — run API collections from the command line
 
 Usage:
-  dispatch-run <file> [options]          run a collection (Dispatch backup or Postman collection)
+  dispatch-run <file|folder> [options]   run a collection (Dispatch backup, Postman/Insomnia file, or a collection folder)
   dispatch-run load <file> [options]     load-test a request or a collection
   dispatch-run mock <file> [options]     serve a collection's saved examples (mock server)
 
@@ -106,7 +108,22 @@ const read = (path: string) => { try { return readFileSync(path, 'utf8') } catch
 const compileInVm: Compile = (code, params) => vm.compileFunction(code, params, { parsingContext: vm.createContext({ atob, btoa, URL, URLSearchParams, TextEncoder, TextDecoder, setTimeout, clearTimeout }) }) as (...args: unknown[]) => unknown
 
 async function loadWorkspace(file: string): Promise<ImportResult> {
-  try { return await importFileAsync(read(file)) } catch (e) { throw new Usage(`${file}: ${e instanceof Error ? e.message : String(e)}`) }
+  try {
+    if (statSync(file, { throwIfNoEntry: false })?.isDirectory()) {
+      // A collection kept as files (dispatch.collection.yaml + *.req.yaml).
+      const files: { path: string; text: string }[] = []
+      const walk = (dir: string) => {
+        for (const e of readdirSync(dir, { withFileTypes: true })) {
+          if (e.isDirectory()) { if (e.name !== '.git' && e.name !== 'node_modules') walk(join(dir, e.name)); continue }
+          if (/(\.req\.yaml|_folder\.yaml|dispatch\.collection\.yaml)$/.test(e.name)) files.push({ path: relative(file, join(dir, e.name)).replace(/\\/g, '/'), text: readFileSync(join(dir, e.name), 'utf8') })
+        }
+      }
+      walk(file)
+      const { parse } = await import('yaml')
+      return filesToCollection(files, parse)
+    }
+    return await importFileAsync(read(file))
+  } catch (e) { throw new Usage(`${file}: ${e instanceof Error ? e.message : String(e)}`) }
 }
 
 async function pickEnvironment(ws: ImportResult, spec: string | undefined): Promise<Environment | null> {

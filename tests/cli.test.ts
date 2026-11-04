@@ -43,6 +43,17 @@ const exec = async (args: string[]) => {
 }
 
 describe('dispatch-run', () => {
+  it('runs a collection folder', async () => {
+    const { mkdirSync } = await import('node:fs')
+    const d = join(dir, 'folder-col'); mkdirSync(join(d, 'sub'), { recursive: true })
+    writeFileSync(join(d, 'dispatch.collection.yaml'), `id: c1\nname: Folder col\nvariables:\n  - key: base\n    value: http://127.0.0.1:${port}\n`)
+    writeFileSync(join(d, 'sub', '_folder.yaml'), 'id: f1\nname: Sub\n')
+    writeFileSync(join(d, 'sub', 'ok.req.yaml'), `id: r1\nname: ok\nmethod: GET\nurl: "{{base}}/ok"\nscripts:\n  post: pm.test('200', () => pm.response.to.have.status(200))\n`)
+    const r = await exec([d])
+    expect(r.code).toBe(0)
+    expect(r.out).toMatch(/✓ GET\s+ok Folder col \/ Sub/)
+    expect(r.out).toContain('tests 1 passed')
+  })
   it('prints help', async () => {
     const r = await exec(['--help'])
     expect(r.code).toBe(0); expect(r.out).toContain('dispatch-run load')

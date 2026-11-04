@@ -14,6 +14,7 @@ import { RunnerView } from './RunnerView'
 import { LoadView } from './LoadView'
 import { getOAuthToken } from './oauth'
 import { importBruno, toPostmanCollection } from '../core/interop'
+import { pickFolder, readCollectionDir, useLinkedDirSync } from './linkedDirs'
 import { DocsView } from './DocsView'
 import { MockView } from './MockView'
 import { Markdown } from './Markdown'
@@ -113,6 +114,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
     setToast({ text: msg, action }); clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), action ? 9000 : msg.length > 80 ? 8000 : 3500)
   }, [])
+  useLinkedDirSync(ws, notify)
   // Every delete can be undone from the toast.
   const trashCount = useRef(0)
   useEffect(() => {
@@ -223,6 +225,15 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           <div className="menuList right" role="menu">
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); fileInput.current?.click() }}>Import (backup, Postman, OpenAPI, HAR)…</button>
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); brunoInput.current?.click() }}>Import a Bruno collection folder…</button>
+            {ws.transport.unrestricted && <button type="button" role="menuitem" onClick={async (e) => {
+              closeMenu(e)
+              try {
+                const dir = await pickFolder(); if (!dir) return
+                const r = await readCollectionDir(ws, dir)
+                await ws.replaceCollection(r)
+                notify(`Opened ${r.collections[0].name} from ${dir}; changes are saved back to the folder.${r.warnings.length ? ` ${r.warnings[0]}` : ''}`)
+              } catch (err) { notify(String(err)) }
+            }}>Open a collection folder…</button>}
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); void onExport() }}>Export backup</button>
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); ws.setView({ kind: 'backups' }) }}>Local backups…</button>
             <hr />

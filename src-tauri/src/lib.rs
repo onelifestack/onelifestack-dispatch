@@ -1,7 +1,7 @@
 //! Dispatch desktop shell. The UI is the same web app; this side sends requests natively, so there are
 //! no browser CORS limits or forbidden headers, and it can (opt-in) accept self-signed certificates.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error as _;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -247,6 +247,82 @@ async fn oauth_listen(port: u16, path: String, timeout_secs: u64) -> Result<Stri
     tokio::time::timeout(Duration::from_secs(timeout_secs), wait).await.map_err(|_| "Timed out waiting for the login to finish.".to_string())?
 }
 
+// ---------- Collections as files ----------
+
+fn safe_join(root: &std::path::Path, rel: &str) -> Result<std::path::PathBuf, String> {
+    let rel = std::path::Path::new(rel);
+    if rel.is_absolute() || rel.components().any(|c| !matches!(c, std::path::Component::Normal(_))) {
+        return Err(format!("Refusing to write outside the collection folder: {}", rel.display()));
+    }
+    Ok(root.join(rel))
+}
+
+const OURS: [&str; 3] = [".req.yaml", "_folder.yaml", "dispatch.collection.yaml"];
+
+#[tauri::command]
+async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
+    app.dialog().file().blocking_pick_folder().and_then(|p| p.into_path().ok()).map(|p| p.display().to_string())
+}
+
+/// Every Dispatch file under `root` (skips .git and node_modules; files over 2 MB are left out).
+#[tauri::command]
+fn read_collection_dir(root: String) -> Result<Vec<(String, String)>, String> { collection_dir_read(root) }
+
+pub fn collection_dir_read(root: String) -> Result<Vec<(String, String)>, String> {
+    let root = std::path::PathBuf::from(&root);
+    if !root.join("dispatch.collection.yaml").exists() { return Err(format!("{} has no dispatch.collection.yaml.", root.display())); }
+    let mut out = vec![];
+    let mut stack = vec![root.clone()];
+    while let Some(dir) = stack.pop() {
+        for e in std::fs::read_dir(&dir).map_err(|e| format!("Couldn’t read {}: {e}", dir.display()))? {
+            let e = e.map_err(|e| e.to_string())?;
+            let p = e.path();
+            let name = e.file_name().to_string_lossy().to_string();
+            if p.is_dir() { if name != ".git" && name != "node_modules" { stack.push(p); } continue; }
+            if !OURS.iter().any(|s| name.ends_with(s)) { continue; }
+            if e.metadata().map(|m| m.len() > 2 * 1024 * 1024).unwrap_or(true) { continue; }
+            let rel = p.strip_prefix(&root).map_err(|e| e.to_string())?.to_string_lossy().replace('\\', "/");
+            let text = std::fs::read_to_string(&p).map_err(|e| format!("Couldn’t read {rel}: {e}"))?;
+            out.push((rel, text));
+        }
+    }
+    Ok(out)
+}
+
+/// Writes the files; with `prune`, also removes Dispatch files that aren't in the list (renames, moves,
+/// deletes) and then empty folders. Never touches other files.
+#[tauri::command]
+fn write_collection_dir(root: String, files: Vec<(String, String)>, prune: bool) -> Result<(), String> { collection_dir_write(root, files, prune) }
+
+pub fn collection_dir_write(root: String, files: Vec<(String, String)>, prune: bool) -> Result<(), String> {
+    let root = std::path::PathBuf::from(&root);
+    std::fs::create_dir_all(&root).map_err(|e| format!("Couldn’t create {}: {e}", root.display()))?;
+    let mut keep = HashSet::new();
+    for (rel, text) in &files {
+        let p = safe_join(&root, rel)?;
+        if let Some(parent) = p.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+        if std::fs::read_to_string(&p).ok().as_deref() != Some(text.as_str()) {
+            std::fs::write(&p, text).map_err(|e| format!("Couldn’t write {rel}: {e}"))?;
+        }
+        keep.insert(p);
+    }
+    if prune {
+        let mut dirs = vec![];
+        let mut stack = vec![root.clone()];
+        while let Some(dir) = stack.pop() {
+            for e in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+                let p = e.path();
+                let name = e.file_name().to_string_lossy().to_string();
+                if p.is_dir() { if name != ".git" && name != "node_modules" { dirs.push(p.clone()); stack.push(p); } continue; }
+                if OURS.iter().any(|s| name.ends_with(s)) && !keep.contains(&p) { let _ = std::fs::remove_file(&p); }
+            }
+        }
+        dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
+        for d in dirs { let _ = std::fs::remove_dir(&d); } // only succeeds when empty
+    }
+    Ok(())
+}
+
 // ---------- Mock server ----------
 // Rust only does the sockets: each request is sent to the app as a "mock-request" event and the app answers with
 // mock_reply, using the same route matcher as the CLI (src/core/mock.ts). Listens on 127.0.0.1 only.
@@ -363,7 +439,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(InFlight::default())
         .manage(std::sync::Arc::new(MockState::default()))
-        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call])
+        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call, pick_folder, read_collection_dir, write_collection_dir])
         .run(tauri::generate_context!())
         .expect("error while running Dispatch");
 }

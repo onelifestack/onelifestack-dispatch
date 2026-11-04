@@ -12,7 +12,7 @@ public web hosting / developer-site listing, OneLifeStack sync design.
 5. [x] Client certificates (mTLS), proxy settings, cookie manager (view/edit/delete, persisted).
 6. [x] Script compatibility: require lodash, moment, crypto-js, uuid; pm.visualizer with a Visualize tab.
 7. [x] Postman collection export; Insomnia and Bruno import.
-8. [ ] Collections as files (desktop): save/open a collection as a folder of YAML files; CLI runs folders too.
+8. [x] Collections as files (desktop): save/open a collection as a folder of YAML files; CLI runs folders too.
 9. [ ] Scheduled runs (desktop): run a collection every N minutes, notify on failure, keep results.
 10. [ ] Server-sent events and Socket.IO requests.
 11. [ ] Response history per request and side-by-side compare.
@@ -27,3 +27,4 @@ Progress notes go below as steps land.
 - Step 5: Settings view (general, proxy + bypass, CA certificates, client certificates by host/*.domain/:port, keys sealed); Rust: reqwest proxy/no_proxy, Identity::from_pem, extra roots. Cookie manager view (add/edit/delete/clear), jar saved sealed and reloaded on start. Live test src-tauri/tests/network_live.rs with examples/tls (passes: unknown CA refused, CA without client cert refused, mTLS accepted, proxy used and bypassed). Fixed: port-specific certificates now win over host-only ones.
 - Step 6: core/scriptLibs.ts scans the script and loads only the libraries it uses (lodash incl. global _, moment, crypto-js, uuid, ajv, handlebars); pm.response.to.have.jsonSchema (ajv, readable errors); pm.visualizer.set → Visualize tab (sandboxed iframe; template scripts run in the web version, desktop CSP blocks inline scripts).
 - Step 7: core/interop.ts — Postman v2.1 collection export (folders, auth, scripts, examples, path vars; secrets blank) round-trips through our own Postman importer; Postman environment export; Insomnia v4 import (groups in any order, base env → collection vars, {{ _.x }} → {{x}}); Bruno folder import (parseBru blocks, bruno.json, folders from paths, environments/, disabled ~rows, warnings for bru./res. scripts and asserts). Menu: "Import a Bruno collection folder…" (webkitdirectory).
+- Step 8: core/fileFormat.ts — dispatch.collection.yaml + <folder>/_folder.yaml + *.req.yaml (ids kept, slugs unique per folder, literal secrets never written, {{refs}} kept, OAuth tokens never written; reading merges this device's secrets). Desktop: pick_folder/read/write commands (prune only Dispatch files, no path escapes), "Save to a folder…"/Reload/Unlink in the collection, "Open a collection folder…" in the menu, auto-write as you edit (debounced, only on change). CLI runs a folder. Tests: TS round trip, CLI folder run, Rust write/prune/escape.

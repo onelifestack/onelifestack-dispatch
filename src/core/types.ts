@@ -134,7 +134,11 @@ export interface Folder {
   updatedAt: number
 }
 
-export interface Collection { id: string; name: string; auth: Auth; variables: KV[]; scripts: Scripts; docs: string; updatedAt: number }
+export interface Collection {
+  id: string; name: string; auth: Auth; variables: KV[]; scripts: Scripts; docs: string; updatedAt: number
+  /** Desktop: a folder this collection is kept in as files ("" = not linked). */
+  linkedDir: string
+}
 export interface Environment { id: string; name: string; variables: KV[]; updatedAt: number }
 
 export interface PreparedFile { name: string; type: string; base64: string }
@@ -270,7 +274,7 @@ export function newCollection(name = 'New collection'): Collection {
   return normalizeCollection({ id: uid(), name })
 }
 export function normalizeCollection(c: Partial<Collection> & { id: string }): Collection {
-  return { name: 'Collection', variables: [], docs: '', updatedAt: Date.now(), ...c, auth: { ...emptyAuth('none'), ...c.auth }, scripts: { ...emptyScripts(), ...c.scripts } }
+  return { name: 'Collection', variables: [], docs: '', linkedDir: '', updatedAt: Date.now(), ...c, auth: { ...emptyAuth('none'), ...c.auth }, scripts: { ...emptyScripts(), ...c.scripts } }
 }
 
 export function newFolder(collectionId: string, name = 'New folder', parentId: string | null = null): Folder {
