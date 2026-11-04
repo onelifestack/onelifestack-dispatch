@@ -312,7 +312,7 @@ export function App({ transport, engine, browserLauncher, extras = {} }: { trans
                   </div>
                   {ws.draft.protocol === 'grpc' ? <GrpcPane ws={ws} notify={notify} />
                     : ws.draft.protocol === 'browser' ? <BrowserPane ws={ws} notify={notify} />
-                    : ws.draft.protocol === 'mcp' ? <McpPane key={ws.draft.id} ws={ws} notify={notify} confirm={confirm} />
+                    : ws.draft.protocol === 'mcp' ? <McpPane key={ws.draft.id} ws={ws} notify={notify} confirm={confirm} ask={ask} />
                     : <RealtimePane key={ws.draft.id} ws={ws} notify={notify} />}
                 </div>
               )}

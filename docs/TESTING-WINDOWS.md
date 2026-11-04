@@ -292,6 +292,25 @@ Run these from the repo folder in PowerShell.
       - Set the request's **Auth** tab to Bearer Token `tk` and connect again. It connects.
       - `whoami` returns `Authorization: Bearer tk`.
 
+6.4d. **MCP sign-in** (new; only runs in the desktop app, so this is its first real test):
+   1. Start `node examples\mcp-http-server.mjs --port 4323 --oauth --token-ttl 60`. Tokens last 60 s, so renewal
+      gets tested too.
+   2. Select the **Demo local** environment. Make a new MCP request with transport HTTP and URL
+      `http://localhost:4323/mcp`, then Connect. Expect a blue banner: "This server needs you to sign in (kept for the
+      Demo local environment)", with a **Sign in** button.
+   3. Click **Sign in**. Your default browser opens a page "Allow Dispatch?". Click **Allow**. The browser shows
+      "You're signed in", and Dispatch shows "Signed in for Demo local" and connects (4 tools). The server's terminal
+      logs `registered client-…` and `signed in client-…`. Record whether Windows Firewall asks about anything.
+   4. `whoami` returns `Authorization: Bearer <a token>`.
+   5. Wait more than 60 s and call `add` again. It still works, and the server logs `refreshed a token`.
+   6. Disconnect, switch the environment to **No environment** and connect again. The sign-in banner comes back,
+      because sign-ins are kept per environment. Switch back to Demo local and connect: no sign-in needed.
+   7. Click **Sign out**, then connect. The banner comes back.
+   8. Press Deny on the consent page instead: Dispatch shows a readable "Login failed: access_denied" and nothing
+      hangs.
+   9. Optional, only with your own account: pick **Well-known servers… → Linear** (or Notion, Sentry, …), connect,
+      sign in, and check that tools are listed. Don't call tools that change anything.
+
 6.5. **gRPC** (optional; needs the extra packages in `examples\grpc\README.md`):
    1. Start `node examples\grpc\server.cjs`.
    2. New request → gRPC → `localhost:50051` → **Load services** → call `SayHello`.

@@ -1,5 +1,5 @@
 1. MCP support
-   → Done (both): an MCP request type to test MCP servers (HTTP, or a local command on desktop), and `dispatch-run mcp <collection>` so AI assistants can list, send and run your requests (`claude mcp add dispatch -- dispatch-run mcp ./my-collection -e Prod`). Both checked against the official MCP SDK. Still open: MCP sign-in (OAuth discovery + dynamic registration): plan in docs/design/mcp-auth.md, waiting on owner answers. A local HTTP test server: examples/mcp-http-server.mjs.
+   → Done (both): an MCP request type to test MCP servers (HTTP, or a local command on desktop), and `dispatch-run mcp <collection>` so AI assistants can list, send and run your requests (`claude mcp add dispatch -- dispatch-run mcp ./my-collection -e Prod`). Both checked against the official MCP SDK. MCP sign-in (OAuth discovery + dynamic registration): built on `feature/mcp-auth` (issue #11, docs/design/mcp-auth.md). A local HTTP test server: examples/mcp-http-server.mjs.
 2. Duplicate environment
    → Done: "Duplicate" in the environment editor and the environment's ⋯ menu (values included).
 3. Smart conversion of http request into paramertized that use environments and variables
