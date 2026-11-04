@@ -339,3 +339,17 @@ describe('network settings', () => {
     expect(changes).toBe(3)
   })
 })
+
+import { SseParser } from '../src/core/sse'
+describe('server-sent events', () => {
+  it('parses events across chunk boundaries, with ids, types, comments and multi-line data', () => {
+    const p = new SseParser()
+    expect(p.push(': keep-alive\nda')).toEqual([])
+    expect(p.push('ta: hello\n\nevent: tick\nid: 7\ndata: {"n":1}\ndata: more\r\n\r\n')).toEqual([
+      { event: 'message', data: 'hello', id: null, retry: null },
+      { event: 'tick', data: '{"n":1}\nmore', id: '7', retry: null },
+    ])
+    expect(p.lastEventId).toBe('7')
+    expect(p.push('retry: 3000\ndata:x\n\n')).toEqual([{ event: 'message', data: 'x', id: '7', retry: 3000 }])
+  })
+})

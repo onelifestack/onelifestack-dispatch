@@ -247,6 +247,61 @@ async fn oauth_listen(port: u16, path: String, timeout_secs: u64) -> Result<Stri
     tokio::time::timeout(Duration::from_secs(timeout_secs), wait).await.map_err(|_| "Timed out waiting for the login to finish.".to_string())?
 }
 
+// ---------- Server-sent events (desktop) ----------
+
+#[derive(Default)]
+struct SseStreams(Mutex<HashMap<u64, tauri::async_runtime::JoinHandle<()>>>);
+
+#[derive(Deserialize)]
+pub struct SseOpen { id: u64, url: String, headers: Vec<(String, String)>, insecure_tls: bool }
+
+#[derive(Serialize, Clone)]
+struct SseMsg { id: u64, kind: String, text: String, status: u16 }
+
+/// Opens an event stream; text arrives as "sse" events (kind: open, chunk, closed, error). The app parses it.
+#[tauri::command]
+fn sse_open(app: tauri::AppHandle, state: tauri::State<'_, SseStreams>, req: SseOpen) -> Result<(), String> {
+    use futures_util::StreamExt;
+    use tauri::Emitter;
+    let id = req.id;
+    let handle = tauri::async_runtime::spawn(async move {
+        let emit = |kind: &str, text: String, status: u16| { let _ = app.emit("sse", SseMsg { id, kind: kind.into(), text, status }); };
+        let client = match reqwest::Client::builder().danger_accept_invalid_certs(req.insecure_tls).build() { Ok(c) => c, Err(e) => { emit("error", describe(&e), 0); return; } };
+        let mut b = client.get(&req.url).header("Accept", "text/event-stream").header("Cache-Control", "no-cache");
+        for (k, v) in &req.headers { b = b.header(k, v); }
+        match b.send().await {
+            Err(e) => emit("error", describe(&e), 0),
+            Ok(res) => {
+                let status = res.status().as_u16();
+                emit("open", res.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_string(), status);
+                let mut stream = res.bytes_stream();
+                let mut pending: Vec<u8> = vec![];
+                while let Some(chunk) = stream.next().await {
+                    match chunk {
+                        Ok(bytes) => {
+                            pending.extend_from_slice(&bytes);
+                            // Only hand over complete UTF-8; keep a split character for the next chunk.
+                            let cut = match std::str::from_utf8(&pending) { Ok(_) => pending.len(), Err(e) => e.valid_up_to() };
+                            let text = String::from_utf8_lossy(&pending[..cut]).to_string();
+                            pending.drain(..cut);
+                            if !text.is_empty() { emit("chunk", text, status); }
+                        }
+                        Err(e) => { emit("error", describe(&e), status); return; }
+                    }
+                }
+                emit("closed", String::new(), status);
+            }
+        }
+    });
+    state.0.lock().unwrap().insert(id, handle);
+    Ok(())
+}
+
+#[tauri::command]
+fn sse_close(state: tauri::State<'_, SseStreams>, id: u64) {
+    if let Some(h) = state.0.lock().unwrap().remove(&id) { h.abort(); }
+}
+
 /// Shows a desktop notification (scheduled runs that fail).
 #[tauri::command]
 fn notify_desktop(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
@@ -446,8 +501,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .manage(InFlight::default())
+        .manage(SseStreams::default())
         .manage(std::sync::Arc::new(MockState::default()))
-        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call, pick_folder, read_collection_dir, write_collection_dir, notify_desktop])
+        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call, pick_folder, read_collection_dir, write_collection_dir, notify_desktop, sse_open, sse_close])
         .run(tauri::generate_context!())
         .expect("error while running Dispatch");
 }

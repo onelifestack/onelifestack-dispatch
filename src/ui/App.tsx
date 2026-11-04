@@ -72,7 +72,7 @@ function TabBar({ ws, onClose }: { ws: WorkspaceApi; onClose: (id: string) => vo
           <div key={t.id} className={`reqTab ${on ? 'on' : ''}`}>
             <button type="button" role="tab" aria-selected={on} className="reqTabMain" onClick={() => ws.selectTab(t.id)} title={t.draft.url || t.draft.name}
               onAuxClick={(e) => { if (e.button === 1) onClose(t.id) }}>
-              <span className={`mtag m-${t.draft.protocol === 'http' ? t.draft.method : 'proto'}`}>{t.draft.protocol !== 'http' ? ({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC' } as Record<string, string>)[t.draft.protocol] : t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>
+              <span className={`mtag m-${t.draft.protocol === 'http' ? t.draft.method : 'proto'}`}>{t.draft.protocol !== 'http' ? ({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO' } as Record<string, string>)[t.draft.protocol] : t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>
               <span className="reqTabName">{t.draft.name}</span>
               {t.sending && <span className="spin" aria-label="sending" />}
             </button>
