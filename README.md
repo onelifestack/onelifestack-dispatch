@@ -57,7 +57,8 @@ curl; export a Dispatch backup or one collection; copy any request as code in 12
 per collection; a mock server that serves saved examples (desktop, or `dispatch-run mock`).
 
 **CLI** (`dispatch-run`): run collections, folders and suites with environments, data files and reporters;
-`dispatch-run load` for load tests with pass/fail thresholds; `dispatch-run mock` to serve examples.
+`dispatch-run load` for load tests with pass/fail thresholds; `dispatch-run mock` to serve examples;
+`dispatch-run mcp` to let AI assistants (Claude and others) list, send and run your requests over MCP.
 
 ## Desktop vs web
 

@@ -16,6 +16,9 @@ import { getOAuthToken } from './oauth'
 import { importBruno, toPostmanCollection } from '../core/interop'
 import { pickFolder, readCollectionDir, useLinkedDirSync } from './linkedDirs'
 import { SchedulesView, useScheduler } from './Schedules'
+import { layeredVars, selectLayer } from '../core/layers'
+import { SpacesView } from './SpacesView'
+import { McpPane } from './McpPane'
 import { DocsView } from './DocsView'
 import { MockView } from './MockView'
 import { Markdown } from './Markdown'
@@ -72,7 +75,7 @@ function TabBar({ ws, onClose }: { ws: WorkspaceApi; onClose: (id: string) => vo
           <div key={t.id} className={`reqTab ${on ? 'on' : ''}`}>
             <button type="button" role="tab" aria-selected={on} className="reqTabMain" onClick={() => ws.selectTab(t.id)} title={t.draft.url || t.draft.name}
               onAuxClick={(e) => { if (e.button === 1) onClose(t.id) }}>
-              <span className={`mtag m-${t.draft.protocol === 'http' ? t.draft.method : 'proto'}`}>{t.draft.protocol !== 'http' ? ({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO' } as Record<string, string>)[t.draft.protocol] : t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>
+              <span className={`mtag m-${t.draft.protocol === 'http' ? t.draft.method : 'proto'}`}>{t.draft.protocol !== 'http' ? ({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO', mcp: 'MCP' } as Record<string, string>)[t.draft.protocol] : t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>
               <span className="reqTabName">{t.draft.name}</span>
               {t.sending && <span className="spin" aria-label="sending" />}
             </button>
@@ -178,7 +181,8 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
     }
   }
 
-  const workspace = () => ({ collections: ws.collections, folders: ws.folders, requests: ws.requests, environments: ws.environments, globals: ws.globals })
+  // Backups and exports cover every workspace.
+  const workspace = () => ({ collections: ws.allCollections, folders: ws.folders, requests: ws.requests, environments: ws.allEnvironments, globals: ws.globals })
   const onExport = async () => {
     try {
       if (await saveTextFile(`dispatch-backup-${new Date().toISOString().slice(0, 10)}.json`, exportWorkspace(workspace())))
@@ -213,6 +217,13 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
     <div className="app">
       <header className="top">
         <span className="brand"><img src="./icon.svg" alt="" width="26" height="26" />Dispatch</span>
+        <label className="spacePick">
+          <span className="sr">Workspace</span>
+          <select aria-label="Workspace" value={ws.activeSpaceId} onChange={(e) => { if (e.target.value === '__manage') ws.setView({ kind: 'spaces' }); else ws.switchSpace(e.target.value) }}>
+            {ws.spaces.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            <option value="__manage">Manage workspaces…</option>
+          </select>
+        </label>
         <button type="button" className="btn small" onClick={() => ws.startNew(ws.draft.collectionId, ws.draft.folderId)}>+ New request</button>
         <span className="grow" />
         <label className="envPick">
@@ -222,6 +233,14 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
             {ws.environments.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
         </label>
+        {layeredVars(ws.environment).map((v) => (
+          <label key={v.id} className="layerPick" title={`Which ${v.key} to use`}>
+            <span className="mono small">{v.key}</span>
+            <select aria-label={`Alternative for ${v.key}`} value={v.active} onChange={(e) => { const env = ws.environment!; void ws.updateEnvironment({ ...env, variables: env.variables.map((x) => (x.id === v.id ? selectLayer(x, e.target.value) : x)) }) }}>
+              {v.options!.map((o) => <option key={o.id} value={o.name}>{o.name}</option>)}
+            </select>
+          </label>
+        ))}
         <details className="menu">
           <summary className="btn small ghost" aria-label="Menu">☰</summary>
           <div className="menuList right" role="menu">
@@ -262,6 +281,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           : env ? <EnvironmentEditor key={env.id} ws={ws} confirm={confirm} environment={env} />
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
           : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
+          : viewed.kind === 'spaces' ? <SpacesView ws={ws} ask={ask} notify={notify} />
           : viewed.kind === 'schedules' ? <SchedulesView ws={ws} sched={sched} notify={notify} />
           : viewed.kind === 'settings' ? <SettingsView ws={ws} notify={notify} />
           : viewed.kind === 'cookies' ? <CookiesView ws={ws} notify={notify} />
@@ -286,7 +306,9 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
                     <span className="grow" />
                     <button type="button" className="btn ghost" onClick={() => void save()}>Save <kbd>Ctrl S</kbd></button>
                   </div>
-                  {ws.draft.protocol === 'grpc' ? <GrpcPane ws={ws} notify={notify} /> : <RealtimePane key={ws.draft.id} ws={ws} notify={notify} />}
+                  {ws.draft.protocol === 'grpc' ? <GrpcPane ws={ws} notify={notify} />
+                    : ws.draft.protocol === 'mcp' ? <McpPane key={ws.draft.id} ws={ws} notify={notify} confirm={confirm} />
+                    : <RealtimePane key={ws.draft.id} ws={ws} notify={notify} />}
                 </div>
               )}
             </>}

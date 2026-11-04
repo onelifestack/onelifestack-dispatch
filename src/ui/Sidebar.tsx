@@ -74,7 +74,7 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
       {...(r.collectionId ? dropProps(`before:${r.id}`, { collectionId: r.collectionId, folderId: r.folderId }, r.id) : {})}>
       <button type="button" className="rowMain" title={r.url} aria-pressed={selected.has(r.id) || undefined}
         onClick={(e) => { if (e.ctrlKey || e.metaKey) toggleSelect(r.id); else { setSelected(new Set()); ws.openRequest(r) } }}>
-        {r.protocol === 'http' ? <Method m={r.method} /> : <span className="mtag m-proto">{({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO' } as Record<string, string>)[r.protocol]}</span>}<span className="rowName">{r.name}</span>
+        {r.protocol === 'http' ? <Method m={r.method} /> : <span className="mtag m-proto">{({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO', mcp: 'MCP' } as Record<string, string>)[r.protocol]}</span>}<span className="rowName">{r.name}</span>
         {openTabIds.has(r.id) && ws.draft.id !== r.id && <span className="openDot" aria-label="open in a tab" />}
       </button>
       <Menu label={`More for ${r.name}`} items={[
@@ -170,6 +170,7 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
                     ['Mock server…', () => ws.setView({ kind: 'mock', collectionId: c.id })],
                     ['Rename', async () => { const n = await ask('Rename collection', c.name); if (n) await ws.updateCollection({ ...c, name: n }) }],
                     ['Export collection', () => onExportCollection(c)],
+                    ...ws.spaces.filter((x) => x.id !== ws.activeSpaceId).map((x) => [`Move to “${x.name}”`, () => void ws.moveToSpace('collection', c.id, x.id)] as [string, () => void]),
                     ...(onExportPostman ? [['Export as Postman collection', () => onExportPostman(c)] as [string, () => void]] : []),
                     ['Delete', async () => { if (await confirm(`Delete “${c.name}” and everything in it? You can undo this right after.`)) await ws.removeCollection(c.id) }, 'danger'],
                   ]} />
@@ -229,6 +230,13 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
                 <span className="rowName">{e.name}</span>
                 {ws.settings.activeEnvId === e.id && <span className="pill">active</span>}
               </button>
+              <Menu label={`More for ${e.name}`} items={[
+                ['Use', () => ws.setSettings({ activeEnvId: e.id })],
+                ['Duplicate', async () => { const c = await ws.duplicateEnvironment(e); ws.setView({ kind: 'environment', id: c.id }) }],
+                ['Rename', async () => { const n = await ask('Rename environment', e.name); if (n) await ws.updateEnvironment({ ...e, name: n }) }],
+                ...ws.spaces.filter((x) => x.id !== ws.activeSpaceId).map((x) => [`Move to “${x.name}”`, () => void ws.moveToSpace('environment', e.id, x.id)] as [string, () => void]),
+                ['Delete', async () => { if (await confirm(`Delete environment “${e.name}”? You can undo this right after.`)) await ws.removeEnvironment(e.id) }, 'danger'],
+              ]} />
             </li>
           ))}
           {!ws.environments.length && <li className="muted small pad">Make an environment to keep base URLs and tokens out of your requests, then use them as <code>{'{{name}}'}</code>.</li>}

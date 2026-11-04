@@ -12,8 +12,16 @@ export interface KV {
   file?: FileData | null
   /** Variables only: hide the value on screen and leave it out of exports. */
   secret?: boolean
+  /**
+   * Variables only: named alternatives ("layers"), e.g. load balancer, ingress, one pod. `value` is always the
+   * active one's value; `active` names it.
+   */
+  options?: VarOption[]
+  active?: string
   description?: string
 }
+
+export interface VarOption { id: string; name: string; value: string }
 
 /** A file kept with the request (form-data part or binary body). Stored as base64 in IndexedDB. */
 export interface FileData { name: string; type: string; size: number; base64: string }
@@ -69,7 +77,7 @@ export interface Auth {
   service: string
 }
 
-export type Protocol = 'http' | 'ws' | 'mqtt' | 'grpc' | 'sse' | 'socketio'
+export type Protocol = 'http' | 'ws' | 'mqtt' | 'grpc' | 'sse' | 'socketio' | 'mcp'
 
 export interface RequestSettings {
   /** null = use the app setting. */
@@ -91,6 +99,7 @@ export interface Example {
 
 export interface WsConfig { messages: KV[] }
 export interface MqttConfig { clientId: string; topics: KV[]; publishTopic: string; payload: string; qos: 0 | 1 | 2; retain: boolean }
+export interface McpConfig { transport: 'http' | 'stdio'; command: string; env: KV[]; cwd: string; tool: string; arguments: string }
 export interface SocketIoConfig { listen: string; emitEvent: string }
 export interface GrpcConfig { method: string; proto: string; useReflection: boolean; message: string; metadata: KV[]; tls: boolean }
 
@@ -118,6 +127,7 @@ export interface RequestDef {
   mqtt: MqttConfig
   grpc: GrpcConfig
   sio: SocketIoConfig
+  mcp: McpConfig
   /** Position among its siblings (requests and folders share one order); ties sort by name. */
   sort: number
   updatedAt: number
@@ -140,8 +150,15 @@ export interface Collection {
   id: string; name: string; auth: Auth; variables: KV[]; scripts: Scripts; docs: string; updatedAt: number
   /** Desktop: a folder this collection is kept in as files ("" = not linked). */
   linkedDir: string
+  /** The workspace it belongs to. */
+  workspaceId: string
 }
-export interface Environment { id: string; name: string; variables: KV[]; updatedAt: number }
+export interface Environment { id: string; name: string; variables: KV[]; updatedAt: number; workspaceId?: string }
+
+/** A workspace: a group of collections and environments ("spaces" in code; Workspace names the backup data). */
+export interface Space { id: string; name: string }
+export const DEFAULT_SPACE: Space = { id: 'default', name: 'My workspace' }
+export const spaceOf = (x: { workspaceId?: string }) => x.workspaceId || DEFAULT_SPACE.id
 
 export interface PreparedFile { name: string; type: string; base64: string }
 /** A form-data part after variables were filled in. */
@@ -214,6 +231,9 @@ export interface Settings {
   clientCerts: ClientCert[]
   /** Desktop: extra CA certificates (PEM) to trust. */
   caCerts: string[]
+  /** The workspace shown, and the environment last used in each workspace. */
+  activeSpaceId: string
+  spaceEnv: Record<string, string | null>
 }
 
 export interface ClientCert {
@@ -228,7 +248,7 @@ export interface ClientCert {
 
 export const defaultSettings: Settings = {
   activeEnvId: null, theme: 'system', timeoutMs: 30_000, followRedirects: true, insecureTls: false, cookieJar: true,
-  proxyUrl: '', proxyBypass: 'localhost, 127.0.0.1', clientCerts: [], caCerts: [],
+  proxyUrl: '', proxyBypass: 'localhost, 127.0.0.1', clientCerts: [], caCerts: [], activeSpaceId: 'default', spaceEnv: {},
 }
 
 let counter = 0
@@ -270,6 +290,7 @@ export function normalizeRequest(r: Partial<RequestDef> & { id: string }): Reque
     mqtt: { clientId: '', topics: [], publishTopic: '', payload: '', qos: 0, retain: false, ...r.mqtt },
     grpc: { method: '', proto: '', useReflection: true, message: '{}', metadata: [], tls: false, ...r.grpc },
     sio: { listen: '', emitEvent: 'message', ...r.sio },
+    mcp: { transport: 'http', command: '', env: [], cwd: '', tool: '', arguments: '{}', ...r.mcp },
   }
 }
 
@@ -277,7 +298,7 @@ export function newCollection(name = 'New collection'): Collection {
   return normalizeCollection({ id: uid(), name })
 }
 export function normalizeCollection(c: Partial<Collection> & { id: string }): Collection {
-  return { name: 'Collection', variables: [], docs: '', linkedDir: '', updatedAt: Date.now(), ...c, auth: { ...emptyAuth('none'), ...c.auth }, scripts: { ...emptyScripts(), ...c.scripts } }
+  return { name: 'Collection', variables: [], docs: '', linkedDir: '', workspaceId: DEFAULT_SPACE.id, updatedAt: Date.now(), ...c, auth: { ...emptyAuth('none'), ...c.auth }, scripts: { ...emptyScripts(), ...c.scripts } }
 }
 
 export function newFolder(collectionId: string, name = 'New folder', parentId: string | null = null): Folder {

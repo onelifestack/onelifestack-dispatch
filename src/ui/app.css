@@ -432,3 +432,18 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 .dadd { background: var(--good-soft); color: var(--good); } .ddel { background: var(--danger-soft); color: var(--danger); }
 .dgap { color: var(--muted); font-style: italic; }
 .emptyInner { display: grid; gap: .6rem; justify-items: center; max-width: 900px; width: 100%; }
+.paramPanel { border: 1px solid var(--primary); border-radius: 12px; padding: .7rem .8rem; margin-bottom: .6rem; background: var(--surface); display: grid; gap: .5rem; box-shadow: var(--shadow); }
+.paramList { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; }
+.paramList .toggle { align-items: baseline; }
+.layerCard { border: 1px solid var(--outline); border-radius: 10px; padding: .6rem; margin-bottom: .6rem; display: grid; gap: .4rem; }
+.layerPick { display: flex; align-items: center; gap: .3rem; }
+.layerPick select { max-width: 160px; }
+@media (max-width: 760px) { .layerPick .mono { display: none; } }
+.spacePick select { font-weight: 700; max-width: 180px; }
+@media (max-width: 760px) { .spacePick select { max-width: 120px; } }
+.mcpConn { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-bottom: .4rem; }
+.mcpConn .url { min-width: 240px; padding: .5rem .6rem; border-radius: 8px; }
+.mcpList { list-style: none; padding: 0; margin: .4rem 0; display: grid; gap: .2rem; max-height: 50vh; overflow: auto; }
+.mcpList .rowMain.on { background: var(--primary-soft); border-radius: 8px; }
+.mcpList li { display: grid; gap: .2rem; }
+.mcpResult { display: grid; gap: .4rem; margin-top: .5rem; }

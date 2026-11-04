@@ -19,7 +19,7 @@ export async function readCollectionDir(ws: WorkspaceApi, dir: string) {
   const { parse } = await yaml()
   const files = (await invoke<[string, string][]>('read_collection_dir', { root: dir })).map(([path, text]) => ({ path, text }))
   const rootId = (() => { try { return (parse(files.find((f) => f.path === 'dispatch.collection.yaml')?.text ?? '') as { id?: string })?.id } catch { return undefined } })()
-  const local = ws.collections.find((c) => c.id === rootId) ?? null
+  const local = ws.allCollections.find((c) => c.id === rootId) ?? null
   const r = filesToCollection(files, parse, { collection: local, folders: ws.folders, requests: ws.requests })
   r.collections[0].linkedDir = dir
   return r
@@ -32,7 +32,7 @@ export function useLinkedDirSync(ws: WorkspaceApi, notify: (m: string) => void) 
   const last = useRef(new Map<string, string>())
   useEffect(() => {
     if (!ws.transport.unrestricted) return
-    const linked = ws.collections.filter((c) => c.linkedDir)
+    const linked = ws.allCollections.filter((c) => c.linkedDir)
     if (!linked.length) return
     const t = setTimeout(() => {
       void (async () => {
@@ -49,5 +49,5 @@ export function useLinkedDirSync(ws: WorkspaceApi, notify: (m: string) => void) 
       })()
     }, 800)
     return () => clearTimeout(t)
-  }, [ws.collections, ws.folders, ws.requests]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ws.allCollections, ws.folders, ws.requests]) // eslint-disable-line react-hooks/exhaustive-deps
 }

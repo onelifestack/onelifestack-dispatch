@@ -10,13 +10,14 @@ import { AuthEditor, authLabel } from './AuthEditor'
 import { CodeArea } from './CodeArea'
 import { VarsHelp } from './VarsHelp'
 import { CodePanel } from './CodePanel'
+import { ParameterizePanel } from './Parameterize'
 import { ProtocolPicker } from './RealtimePane'
 import type { WorkspaceApi } from './useWorkspace'
 
 type Tab = 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'docs' | 'settings'
 
 export interface AuthActions { getToken: (auth: Auth, apply: (a: Auth) => void) => void; gettingToken: boolean }
-interface Props { ws: WorkspaceApi; onSave: () => void; notify: (msg: string) => void; authActions?: AuthActions; scriptHelp?: React.ReactNode; renderDocs?: (md: string) => React.ReactNode }
+interface Props { ws: WorkspaceApi; onSave: () => void; notify: (msg: string, action?: { label: string; run: () => void }) => void; authActions?: AuthActions; scriptHelp?: React.ReactNode; renderDocs?: (md: string) => React.ReactNode }
 
 /** One-click examples for the script editor. */
 const GraphqlTools = lazy(() => import('./GraphqlTools').then((m) => ({ default: m.GraphqlTools })))
@@ -50,6 +51,7 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp, rende
   const [tab, setTab] = useState<Tab>('params')
   const [scriptTab, setScriptTab] = useState<'pre' | 'post'>('pre')
   const [gqlSchema, setGqlSchema] = useState<GraphQLSchema | null>(null)
+  const [paramOpen, setParamOpen] = useState(false)
   const set = (patch: Partial<RequestDef>) => setDraft((d) => ({ ...d, ...patch }))
   const setBody = (patch: Partial<RequestDef['body']>) => setDraft((d) => ({ ...d, body: { ...d.body, ...patch } }))
 
@@ -61,7 +63,7 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp, rende
     try {
       const { request, warnings } = fromCurl(text)
       setDraft((d) => ({ ...request, id: d.id, name: d.name === 'New request' ? request.name : d.name, collectionId: d.collectionId, folderId: d.folderId, pathVars: pathVarsFromUrl(request.url, []) }))
-      notify(warnings.length ? `Imported from curl. ${warnings.join(' ')}` : 'Imported from curl.')
+      notify(warnings.length ? `Imported from curl. ${warnings.join(' ')}` : 'Imported from curl. Turn its hard-coded values into variables?', { label: 'Parameterize', run: () => setParamOpen(true) })
     } catch (err) {
       notify(err instanceof Error ? err.message : String(err))
     }
@@ -95,10 +97,12 @@ export function RequestPane({ ws, onSave, notify, authActions, scriptHelp, rende
         <input className="reqName" value={draft.name} aria-label="Request name" onChange={(e) => set({ name: e.target.value })} />
         {ws.dirty && <span className="dot" title="Unsaved changes" aria-label="Unsaved changes" />}
         <span className="grow" />
+        <button type="button" className="btn small ghost" aria-expanded={paramOpen} onClick={() => setParamOpen(!paramOpen)} title="Turn hard-coded values into variables">Parameterize</button>
         <VarsHelp ws={ws} notify={notify} />
         <CodePanel ws={ws} notify={notify} />
         <button type="button" className="btn ghost" onClick={onSave}>Save <kbd>Ctrl S</kbd></button>
       </div>
+      {paramOpen && <ParameterizePanel ws={ws} notify={notify} onClose={() => setParamOpen(false)} />}
       <form className="urlBar" onSubmit={(e) => { e.preventDefault(); void ws.send() }}>
         <select className={`method m-${draft.method}`} value={draft.method} aria-label="Method" onChange={(e) => set({ method: e.target.value as Method })}>
           {METHODS.map((m) => <option key={m}>{m}</option>)}

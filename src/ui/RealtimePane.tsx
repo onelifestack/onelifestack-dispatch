@@ -38,7 +38,7 @@ function useSession(id: string) {
   return s
 }
 
-export const PROTOCOLS: [Protocol, string][] = [['http', 'HTTP'], ['ws', 'WebSocket'], ['sse', 'Server-sent events'], ['socketio', 'Socket.IO'], ['mqtt', 'MQTT'], ['grpc', 'gRPC']]
+export const PROTOCOLS: [Protocol, string][] = [['http', 'HTTP'], ['ws', 'WebSocket'], ['sse', 'Server-sent events'], ['socketio', 'Socket.IO'], ['mqtt', 'MQTT'], ['grpc', 'gRPC'], ['mcp', 'MCP']]
 
 export function ProtocolPicker({ draft, onChange }: { draft: RequestDef; onChange: (p: Protocol, url: string) => void }) {
   return (
