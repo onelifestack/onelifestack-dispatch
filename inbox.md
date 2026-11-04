@@ -1,5 +1,5 @@
 1. MCP support
-   → Planned (both): an MCP request type to test MCP servers, and `dispatch-run mcp` so AI assistants can run your collections.
+   → Done (both): an MCP request type to test MCP servers (HTTP, or a local command on desktop), and `dispatch-run mcp <collection>` so AI assistants can list, send and run your requests (`claude mcp add dispatch -- dispatch-run mcp ./my-collection -e Prod`). Both checked against the official MCP SDK.
 2. Duplicate environment
    → Done: "Duplicate" in the environment editor and the environment's ⋯ menu (values included).
 3. Smart conversion of http request into paramertized that use environments and variables

@@ -20,6 +20,7 @@ import { type Environment, type KV, type Settings, defaultSettings, kv } from '.
 import { formatMs } from '../core/format'
 import { createServer } from 'node:http'
 import { buildRoutes, fillMockBody, matchRoute } from '../core/mock'
+import { serveMcp } from './mcpServer'
 
 const VERSION = '0.3.0'
 const color = process.stdout.isTTY && !process.env.NO_COLOR
@@ -32,6 +33,7 @@ Usage:
   dispatch-run <file|folder> [options]   run a collection (Dispatch backup, Postman/Insomnia file, or a collection folder)
   dispatch-run load <file> [options]     load-test a request or a collection
   dispatch-run mock <file> [options]     serve a collection's saved examples (mock server)
+  dispatch-run mcp <file|folder> [opts]  serve a collection to AI assistants over MCP (stdio)
 
 Run options:
   -c, --collection <name>      collection to run (default: the only/first one)
@@ -66,6 +68,11 @@ Load options:
 Mock options:
       --port <n>               port to listen on (default 4319, 127.0.0.1 only)
       --delay <ms>             wait before each response
+
+MCP options (also -e, --env-var, -g, -k, --timeout from above):
+      --allow-methods <list>   methods assistants may send, e.g. GET,HEAD (default: all)
+  Add to an assistant, e.g. Claude Code:
+      claude mcp add dispatch -- dispatch-run mcp ./my-collection -e Prod
 
 Exit code: 0 when everything passed, 1 when a test, request or threshold failed, 2 for usage errors.
 `
@@ -156,10 +163,11 @@ async function main(argv: string[]): Promise<number> {
   if (opts.version) { console.log(VERSION); return 0 }
   const isLoad = pos[0] === 'load'
   const isMock = pos[0] === 'mock'
-  const file = isLoad || isMock ? pos[1] : pos[0]
+  const isMcp = pos[0] === 'mcp'
+  const file = isLoad || isMock || isMcp ? pos[1] : pos[0]
   if (!file) throw new Usage('Give a collection file.')
   const ws = await loadWorkspace(file)
-  for (const w of ws.warnings) console.error(yellow(`note: ${w}`))
+  for (const w of ws.warnings) console.error(yellow(`note: ${w}`)) // stderr: safe in MCP mode too
 
   if (isMock) {
     const name = one(opts, 'collection')
@@ -201,6 +209,15 @@ async function main(argv: string[]): Promise<number> {
   const transport = new CookieTransport(new FetchTransport(), new CookieJar())
   const scripts = opts['no-scripts'] ? {} : scriptPipeline({ engine: new InlineEngine(compileInVm), transport, sendOptions: () => ({ timeoutMs: settings.timeoutMs, followRedirects: true, insecureTls: settings.insecureTls }) })
   const pipeline = authPipeline(scripts, transport)
+  if (isMcp) {
+    // Stdout is the protocol channel from here on.
+    console.error(`dispatch-run ${VERSION}: serving ${ws.collections[0]?.name ?? file} over MCP (stdio)`)
+    await serveMcp({ ws: { ...ws, collections: one(opts, 'collection') ? ws.collections.filter((c) => c.name === one(opts, 'collection')) : ws.collections },
+      environment, globals, settings, transport, pipeline, version: VERSION,
+      allowMethods: (one(opts, 'allow-methods') ?? '').split(',').map((m) => m.trim().toUpperCase()).filter(Boolean) })
+    return 0
+  }
+
   let items = selectItems(ws, one(opts, 'collection'), opts.folder)
   if (!items.length) throw new Usage('Nothing to run: no HTTP requests found.')
 
