@@ -268,3 +268,12 @@ import type { Flow } from './flows'
 export const listFlows = () => all<Flow>('flows')
 export const putFlow = (f: Flow) => put('flows', f)
 export const deleteFlow = (id: string) => del('flows', id)
+
+// ---------- MCP sign-ins (tokens; sealed, never exported) ----------
+import type { McpSignIn } from './mcpAuth'
+export async function getMcpSignIns(): Promise<McpSignIn[]> {
+  const sealedList = await getMeta<string>('mcpSignIns')
+  if (!sealedList) return []
+  try { return JSON.parse(await (await unsealer())(sealedList)) } catch { return [] }
+}
+export async function putMcpSignIns(list: McpSignIn[]) { await put('meta', await (await sealer())(JSON.stringify(list)), 'mcpSignIns') }
