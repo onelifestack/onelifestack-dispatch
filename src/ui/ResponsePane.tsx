@@ -5,6 +5,7 @@ import { queryJson } from '../core/jsonpath'
 import { parseSetCookie } from '../core/cookies'
 import { uid } from '../core/types'
 import type { WorkspaceApi } from './useWorkspace'
+import { CodeArea } from './CodeArea'
 
 type Tab = 'body' | 'preview' | 'headers' | 'cookies' | 'tests' | 'sent'
 
@@ -101,7 +102,9 @@ export function ResponsePane({ ws, notify, saveFile }: { ws: WorkspaceApi; notif
           : res.body === '' ? <p className="muted">Empty body.</p>
           : <>
               {filtered?.error && <p className="warnLine small">Filter: {filtered.error}</p>}
-              <pre className="code mono out">{truncated ? shown.slice(0, PREVIEW_LIMIT) : shown}</pre>
+              {pretty != null && !raw && !filtered && !truncated
+                ? <CodeArea key={res.timeMs + res.size} label="Response body" lang="json" readOnly value={shown} onChange={() => {}} rows={20} />
+                : <pre className="code mono out">{truncated ? shown.slice(0, PREVIEW_LIMIT) : shown}</pre>}
               {truncated && <button type="button" className="btn small" onClick={() => setFull(true)}>Show all {formatBytes(shown.length)}</button>}
             </>)}
         {res && current === 'preview' && (isImage

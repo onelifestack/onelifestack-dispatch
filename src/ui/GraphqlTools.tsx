@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { type GraphQLSchema, checkQuery, fetchSchema, rootFields, starterQuery, typeFields } from '../core/graphql'
 import type { WorkspaceApi } from './useWorkspace'
 
@@ -6,11 +6,12 @@ import type { WorkspaceApi } from './useWorkspace'
 const cache = new Map<string, GraphQLSchema>()
 
 /** GraphQL extras under the query editor: fetch schema, problems, and an explorer that inserts starter operations. */
-export function GraphqlTools({ ws, notify }: { ws: WorkspaceApi; notify: (m: string) => void }) {
+export function GraphqlTools({ ws, notify, onSchema }: { ws: WorkspaceApi; notify: (m: string) => void; onSchema?: (s: GraphQLSchema | null) => void }) {
   const url = ws.prepared.url
   const [schema, setSchema] = useState<GraphQLSchema | null>(() => cache.get(url) ?? null)
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
+  useEffect(() => { onSchema?.(schema) }, [schema]) // eslint-disable-line react-hooks/exhaustive-deps
   const problems = useMemo(() => checkQuery(ws.draft.body.text, schema), [ws.draft.body.text, schema])
   const roots = useMemo(() => (schema ? rootFields(schema) : []), [schema])
 

@@ -26,8 +26,8 @@ function ScriptsEditor({ scripts, onChange, scope }: { scripts: Scripts; onChang
     <h2>Scripts</h2>
     <p className="muted small">Run for every request in this {scope}: before-request scripts run outer first (collection, folders, request); after-response scripts in the same order.</p>
     <div className="gqlGrid">
-      <CodeArea label={`${scope} pre-request script`} rows={8} value={scripts.pre} onChange={(pre) => onChange({ ...scripts, pre })} placeholder="// before every request" />
-      <CodeArea label={`${scope} post-response script`} rows={8} value={scripts.post} onChange={(post) => onChange({ ...scripts, post })} placeholder="// after every response" />
+      <CodeArea lang="javascript" label={`${scope} pre-request script`} rows={8} value={scripts.pre} onChange={(pre) => onChange({ ...scripts, pre })} placeholder="// before every request" />
+      <CodeArea lang="javascript" label={`${scope} post-response script`} rows={8} value={scripts.post} onChange={(post) => onChange({ ...scripts, post })} placeholder="// after every response" />
     </div>
   </>
 }

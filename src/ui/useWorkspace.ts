@@ -9,6 +9,7 @@ import type { Workspace } from '../core/backup'
 import { type Execution, type Pipeline, type RunContext, execute, folderChain, prepareContext, sendOptions } from '../core/runtime'
 import { type ScriptEngine, scriptPipeline } from '../core/scriptPipeline'
 import { WorkerEngine } from '../core/workerEngine'
+import { FAKE } from '../core/fake'
 import { authPipeline } from '../core/auth'
 
 export type View =
@@ -130,6 +131,13 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     collection: collections.find((c) => c.id === d.collectionId) ?? null,
     folders, environment, globals, ...extra,
   }), [collections, folders, environment, globals])
+  /** Variable names for "{{" completion: what's in scope for the open request, then the fake-data generators. */
+  const variableNames = useCallback(() => {
+    const out = new Map<string, string>()
+    const add = (rows: KV[] | undefined, from: string) => rows?.forEach((v) => { if (v.enabled && v.key.trim()) out.set(v.key.trim(), v.secret ? `${from} · secret` : `${from} · ${v.value.slice(0, 30)}`) })
+    add(globals, 'globals'); add(collection?.variables, 'collection'); add(environment?.variables, environment?.name ?? 'environment')
+    return [...[...out].map(([name, detail]) => ({ name, detail })), ...Object.keys(FAKE).map((name) => ({ name, detail: 'generated' }))]
+  }, [globals, collection, environment])
   const prepared = useMemo(() => prepare(draft, prepareContext(runContext(draft), draft)), [draft, runContext])
   const chain = useMemo(() => folderChain(folders, draft.folderId), [folders, draft.folderId])
 
@@ -389,7 +397,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     trash, undoDelete, backups, backupNow, restoreBackup,
     ready, transport, collections, folders, requests, environments, globals, history, settings, logs,
     tabs, activeId, active, draft, view, result: active.result, sending: active.sending, saved, dirty, isDirty,
-    collection, environment, prepared, chain, runContext, pipeline: pipelineRef,
+    collection, environment, prepared, chain, runContext, pipeline: pipelineRef, variableNames,
     setDraft, setView, setSettings, setLogs, log, openRequest, startNew, closeTab, selectTab, saveDraft, renameRequest,
     moveRequest, removeRequest, duplicateRequest, send, cancel, applyChanges, openHistory, clearHistory,
     addCollection, updateCollection, removeCollection, addFolder, updateFolder, removeFolder,

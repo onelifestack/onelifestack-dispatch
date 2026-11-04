@@ -401,3 +401,10 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 .toastAction { border: 0; background: var(--primary); color: var(--on-primary); font: 700 13px system-ui, sans-serif; padding: .3rem .7rem; border-radius: 6px; cursor: pointer; }
 .toastClose { border: 0; background: none; color: inherit; opacity: .7; cursor: pointer; font-size: 16px; }
 .rowActions { display: flex; gap: .3rem; justify-content: flex-end; }
+
+/* CodeMirror tokens */
+:root { --cm-keyword: #7b2fbe; --cm-string: #0f6648; --cm-number: #b3541e; --cm-property: #1d5fa8; --cm-function: #5b2ee0; --cm-type: #8a3d00; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --cm-keyword: #d2b4ff; --cm-string: #7fddb4; --cm-number: #f2a46b; --cm-property: #9dc8ff; --cm-function: #c4b2ff; --cm-type: #f2c46b; } }
+:root[data-theme="dark"] { --cm-keyword: #d2b4ff; --cm-string: #7fddb4; --cm-number: #f2a46b; --cm-property: #9dc8ff; --cm-function: #c4b2ff; --cm-type: #f2c46b; }
+.cmHost .cm-editor { max-height: 60vh; }
+.cmHost .cm-scroller { overflow: auto; }

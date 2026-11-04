@@ -151,7 +151,7 @@ export function RealtimePane({ ws, notify, createWebSocket }: { ws: WorkspaceApi
               <label className="toggle"><input type="checkbox" checked={d.mqtt.retain} onChange={(e) => set({ mqtt: { ...d.mqtt, retain: e.target.checked } })} /> Retain</label>
             </div>
           </>}
-          <CodeArea label="Message" rows={6} value={compose} onChange={setCompose} placeholder={isWs ? '{"type": "ping", "at": "{{$isoTimestamp}}"}' : '{"temp": 21.5}'} />
+          <CodeArea label="Message" lang="json" variables={ws.variableNames} rows={6} value={compose} onChange={setCompose} placeholder={isWs ? '{"type": "ping", "at": "{{$isoTimestamp}}"}' : '{"temp": 21.5}'} />
           <div className="actions">
             <button type="button" className="btn primary" disabled={!open} onClick={() => send(compose)}>{isWs ? 'Send' : 'Publish'}</button>
             <button type="button" className="btn ghost" disabled={!compose.trim()} onClick={() => set({ ws: { messages: [...d.ws.messages, kv(compose.split('\n')[0].slice(0, 30) || 'Message', compose)] } })}>Save message</button>
