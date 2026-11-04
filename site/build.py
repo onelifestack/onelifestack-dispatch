@@ -105,6 +105,9 @@ FEATURES = [
  ("Auth", "Basic, bearer, API key, Digest, OAuth 2.0 (client credentials, password, authorization code with PKCE, refresh), JWT and AWS Signature v4. Folders and collections can set auth for everything inside."),
  ("Variables and secrets", "Globals, collection, environment, data-file and script scopes, plus 70 `{{$random...}}` fake-data generators. Secret values are hidden, left out of exports, and encrypted on this device."),
  ("Scripts and tests", "Pre-request and post-response JavaScript with a `pm` API (variables, request edits, `pm.test`, `pm.expect`, `pm.sendRequest`). Scripts run in a sandbox with no network or storage access of their own. Common libraries can be loaded with `require`."),
+ ("Browser logins", "On desktop, a Browser login request drives your installed Chrome or Edge through a login page: open, type, click, wait. It keeps the cookies (HttpOnly too) or the token from local storage as secret variables, so the requests after it are signed in. It also runs in the runner, schedules and the CLI."),
+ ("Flows", "Wire saved requests together on a canvas with If, Script, Set variable, For each, Delay and End blocks. Requests branch on ok or failed, and each block shows its status live while the flow runs. Run flows in the app or with `dispatch-run flow`."),
+ ("MCP", "Test MCP servers: connect over HTTP or, on desktop, start a local server command, then list and call tools, read resources and get prompts. `dispatch-run mcp` works the other way round and lets an AI assistant list, send and run your saved requests, limited to the methods you allow."),
  ("Runner and data-driven runs", "Run a collection, a folder or a suite, with iterations, delays, CSV or JSON data files and stop-on-failure. Export JSON or JUnit reports."),
  ("Load testing", "Up to 200 virtual users with ramp-up, duration or loops, think time and pass/fail thresholds (p95, error rate, throughput). Latency and throughput charts, and a CSV of every sample."),
  ("Schedules", "On desktop, run a collection every few minutes and get a notification when it fails. Results are kept."),
@@ -112,7 +115,8 @@ FEATURES = [
  ("Collections as files", "On desktop, save a collection as a folder of YAML files written as you work, so it can live in git. The CLI runs those folders."),
  ("Import and export", "Import Postman collections and environments, Insomnia exports, Bruno folders, OpenAPI 3 and Swagger 2 (JSON or YAML), HAR files and curl commands. Export a Dispatch backup, one collection, or a Postman collection."),
  ("Code in 12 languages", "Copy any request as curl, JavaScript fetch, Node axios, Python requests, Go, Java, C#, PHP, Ruby, Rust, HTTPie or PowerShell."),
- ("The CLI", "`dispatch-run` runs collections, folders and suites with environments and data files, runs load tests with pass/fail thresholds, and serves mocks. Built for CI."),
+ ("The CLI", "`dispatch-run` runs collections, folders, suites and flows with environments and data files, runs load tests with pass/fail thresholds, serves mocks, and serves a collection to AI assistants over MCP. Built for CI."),
+ ("Workspaces and tidy-ups", "Group collections and environments into workspaces. Duplicate an environment. Parameterize turns hard-coded hosts, tokens and IDs in a request into variables, and is offered right after you paste a curl command. A variable can hold named alternatives, such as the load balancer or one instance, and the runner can run once per alternative to compare them."),
  ("Everyday comforts", "A code editor with syntax colours and `{{variable}}` completion, undo for every delete, daily local backups with restore, drag and drop in the sidebar, search across bodies and headers (Ctrl+K), and response history with side-by-side compare."),
 ]
 COMPARE = [
@@ -123,6 +127,8 @@ COMPARE = [
  ("Cookies", "Cookie jar with a manager", "The browser's own rules"),
  ("Client certificates, extra CAs, proxy", "Yes", "No"),
  ("gRPC", "Yes", "No"),
+ ("Browser logins", "Yes, with your installed Chrome or Edge", "No"),
+ ("MCP servers", "Over HTTP, or a local command", "Over HTTP, if the server allows CORS"),
  ("Mock server", "Yes", "No (use the CLI)"),
  ("Collections as files, schedules", "Yes", "No"),
  ("Load tests", "No browser limits", "About six connections per server, and CORS applies"),
@@ -144,8 +150,8 @@ FAQ = [
 PRIVACY_KEEP = ["Collections, requests, environments, history and settings", "Secret values, encrypted with a key that stays on the device", "Daily local backups", "Everything the app saves, in local storage or in the folder you pick"]
 PRIVACY_NEVER = ["No account or sign-in", "No analytics, telemetry or crash reports", "No update checks or other calls home", "No fonts, scripts or images from other sites", "No server that receives your collections"]
 NEXT = [
- ("Flows and browser automation", "Chain requests into flows, and drive a browser as one of the steps."),
- ("MCP", "An MCP server, so tools that speak MCP can work with your collections."),
+ ("Sign-in for MCP servers", "Connect to MCP servers that need you to sign in with OAuth, with the token kept as a secret."),
+ ("Signed installers", "Code-signed installers for Windows and macOS, so they open without a warning."),
 ]
 
 def app_buttons(primary=True):
@@ -249,6 +255,12 @@ def cli_page():
 <h2>Mock server</h2>
 <pre><code>node dispatch-run.mjs mock demo-shop.postman_collection.json</code></pre>
 <p>Serves the saved examples in a collection. Run <code>node dispatch-run.mjs --help</code> for every option.</p>
+<h2>Flows</h2>
+<pre><code>node dispatch-run.mjs flow my-backup.json --flow "Checkout" -e staging.json</code></pre>
+<p>Runs a flow from a Dispatch backup or export, with the same blocks and branches as in the app. Browser login steps need Chrome or Edge on the machine.</p>
+<h2>Serve a collection to an AI assistant (MCP)</h2>
+<pre><code>claude mcp add dispatch -- node dispatch-run.mjs mcp ./my-collection -e staging.json --allow-methods GET,HEAD</code></pre>
+<p>An MCP server over stdio with three tools: <code>list_requests</code>, <code>send_request</code> and <code>run_collection</code>. Requests go through their auth, scripts and tests. <code>--allow-methods</code> limits what the assistant may send.</p>
 <h2>In GitHub Actions</h2>
 <pre><code>- uses: actions/setup-node@v4
   with: {{ node-version: 22 }}
@@ -257,7 +269,17 @@ def cli_page():
 def changelog():
     def rel(v, d, title, items): return f'<div class="release"><h2 id="v{v.replace(".", "-")}">{v} <span class="muted">{d}</span></h2><p>{title}</p>{ul(items)}</div>'
     return "<h1>Changelog</h1><p class=\"lead\">What changed in each release, newest first.</p>" + \
-    rel("0.3.0", "2026-11-04", "Safer storage, a real editor, and collections that live in files.", [
+    rel("0.4.0", "2026-11-04", "Browser logins, flows and MCP. 0.4.1 and 0.4.2 fixed Windows issues found in testing.", [
+        "Browser login requests: drive an installed Chrome or Edge through a login page and keep its cookies or token as secret variables (desktop, runner, schedules and CLI).",
+        "Flows: wire requests together on a canvas with If, Script, Set variable, For each, Delay and End blocks, with live status and a run log. `dispatch-run flow` runs them from an export.",
+        "MCP requests: test MCP servers over HTTP or, on desktop, a local command; list and call tools, read resources, get prompts.",
+        "`dispatch-run mcp` serves a collection to AI assistants, with `--allow-methods` to limit what they may send.",
+        "Workspaces to group collections and environments.",
+        "Duplicate environments.",
+        "Parameterize: turn hard-coded hosts, credentials and IDs into variables, also offered after pasting curl.",
+        "Endpoint alternatives: one variable, several named targets; the runner can run once per alternative.",
+        "Windows fixes: commands keep their backslashes, `.cmd` tools are found, no stray console windows.",
+    ]) + rel("0.3.0", "2026-11-04", "Safer storage, a real editor, and collections that live in files.", [
         "Code editor with syntax colours, `{{variable}}` and `pm.` completion, GraphQL completion from the schema, and foldable JSON responses.",
         "Secrets are encrypted at rest with a device key that cannot be exported. OAuth tokens are saved after an automatic refresh.",
         "Undo for every delete, and daily local backups with restore.",
@@ -303,6 +325,7 @@ def privacy():
 <p>Secret variables, passwords, tokens, keys, and Authorization and Cookie headers are encrypted before they are saved, using a key that stays on the device and cannot be exported. Exports and backups you download leave secrets out.</p>
 <h2>Requests you send</h2>
 <p>When you press Send, Dispatch sends that request to the address you typed, with the headers and body you set. That is the only network traffic Dispatch makes. What the other server does with it is up to that server. Scripts you write can send requests too (<code>pm.sendRequest</code>), to the places you tell them to.</p>
+<p>A Browser login request opens your installed Chrome or Edge with a new, empty profile that is deleted afterwards, with sync and background networking turned off. It visits the pages in your steps. The values it keeps, such as cookies or a token, are stored as secret variables on this device.</p>
 <h2>What Dispatch does not do</h2>
 <ul><li>No account, sign-in or sync.</li><li>No analytics, telemetry or crash reporting.</li><li>No update check. Dispatch does not contact us or anyone else on its own.</li><li>No advertising and no trackers.</li><li>No fonts, scripts or images loaded from other sites, in the app or on this website.</li></ul>
 <h2>The web app and this website</h2>
