@@ -302,4 +302,49 @@ describe('Dispatch app', () => {
     expect(side().queryByRole('button', { name: 'Later' })).toBeNull()
     expect(side().getByRole('button', { name: 'Keep me' })).toBeTruthy()
   })
+
+  it('moves and reorders with drag and drop, multi-selects, and searches bodies', async () => {
+    await start()
+    const file = new File([JSON.stringify({
+      info: { name: 'Shop', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
+      item: [
+        { name: 'A', request: { method: 'GET', url: 'https://s.test/a' } },
+        { name: 'B', request: { method: 'POST', url: 'https://s.test/b', body: { mode: 'raw', raw: '{"needle": 1}' } } },
+        { name: 'C', request: { method: 'GET', url: 'https://s.test/c' } },
+        { name: 'Box', item: [] },
+      ],
+    })], 'shop.json', { type: 'application/json' })
+    await act(async () => { fireEvent.change(document.querySelector('header input[type="file"]')!, { target: { files: [file] } }) })
+    await screen.findByText(/Imported 1 collection/)
+    const names = () => [...document.querySelectorAll('.tree .rowName')].map((e) => e.textContent)
+    expect(names()).toEqual(['A', 'B', 'C', 'Box'])
+    const dt = { setData: () => {}, effectAllowed: '', dropEffect: '' }
+    const row = (n: string) => side().getByRole('button', { name: new RegExp(`^(GET|POST) ${n}$`) }).closest('li')!
+    // drag C before A
+    fireEvent.dragStart(row('C'), { dataTransfer: dt })
+    fireEvent.dragOver(row('A'), { dataTransfer: dt })
+    await act(async () => { fireEvent.drop(row('A'), { dataTransfer: dt }) })
+    expect(names()).toEqual(['C', 'A', 'B', 'Box'])
+    // drag A into the Box folder
+    fireEvent.dragStart(row('A'), { dataTransfer: dt })
+    const box = side().getByRole('button', { name: 'Box' }).closest('.row')!
+    fireEvent.dragOver(box, { dataTransfer: dt })
+    await act(async () => { fireEvent.drop(box, { dataTransfer: dt }) })
+    expect(names()).toEqual(['C', 'B', 'Box', 'A'])
+    // search by body text
+    fireEvent.change(side().getByLabelText('Filter requests'), { target: { value: 'needle' } })
+    expect(names()).toEqual(['B'])
+    fireEvent.change(side().getByLabelText('Filter requests'), { target: { value: '' } })
+    // ctrl-click two, delete together, undo once
+    fireEvent.click(side().getByRole('button', { name: /^GET C$/ }), { ctrlKey: true })
+    fireEvent.click(side().getByRole('button', { name: /^POST B$/ }), { ctrlKey: true })
+    expect(screen.getByRole('toolbar', { name: 'Selected requests' }).textContent).toMatch(/2 selected/)
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Selected requests' })).getByRole('button', { name: 'Delete' }))
+    const d = await screen.findByRole('dialog', { hidden: true })
+    fireEvent.click(within(d).getByRole('button', { name: 'Delete', hidden: true }))
+    await screen.findByText('Deleted 2 requests.')
+    expect(names()).toEqual(['Box', 'A'])
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(names()).toEqual(['C', 'B', 'Box', 'A']))
+  })
 })

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as db from '../core/db'
 import type { Collection, Environment, Folder, HistoryEntry, HttpResponse, KV, LogLine, PreparedRequest, RequestDef, Settings, TestResult } from '../core/types'
-import { defaultSettings, newCollection, newEnvironment, newFolder, newRequest, normalizeRequest, uid } from '../core/types'
+import { bySort, defaultSettings, newCollection, newEnvironment, newFolder, newRequest, normalizeRequest, uid } from '../core/types'
 import { prepare } from '../core/prepare'
 import { CookieTransport, type Transport, defaultTransport } from '../core/transport'
 import { CookieJar } from '../core/cookies'
@@ -368,6 +368,60 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     }
   }, [globals, setGlobals])
 
+  /**
+   * Moves requests and folders under a parent (a collection's top level, or a folder), placed before `beforeId`
+   * (a sibling request or folder) or at the end. Siblings are renumbered so the order is exact. Folders carry their
+   * contents along, also to another collection. A folder can't move into itself or its own subfolders.
+   */
+  const placeItems = useCallback(async (items: { kind: 'request' | 'folder'; id: string }[], parent: { collectionId: string; folderId: string | null }, beforeId: string | null = null) => {
+    const descendants = (fid: string) => {
+      const ids = new Set([fid])
+      for (let grew = true; grew;) { grew = false; for (const f of folders) if (f.parentId && ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); grew = true } }
+      return ids
+    }
+    if (parent.folderId && items.some((i) => i.kind === 'folder' && descendants(i.id).has(parent.folderId!))) return false
+    const moving = new Set(items.map((i) => i.id))
+    let nextFolders = folders.map((f) => ({ ...f }))
+    let nextRequests = requests.map((r) => ({ ...r }))
+    // Re-parent.
+    for (const it of items) {
+      if (it.kind === 'request') nextRequests = nextRequests.map((r) => (r.id === it.id ? { ...r, collectionId: parent.collectionId, folderId: parent.folderId } : r))
+      else {
+        const ids = descendants(it.id)
+        nextFolders = nextFolders.map((f) => (f.id === it.id ? { ...f, collectionId: parent.collectionId, parentId: parent.folderId } : ids.has(f.id) ? { ...f, collectionId: parent.collectionId } : f))
+        nextRequests = nextRequests.map((r) => (r.folderId && ids.has(r.folderId) ? { ...r, collectionId: parent.collectionId } : r))
+      }
+    }
+    // Renumber the new siblings with the moved items placed before `beforeId`.
+    const siblings = [
+      ...nextFolders.filter((f) => f.collectionId === parent.collectionId && f.parentId === parent.folderId).map((f) => ({ kind: 'folder' as const, id: f.id, sort: f.sort, name: f.name })),
+      ...nextRequests.filter((r) => r.collectionId === parent.collectionId && (r.folderId ?? null) === parent.folderId).map((r) => ({ kind: 'request' as const, id: r.id, sort: r.sort, name: r.name })),
+    ].sort(bySort)
+    const rest = siblings.filter((x) => !moving.has(x.id))
+    const moved = items.map((i) => siblings.find((x) => x.id === i.id)!).filter(Boolean)
+    const at = beforeId ? rest.findIndex((x) => x.id === beforeId) : -1
+    const ordered = at >= 0 ? [...rest.slice(0, at), ...moved, ...rest.slice(at)] : [...rest, ...moved]
+    ordered.forEach((x, i) => {
+      if (x.kind === 'folder') nextFolders = nextFolders.map((f) => (f.id === x.id ? { ...f, sort: i + 1 } : f))
+      else nextRequests = nextRequests.map((r) => (r.id === x.id ? { ...r, sort: i + 1 } : r))
+    })
+    const changedF = nextFolders.filter((f, i) => JSON.stringify(f) !== JSON.stringify(folders[i]))
+    const changedR = nextRequests.filter((r, i) => JSON.stringify(r) !== JSON.stringify(requests[i]))
+    setFolders(nextFolders); setRequests(nextRequests)
+    setTabs((ts) => ts.map((t) => { const r = changedR.find((x) => x.id === t.draft.id); return r ? { ...t, draft: { ...t.draft, collectionId: r.collectionId, folderId: r.folderId, sort: r.sort } } : t }))
+    await db.putMany({ folders: changedF, requests: changedR })
+    return true
+  }, [folders, requests])
+
+  /** Deletes several requests with one undo. */
+  const removeRequests = useCallback(async (ids: string[]) => {
+    const gone = requests.filter((r) => ids.includes(r.id))
+    for (const id of ids) await db.deleteRequest(id)
+    setRequests((rs) => rs.filter((r) => !ids.includes(r.id)))
+    setTabs((ts) => ts.map((t) => (ids.includes(t.draft.id) ? { ...t, draft: { ...t.draft, id: uid() } } : t)))
+    if (gone.length) toTrash(gone.length === 1 ? `“${gone[0].name}”` : `${gone.length} requests`, { requests: gone })
+  }, [requests, toTrash])
+
   /** Puts back the most recent delete. */
   const undoDelete = useCallback(async () => {
     const last = trash[trash.length - 1]
@@ -394,7 +448,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   }, [snapshot])
 
   return {
-    trash, undoDelete, backups, backupNow, restoreBackup,
+    trash, undoDelete, backups, backupNow, restoreBackup, placeItems, removeRequests,
     ready, transport, collections, folders, requests, environments, globals, history, settings, logs,
     tabs, activeId, active, draft, view, result: active.result, sending: active.sending, saved, dirty, isDirty,
     collection, environment, prepared, chain, runContext, pipeline: pipelineRef, variableNames,

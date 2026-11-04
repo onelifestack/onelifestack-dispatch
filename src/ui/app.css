@@ -408,3 +408,11 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 :root[data-theme="dark"] { --cm-keyword: #d2b4ff; --cm-string: #7fddb4; --cm-number: #f2a46b; --cm-property: #9dc8ff; --cm-function: #c4b2ff; --cm-type: #f2c46b; }
 .cmHost .cm-editor { max-height: 60vh; }
 .cmHost .cm-scroller { overflow: auto; }
+
+/* Sidebar: selection and drag-and-drop */
+.row.selected { background: var(--primary-soft); box-shadow: inset 3px 0 0 var(--primary); }
+.dropBefore > .row:first-child, li.row.dropBefore { box-shadow: inset 0 2px 0 var(--primary); }
+.row.dropInto { background: var(--primary-soft); outline: 2px dashed var(--primary); outline-offset: -2px; }
+.selBar { display: flex; align-items: center; gap: .4rem; padding: .35rem .6rem; background: var(--primary-soft); border-bottom: 1px solid var(--outline); }
+.selBar .icon { margin-left: auto; }
+[draggable="true"] { cursor: grab; }
