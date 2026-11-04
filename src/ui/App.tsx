@@ -8,7 +8,7 @@ import { CollectionEditor, EnvironmentEditor, FolderEditor, GlobalsEditor } from
 import { exportCollection, exportWorkspace, importFile, type ImportResult } from '../core/backup'
 import { nameFromUrl } from '../core/curl'
 import { withScheme } from '../core/url'
-import type { Transport } from '../core/transport'
+import { CookieTransport, type Transport } from '../core/transport'
 import { saveAnyFile, saveTextFile } from './files'
 import { RunnerView } from './RunnerView'
 import { LoadView } from './LoadView'
@@ -211,6 +211,15 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
             {ws.transport.unrestricted && <>
               <label className="menuRow"><input type="checkbox" checked={ws.settings.insecureTls} onChange={(e) => ws.setSettings({ insecureTls: e.target.checked })} /> Allow self-signed certificates</label>
               <label className="menuRow"><input type="checkbox" checked={ws.settings.cookieJar} onChange={(e) => ws.setSettings({ cookieJar: e.target.checked })} /> Keep cookies between requests</label>
+              {ws.transport instanceof CookieTransport && (
+                <button type="button" role="menuitem" onClick={(e) => {
+                  closeMenu(e)
+                  const jar = (ws.transport as CookieTransport).jar
+                  const list = jar.list()
+                  ws.log([{ level: 'info', at: Date.now(), source: 'cookies', text: list.length ? `Cleared ${list.length} cookie${list.length > 1 ? 's' : ''}: ${list.map((c) => `${c.name} (${c.domain})`).join(', ')}` : 'The cookie jar was already empty.' }])
+                  jar.clear(); notify(list.length ? `Cleared ${list.length} cookie${list.length > 1 ? 's' : ''}.` : 'No cookies to clear.')
+                }}>Clear cookies</button>
+              )}
             </>}
           </div>
         </details>

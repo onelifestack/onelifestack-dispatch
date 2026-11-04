@@ -19,8 +19,8 @@ Order (each step: code + tests + typecheck + build, then commit and push):
 7. [x] CLI runner (`dispatch-run`) for CI: runs a backup/collection file with the same core in Node.
 8. [x] Auth: Digest, OAuth 2 (client credentials, password, auth code + PKCE, refresh), JWT, AWS SigV4.
 9. [x] Code generation (curl, JS fetch, Node axios, Python requests, Go, Java, C#, PHP, Ruby, Rust, HTTPie, PowerShell).
-10. [ ] Import OpenAPI 3 / Swagger 2 and HAR.
-11. [ ] Response: HTML preview (sandboxed), JSON filter, save to file, timing breakdown, cookies; cookie jar.
+10. [x] Import OpenAPI 3 / Swagger 2 and HAR.
+11. [x] Response: HTML preview (sandboxed), JSON filter, save to file, timing breakdown, cookies; cookie jar.
 12. [ ] Docs (Markdown) on collections/folders/requests; saved examples; local mock server (desktop).
 13. [ ] GraphQL (schema introspection, autocomplete), WebSocket (live log), MQTT (over WebSocket), gRPC (desktop).
 14. [ ] Desktop build + Playwright visual pass; README/CLAUDE.md; PR.
@@ -54,3 +54,5 @@ Progress notes go under each step as it lands.
   auth code + PKCE / refresh. Desktop: system browser + one-shot 127.0.0.1 listener for the redirect; web: paste
   the landing URL. Expired tokens with a refresh token refresh per send (not saved back yet).
 - Step 9: core/codegen.ts — 12 languages from the prepared request (escaping tested; Python output parsed with ast; curl round-trips). "</> Code" panel.
+- Step 10: core/openapi.ts — OpenAPI 3 (JSON/YAML) + Swagger 2: servers→{{baseUrl}}, tags→folders, params→path vars/query/headers, sample bodies from examples/schemas ($ref, allOf/oneOf, recursion-safe), security→auth (+secret vars), response examples. HAR: entries→requests with recorded responses. All via importFile (app and CLI).
+- Step 11: done in step 3 + cookie jar (step 5) + "Clear cookies" menu item (desktop).

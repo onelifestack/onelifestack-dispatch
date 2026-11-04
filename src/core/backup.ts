@@ -1,6 +1,8 @@
 import type { Auth, Collection, Environment, Example, Folder, KV, Method, RequestDef, Scripts } from './types'
 import { METHODS, emptyAuth, emptyBody, kv, newCollection, newEnvironment, newFolder, newRequest, normalizeCollection, normalizeFolder, normalizeRequest, uid } from './types'
 import { paramsFromUrl } from './url'
+import { parse as parseYaml } from 'yaml'
+import { importHar, importOpenApi, isHar, isOpenApi } from './openapi'
 
 export interface Workspace { collections: Collection[]; folders: Folder[]; requests: RequestDef[]; environments: Environment[]; globals?: KV[] }
 
@@ -42,11 +44,17 @@ export interface ImportResult extends Workspace {
  */
 export function importFile(text: string): ImportResult {
   let data: any
-  try { data = JSON.parse(text) } catch { throw new Error('That file isn’t valid JSON.') }
+  try { data = JSON.parse(text) } catch {
+    // OpenAPI specs are often YAML.
+    try { data = parseYaml(text) } catch { data = undefined }
+    if (!data || typeof data !== 'object') throw new Error('That file isn’t valid JSON (or OpenAPI YAML).')
+  }
   if (data?.format === FORMAT) return importDispatch(data)
+  if (isOpenApi(data)) return importOpenApi(data)
+  if (isHar(data)) return importHar(data)
   if ((data?.info?.schema && String(data.info.schema).includes('collection')) || (data?.info && Array.isArray(data?.item))) return importPostmanCollection(data)
   if (Array.isArray(data?.values) && (data?._postman_variable_scope === 'environment' || typeof data?.name === 'string')) return importPostmanEnvironment(data)
-  throw new Error('Unrecognised file. Import a Dispatch backup, a Postman collection (v2.1) or a Postman environment.')
+  throw new Error('Unrecognised file. Import a Dispatch backup, a Postman collection (v2.1) or environment, an OpenAPI 3 / Swagger 2 spec, or a HAR file.')
 }
 
 function importDispatch(d: any): ImportResult {
