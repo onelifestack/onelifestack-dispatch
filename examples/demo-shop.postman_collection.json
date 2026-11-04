@@ -25,11 +25,14 @@
         "event": [{ "listen": "test", "script": { "exec": [
           "pm.test('same item', () => pm.expect(pm.response.json().item).to.equal(pm.iterationData.get('item')))",
           "pm.test('fast', () => pm.expect(pm.response.responseTime).to.be.below(1000))"
-        ] } }] }
+        ] } }],
+        "response": [{ "name": "Found", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{ \"id\": 1, \"item\": \"coffee\", \"qty\": 2 }" }] }
     ] },
     { "name": "4 Digest", "request": { "method": "GET", "url": "{{base}}/digest",
         "auth": { "type": "digest", "digest": [{ "key": "username", "value": "ann" }, { "key": "password", "value": "secret" }] } },
       "event": [{ "listen": "test", "script": { "exec": ["pm.test('digest works', () => pm.response.to.have.status(200))"] } }] },
-    { "name": "5 Flaky", "request": { "method": "GET", "url": "{{base}}/flaky" } }
+    { "name": "5 Flaky", "request": { "method": "GET", "url": "{{base}}/flaky" },
+      "response": [{ "name": "OK", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json" }], "body": "{ \"ok\": true }" }] }
   ]
 }

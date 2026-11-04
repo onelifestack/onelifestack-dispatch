@@ -415,8 +415,8 @@
         {
           "id": "67b5e9c1-75d7-4cd4-aa26-4aa6b1718ae9",
           "type": "request",
-          "x": 0,
-          "y": 0,
+          "x": 314,
+          "y": 140,
           "label": "Login",
           "config": {
             "requestId": "4bab6d8d-42df-4be9-b256-5efe50338647"
@@ -425,8 +425,8 @@
         {
           "id": "7d04c975-aff0-4788-bb31-0e63a9a47bee",
           "type": "request",
-          "x": 0,
-          "y": 0,
+          "x": 568,
+          "y": 140,
           "label": "Orders",
           "config": {
             "requestId": "7636d7d9-6bb5-45a8-b502-d240fdfe08ae"
