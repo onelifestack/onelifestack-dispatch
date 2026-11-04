@@ -41,6 +41,8 @@ export interface Execution {
   scriptError?: string
   /** A pre-request script skipped the request. */
   skipped?: boolean
+  /** A browser-login run's step results. */
+  browser?: import('./browser').BrowserRunResult
   /** HTML from pm.visualizer.set() in a post-response script. */
   visualizer?: { html: string }
   /** OAuth 2 tokens refreshed while sending, to save back to where the auth lives. */
@@ -80,6 +82,8 @@ export interface Pipeline {
   sign?: (p: PreparedRequest, req: RequestDef, ctx: RunContext, out: Execution) => Promise<PreparedRequest>
   /** Answers auth challenges (Digest) by resending. */
   retry?: (p: PreparedRequest, res: HttpResponse, req: RequestDef, ctx: RunContext, send: (p: PreparedRequest) => Promise<HttpResponse>) => Promise<{ sent: PreparedRequest; response: HttpResponse } | null>
+  /** Runs a browser-login request (desktop app and CLI provide it). */
+  browser?: (req: RequestDef, ctx: RunContext, out: Execution, signal?: AbortSignal) => Promise<void>
   /** Runs after the response (tests). */
   afterResponse?: (req: RequestDef, ctx: RunContext, out: Execution) => Promise<void>
 }
@@ -87,6 +91,11 @@ export interface Pipeline {
 /** Runs one request: hooks, variables, auth, send, tests. Never throws; failures land in `error`. */
 export async function execute(req: RequestDef, ctx: RunContext, transport: Transport, opts: SendOptions, pipeline: Pipeline = {}): Promise<Execution> {
   const out: Execution = { sent: prepare(req, prepareContext(ctx, req)), response: null, error: null, tests: [], logs: [], changes: noChanges() }
+  if (req.protocol === 'browser') {
+    if (!pipeline.browser) { out.error = 'Browser login needs the desktop app or dispatch-run (a web page can’t start a browser).'; return out }
+    try { await pipeline.browser(req, ctx, out, opts.signal) } catch (e) { out.error = e instanceof Error ? e.message : String(e) }
+    return out
+  }
   try {
     const finalReq = pipeline.beforeSend ? await pipeline.beforeSend(req, ctx, out) : req
     if (out.scriptError) throw new SendError(`Not sent: the pre-request script failed. ${out.scriptError}`)

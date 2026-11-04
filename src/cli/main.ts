@@ -15,12 +15,15 @@ import { InlineEngine, scriptPipeline } from '../core/scriptPipeline'
 import { CookieTransport, FetchTransport } from '../core/transport'
 import { CookieJar } from '../core/cookies'
 import { authPipeline } from '../core/auth'
+import { browserHook } from '../core/browserPipeline'
+import { nodeLauncher } from '../node/browserLauncher'
 import type { Compile } from '../core/scripts'
 import { type Environment, type KV, type Settings, defaultSettings, kv } from '../core/types'
 import { formatMs } from '../core/format'
 import { createServer } from 'node:http'
 import { buildRoutes, fillMockBody, matchRoute } from '../core/mock'
 import { serveMcp } from './mcpServer'
+import { runFlow } from '../core/flows'
 
 const VERSION = '0.3.0'
 const color = process.stdout.isTTY && !process.env.NO_COLOR
@@ -34,6 +37,7 @@ Usage:
   dispatch-run load <file> [options]     load-test a request or a collection
   dispatch-run mock <file> [options]     serve a collection's saved examples (mock server)
   dispatch-run mcp <file|folder> [opts]  serve a collection to AI assistants over MCP (stdio)
+  dispatch-run flow <file> [options]     run a flow from a Dispatch backup/export
 
 Run options:
   -c, --collection <name>      collection to run (default: the only/first one)
@@ -64,6 +68,9 @@ Load options:
       --min-rps <n>            fail if throughput is below this
       --samples <path>         write every sample as CSV
       --i-have-permission      required: you own the server or may load-test it
+
+Flow options (also -e, -g, --env-var, -k, --timeout, --json from above):
+      --flow <name>            flow to run (default: the only/first one)
 
 Mock options:
       --port <n>               port to listen on (default 4319, 127.0.0.1 only)
@@ -164,7 +171,8 @@ async function main(argv: string[]): Promise<number> {
   const isLoad = pos[0] === 'load'
   const isMock = pos[0] === 'mock'
   const isMcp = pos[0] === 'mcp'
-  const file = isLoad || isMock || isMcp ? pos[1] : pos[0]
+  const isFlow = pos[0] === 'flow'
+  const file = isLoad || isMock || isMcp || isFlow ? pos[1] : pos[0]
   if (!file) throw new Usage('Give a collection file.')
   const ws = await loadWorkspace(file)
   for (const w of ws.warnings) console.error(yellow(`note: ${w}`)) // stderr: safe in MCP mode too
@@ -208,14 +216,35 @@ async function main(argv: string[]): Promise<number> {
   const settings: Settings = { ...defaultSettings, timeoutMs: int(one(opts, 'timeout'), 'timeout', 30_000), insecureTls: !!opts.insecure }
   const transport = new CookieTransport(new FetchTransport(), new CookieJar())
   const scripts = opts['no-scripts'] ? {} : scriptPipeline({ engine: new InlineEngine(compileInVm), transport, sendOptions: () => ({ timeoutMs: settings.timeoutMs, followRedirects: true, insecureTls: settings.insecureTls }) })
-  const pipeline = authPipeline(scripts, transport)
+  const pipeline = { ...authPipeline(scripts, transport), browser: browserHook(nodeLauncher, () => transport.jar) }
   if (isMcp) {
     // Stdout is the protocol channel from here on.
     console.error(`dispatch-run ${VERSION}: serving ${ws.collections[0]?.name ?? file} over MCP (stdio)`)
     await serveMcp({ ws: { ...ws, collections: one(opts, 'collection') ? ws.collections.filter((c) => c.name === one(opts, 'collection')) : ws.collections },
-      environment, globals, settings, transport, pipeline, version: VERSION,
+      environment, globals, settings, transport, pipeline, version: VERSION, engine: new InlineEngine(compileInVm),
       allowMethods: (one(opts, 'allow-methods') ?? '').split(',').map((m) => m.trim().toUpperCase()).filter(Boolean) })
     return 0
+  }
+
+  if (isFlow) {
+    const name = one(opts, 'flow')
+    const flows = ws.flows ?? []
+    const flow = name ? flows.find((f) => f.name === name) : flows[0]
+    if (!flow) throw new Usage(name ? `No flow named "${name}"${flows.length ? ` (have: ${flows.map((f) => f.name).join(', ')})` : ''}.` : 'The file has no flows (export a workspace or backup from Dispatch).')
+    console.log(bold(`Flow: ${flow.name}`))
+    const r = await runFlow(flow, { collections: ws.collections, folders: ws.folders, requests: ws.requests, environment, globals, settings }, transport, pipeline,
+      new InlineEngine(compileInVm), {
+        onStep: (s) => {
+          if (s.status === 'running') return
+          const mark = s.status === 'ok' ? green('✓') : s.status === 'failed' ? red('✗') : dim('·')
+          console.log(`${mark} ${s.label}${s.status_code !== undefined ? ` ${s.status_code < 400 ? green(String(s.status_code)) : red(String(s.status_code))}` : ''}${s.port ? dim(` → ${s.port}`) : ''}  ${dim(s.detail)}`)
+          for (const t of s.tests ?? []) console.log(t.passed ? `    ${green('✓')} ${t.name}` : `    ${red('✗')} ${t.name}${t.error ? red(` — ${t.error}`) : ''}`)
+        },
+      })
+    for (const l of r.logs.filter((x) => x.level === 'warn' || x.level === 'error')) console.log(dim(`  ${l.level}: ${l.text}`))
+    if (one(opts, 'json')) writeFileSync(one(opts, 'json')!, JSON.stringify({ flow: flow.name, ok: r.ok, error: r.error, durationMs: r.durationMs, steps: r.steps }, null, 2))
+    console.log(`\n${r.ok ? green(bold('Passed')) : red(bold('Failed'))}  ${r.steps.length} steps, ${formatMs(r.durationMs)}${r.error ? red(`  ${r.error}`) : ''}`)
+    return r.ok ? 0 : 1
   }
 
   let items = selectItems(ws, one(opts, 'collection'), opts.folder)

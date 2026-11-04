@@ -1,6 +1,6 @@
 /**
  * `dispatch-run mcp <file|folder>`: serves a collection to AI assistants over MCP (stdio, newline-delimited
- * JSON-RPC). Tools: list_requests, send_request, run_collection. Stdout carries protocol messages only; anything
+ * JSON-RPC). Tools: list_requests, send_request, run_collection, and run_flow when the file has flows. Stdout carries protocol messages only; anything
  * else goes to stderr.
  */
 import { createInterface } from 'node:readline'
@@ -10,6 +10,8 @@ import type { Transport } from '../core/transport'
 import { type Pipeline, execute, sendOptions } from '../core/runtime'
 import { collectItems, failed, runCollection, type RunItem } from '../core/runner'
 import { kv } from '../core/types'
+import { runFlow } from '../core/flows'
+import type { ScriptEngine } from '../core/scriptPipeline'
 
 export interface McpServeOptions {
   ws: ImportResult
@@ -21,11 +23,13 @@ export interface McpServeOptions {
   /** Methods the assistant may send; empty = all. */
   allowMethods: string[]
   version: string
+  /** Runs If/Script blocks in flows. */
+  engine?: ScriptEngine
 }
 
 const BODY_LIMIT = 20_000
 
-export function mcpTools() {
+export function mcpTools(flowNames: string[] = []) {
   return [
     {
       name: 'list_requests',
@@ -55,6 +59,11 @@ export function mcpTools() {
         },
       },
     },
+    ...(flowNames.length ? [{
+      name: 'run_flow',
+      description: `Run a flow (requests chained with conditions and loops) and return each step. Flows: ${flowNames.join(', ')}.`,
+      inputSchema: { type: 'object', properties: { name: { type: 'string', enum: flowNames, description: 'The flow to run.' } }, required: ['name'] },
+    }] : []),
   ]
 }
 
@@ -76,7 +85,7 @@ export async function handleMcp(msg: any, o: McpServeOptions): Promise<any | nul
         instructions: `Requests from the Dispatch collection “${col?.name ?? '(none)'}”${o.environment ? ` with environment “${o.environment.name}”` : ''}. Use list_requests to see what's there.`,
       })
     case 'ping': return reply({})
-    case 'tools/list': return reply({ tools: mcpTools() })
+    case 'tools/list': return reply({ tools: mcpTools(o.engine ? (o.ws.flows ?? []).map((f) => f.name) : []) })
     case 'tools/call': {
       const name = msg.params?.name
       const args = msg.params?.arguments ?? {}
@@ -116,6 +125,19 @@ export async function handleMcp(msg: any, o: McpServeOptions): Promise<any | nul
           `${s.requests} requests in ${s.iterations} iteration(s): ${s.testsPassed} tests passed, ${s.testsFailed} failed, ${s.failedRequests} errors, avg ${s.avgTimeMs} ms.`,
           ...bad.slice(0, 20).map((r) => `✗ ${r.name}: ${r.error ?? r.tests.filter((t) => !t.passed).map((t) => `${t.name}: ${t.error ?? 'failed'}`).join('; ')}`),
         ].join('\n'), bad.length > 0)
+      }
+      if (name === 'run_flow' && o.engine) {
+        const f = (o.ws.flows ?? []).find((x) => x.name === args.name)
+        if (!f) return text(`No flow named “${args.name}”.`, true)
+        if (o.allowMethods.length) {
+          const blocked = f.nodes.flatMap((n) => (n.type === 'request' ? o.ws.requests.filter((r) => r.id === n.config.requestId && !o.allowMethods.includes(r.method)) : []))
+          if (blocked.length) return text(`This flow sends ${blocked.map((b) => `${b.method} ${b.name}`).join(', ')}, which aren’t allowed here.`, true)
+        }
+        const r = await runFlow(f, { collections: o.ws.collections, folders: o.ws.folders, requests: o.ws.requests, environment: o.environment, globals: o.globals, settings: o.settings }, o.transport, o.pipeline, o.engine)
+        return text([
+          `${r.ok ? 'Passed' : `Failed: ${r.error}`} (${r.steps.length} steps, ${r.durationMs} ms)`,
+          ...r.steps.filter((x) => x.status !== 'running').slice(0, 100).map((x) => `${x.status === 'ok' ? '✓' : x.status === 'failed' ? '✗' : '·'} ${x.label}${x.status_code !== undefined ? ` ${x.status_code}` : ''}${x.port ? ` → ${x.port}` : ''} ${x.detail}`),
+        ].join('\n'), !r.ok)
       }
       return fail(-32602, `Unknown tool ${name}`)
     }

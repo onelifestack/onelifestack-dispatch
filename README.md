@@ -24,6 +24,14 @@ network traffic is the requests you send.
 - Server-sent events and Socket.IO.
 - Response history per request with side-by-side compare.
 
+**Browser logins and flows**
+- Browser login requests: drive an installed Chrome or Edge through a login form (open, type, click, wait) and keep
+  the cookies (HttpOnly too) or the token from localStorage/sessionStorage as secret variables and in the cookie
+  jar. Runs in the desktop app, the runner, schedules, `dispatch-run` and MCP.
+- Flows: a canvas where you wire saved requests together with If, Script, Set variable, For each, Delay and End
+  blocks, n8n-style. Requests branch on “ok”/“failed”; live status per block and a run log. Run them in the app,
+  with `dispatch-run flow`, or from an AI assistant (`run_flow` over MCP). Flows are part of backups and exports.
+
 **Requests**
 - HTTP with params (kept in sync with the URL), `:path` variables, headers, and bodies: JSON, text, XML, HTML,
   urlencoded, multipart form-data with files, binary files, GraphQL.
@@ -58,7 +66,7 @@ per collection; a mock server that serves saved examples (desktop, or `dispatch-
 
 **CLI** (`dispatch-run`): run collections, folders and suites with environments, data files and reporters;
 `dispatch-run load` for load tests with pass/fail thresholds; `dispatch-run mock` to serve examples;
-`dispatch-run mcp` to let AI assistants (Claude and others) list, send and run your requests over MCP.
+`dispatch-run flow` to run a flow from an export; `dispatch-run mcp` to let AI assistants (Claude and others) list, send and run your requests over MCP.
 
 ## Desktop vs web
 

@@ -17,8 +17,11 @@ import { importBruno, toPostmanCollection } from '../core/interop'
 import { pickFolder, readCollectionDir, useLinkedDirSync } from './linkedDirs'
 import { SchedulesView, useScheduler } from './Schedules'
 import { layeredVars, selectLayer } from '../core/layers'
+import { FlowView } from './FlowView'
 import { SpacesView } from './SpacesView'
 import { McpPane } from './McpPane'
+import { BrowserPane } from './BrowserPane'
+import type { BrowserLauncher } from '../core/browser'
 import { DocsView } from './DocsView'
 import { MockView } from './MockView'
 import { Markdown } from './Markdown'
@@ -75,7 +78,7 @@ function TabBar({ ws, onClose }: { ws: WorkspaceApi; onClose: (id: string) => vo
           <div key={t.id} className={`reqTab ${on ? 'on' : ''}`}>
             <button type="button" role="tab" aria-selected={on} className="reqTabMain" onClick={() => ws.selectTab(t.id)} title={t.draft.url || t.draft.name}
               onAuxClick={(e) => { if (e.button === 1) onClose(t.id) }}>
-              <span className={`mtag m-${t.draft.protocol === 'http' ? t.draft.method : 'proto'}`}>{t.draft.protocol !== 'http' ? ({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO', mcp: 'MCP' } as Record<string, string>)[t.draft.protocol] : t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>
+              <span className={`mtag m-${t.draft.protocol === 'http' ? t.draft.method : 'proto'}`}>{t.draft.protocol !== 'http' ? ({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO', mcp: 'MCP', browser: 'WEB' } as Record<string, string>)[t.draft.protocol] : t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>
               <span className="reqTabName">{t.draft.name}</span>
               {t.sending && <span className="spin" aria-label="sending" />}
             </button>
@@ -95,8 +98,8 @@ export interface AppExtras {
   extend?: (base: Pipeline, transport: Transport) => Pipeline
 }
 
-export function App({ transport, engine, extras = {} }: { transport?: Transport; engine?: ScriptEngine; extras?: AppExtras }) {
-  const ws = useWorkspace({ transport, engine, extend: extras.extend })
+export function App({ transport, engine, browserLauncher, extras = {} }: { transport?: Transport; engine?: ScriptEngine; browserLauncher?: BrowserLauncher; extras?: AppExtras }) {
+  const ws = useWorkspace({ transport, engine, browserLauncher, extend: extras.extend })
   const { ask, confirm, askSave, askPlace, node: dialog } = useDialogs()
   const [toast, setToast] = useState<{ text: string; action?: { label: string; run: () => void } } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -182,7 +185,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
   }
 
   // Backups and exports cover every workspace.
-  const workspace = () => ({ collections: ws.allCollections, folders: ws.folders, requests: ws.requests, environments: ws.allEnvironments, globals: ws.globals })
+  const workspace = () => ({ collections: ws.allCollections, folders: ws.folders, requests: ws.requests, environments: ws.allEnvironments, globals: ws.globals, flows: ws.allFlows })
   const onExport = async () => {
     try {
       if (await saveTextFile(`dispatch-backup-${new Date().toISOString().slice(0, 10)}.json`, exportWorkspace(workspace())))
@@ -281,6 +284,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
           : env ? <EnvironmentEditor key={env.id} ws={ws} confirm={confirm} environment={env} />
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
           : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
+          : viewed.kind === 'flow' ? <FlowView key={viewed.id} ws={ws} flowId={viewed.id} notify={notify} confirm={confirm} />
           : viewed.kind === 'spaces' ? <SpacesView ws={ws} ask={ask} notify={notify} />
           : viewed.kind === 'schedules' ? <SchedulesView ws={ws} sched={sched} notify={notify} />
           : viewed.kind === 'settings' ? <SettingsView ws={ws} notify={notify} />
@@ -307,6 +311,7 @@ export function App({ transport, engine, extras = {} }: { transport?: Transport;
                     <button type="button" className="btn ghost" onClick={() => void save()}>Save <kbd>Ctrl S</kbd></button>
                   </div>
                   {ws.draft.protocol === 'grpc' ? <GrpcPane ws={ws} notify={notify} />
+                    : ws.draft.protocol === 'browser' ? <BrowserPane ws={ws} notify={notify} />
                     : ws.draft.protocol === 'mcp' ? <McpPane key={ws.draft.id} ws={ws} notify={notify} confirm={confirm} />
                     : <RealtimePane key={ws.draft.id} ws={ws} notify={notify} />}
                 </div>

@@ -5,6 +5,7 @@ import { resetForTests } from '../src/core/db'
 import type { HttpResponse, PreparedRequest } from '../src/core/types'
 import type { SendOptions, Transport } from '../src/core/transport'
 import { SendError } from '../src/core/transport'
+import { InlineEngine } from '../src/core/scriptPipeline'
 
 class FakeTransport implements Transport {
   readonly label = 'Fake'
@@ -488,5 +489,31 @@ describe('Dispatch app', () => {
     expect(within(workRow).getAllByRole('cell')[1].textContent).toBe('2')
     fireEvent.click(within(workRow).getByRole('button', { name: 'Remove' }))
     expect(await screen.findByText(/Move or delete Work’s collections/)).toBeTruthy()
+  })
+
+  it('builds and runs a flow from the sidebar', async () => {
+    render(<App transport={t} engine={new InlineEngine()} />)
+    await screen.findByLabelText('URL')
+    typeUrl('https://api.test/me')
+    fireEvent.change(screen.getByLabelText('Request name'), { target: { value: 'Who am I' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Save Ctrl/ }))
+    let d = await screen.findByRole('dialog', { hidden: true })
+    fireEvent.change(within(d).getByLabelText('New collection name'), { target: { value: 'Shop' } })
+    fireEvent.click(within(d).getByRole('button', { name: 'Save', hidden: true }))
+    await screen.findByText('Saved.')
+
+    fireEvent.click(side().getByRole('tab', { name: 'Flows' }))
+    fireEvent.click(side().getByRole('button', { name: '+ New' }))
+    d = await screen.findByRole('dialog', { hidden: true })
+    fireEvent.change(within(d).getByRole('textbox', { hidden: true }), { target: { value: 'Smoke' } })
+    fireEvent.click(within(d).getByRole('button', { name: 'OK', hidden: true }))
+    const view = await screen.findByRole('region', { name: 'Flow Smoke' })
+    // A new Request block picks the saved request and is wired after Start.
+    fireEvent.click(within(view).getByRole('button', { name: /Request/ }))
+    expect(within(view).getByRole('button', { name: /Who am I \(request\)/ })).toBeTruthy()
+    fireEvent.click(within(view).getByRole('button', { name: 'Run flow' }))
+    expect(await within(view).findByText('Passed')).toBeTruthy()
+    expect(t.sent.at(-1)?.url).toBe('https://api.test/me')
+    expect(side().getByRole('button', { name: /Smoke/ })).toBeTruthy()
   })
 })

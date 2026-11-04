@@ -1,3 +1,4 @@
+import { type BrowserConfig, defaultBrowserConfig } from './browser'
 export const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
 export type Method = (typeof METHODS)[number]
 
@@ -77,7 +78,7 @@ export interface Auth {
   service: string
 }
 
-export type Protocol = 'http' | 'ws' | 'mqtt' | 'grpc' | 'sse' | 'socketio' | 'mcp'
+export type Protocol = 'http' | 'ws' | 'mqtt' | 'grpc' | 'sse' | 'socketio' | 'mcp' | 'browser'
 
 export interface RequestSettings {
   /** null = use the app setting. */
@@ -128,6 +129,7 @@ export interface RequestDef {
   grpc: GrpcConfig
   sio: SocketIoConfig
   mcp: McpConfig
+  browser: BrowserConfig
   /** Position among its siblings (requests and folders share one order); ties sort by name. */
   sort: number
   updatedAt: number
@@ -291,6 +293,7 @@ export function normalizeRequest(r: Partial<RequestDef> & { id: string }): Reque
     grpc: { method: '', proto: '', useReflection: true, message: '{}', metadata: [], tls: false, ...r.grpc },
     sio: { listen: '', emitEvent: 'message', ...r.sio },
     mcp: { transport: 'http', command: '', env: [], cwd: '', tool: '', arguments: '{}', ...r.mcp },
+    browser: { ...defaultBrowserConfig(), ...r.browser },
   }
 }
 

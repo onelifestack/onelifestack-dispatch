@@ -13,7 +13,7 @@ export interface RunItem {
 export function collectItems(collection: Collection, folderId: string | null, folders: Folder[], requests: RequestDef[]): RunItem[] {
   const out: RunItem[] = []
   const walk = (parent: string | null, path: string) => {
-    const reqs = requests.filter((r) => r.collectionId === collection.id && (r.folderId ?? null) === parent && r.protocol === 'http')
+    const reqs = requests.filter((r) => r.collectionId === collection.id && (r.folderId ?? null) === parent && (r.protocol === 'http' || r.protocol === 'browser'))
       .map((r) => ({ sort: r.sort, name: r.name, run: () => out.push({ request: r, path }) }))
     const subs = folders.filter((f) => f.collectionId === collection.id && f.parentId === parent)
       .map((f) => ({ sort: f.sort, name: f.name, run: () => walk(f.id, `${path} / ${f.name}`) }))
@@ -134,7 +134,7 @@ export async function runCollection(cfg: RunConfig, transport: Transport, pipeli
       if (x.changes.collection && ctx.collection) collections.set(ctx.collection.id, { ...ctx.collection, variables: x.changes.collection })
       if (x.changes.globals) globals = x.changes.globals
       const r: RunResult = {
-        iteration: it0, label: cfg.iterationLabels?.[it0], index: i, name: item.request.name, path: item.path, method: x.sent.method, url: x.sent.url,
+        iteration: it0, label: cfg.iterationLabels?.[it0], index: i, name: item.request.name, path: item.path, method: item.request.protocol === 'browser' ? 'WEB' : x.sent.method, url: x.sent.url,
         status: x.response?.status ?? null, statusText: x.response?.statusText ?? '', timeMs: x.response?.timeMs ?? 0, size: x.response?.size ?? 0,
         tests: x.tests, error: x.error, skipped: !!x.skipped,
         detail: { sent: x.sent, logs: x.logs, response: x.response ? { ...x.response, body: capBody(x.response.body), base64: undefined } : null },

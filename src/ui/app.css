@@ -447,3 +447,59 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 .mcpList .rowMain.on { background: var(--primary-soft); border-radius: 8px; }
 .mcpList li { display: grid; gap: .2rem; }
 .mcpResult { display: grid; gap: .4rem; margin-top: .5rem; }
+.steps { list-style: none; padding: 0; margin: .5rem 0; display: grid; gap: .35rem; }
+.steps li { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding: .4rem .5rem; border: 1px solid var(--outline); border-radius: 10px; background: var(--surface); }
+.steps li.stepOk { border-color: var(--good); } .steps li.stepBad { border-color: var(--danger); background: var(--danger-soft); }
+.stepNo { font: 700 12px var(--mono); color: var(--muted); width: 1.4rem; }
+.steps input.grow { min-width: 200px; }
+.stepTools { margin-left: auto; }
+.stepNote { flex-basis: 100%; padding-left: 1.8rem; }
+.okBox { background: var(--good-soft); color: var(--good); border-radius: 8px; padding: .55rem .75rem; margin-top: .5rem; }
+
+/* ---------- flows ---------- */
+.flowView { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; height: 100%; min-height: 0; padding: .8rem 1rem 0; gap: .5rem; box-sizing: border-box; }
+.flowHead { display: flex; align-items: flex-end; gap: .5rem; }
+.flowHead .titleInput { width: 100%; }
+.flowTools { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.flowIcon { font: 600 12px var(--mono); }
+.flowProblems { margin: 0; padding: .4rem .8rem .4rem 1.8rem; background: var(--warn-soft); color: var(--warn); border-radius: 8px; }
+.flowBody { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: .6rem; min-height: max(360px, 58vh); }
+.flowCanvas { position: relative; overflow: auto; min-height: 320px; user-select: none; -webkit-user-select: none; border: 1px solid var(--outline); border-radius: var(--radius); touch-action: none;
+  background-color: var(--sunken); background-image: radial-gradient(circle, var(--outline) 1px, transparent 1.2px); background-size: 22px 22px; }
+.flowWires { position: absolute; left: 0; top: 0; overflow: visible; }
+.flowWires .wireLine { fill: none; stroke: var(--muted); stroke-width: 2; pointer-events: none; }
+.flowWires .wireHit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
+.flowWires .port-failed .wireLine, .flowWires .port-false .wireLine { stroke-dasharray: 6 4; }
+.flowWires .wire.on .wireLine { stroke: var(--primary); stroke-width: 3; }
+.flowWires .drafting { stroke: var(--primary); stroke-dasharray: 4 4; }
+.flowNode { position: absolute; box-sizing: border-box; background: var(--surface); border: 1.5px solid var(--outline); border-radius: 10px; box-shadow: 0 2px 6px rgba(38, 23, 61, .08); }
+.flowNode.on { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.flowNode.s-running { border-color: var(--info); box-shadow: 0 0 0 3px var(--info-soft); }
+.flowNode.s-ok { border-color: var(--good); }
+.flowNode.s-failed { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+.flowNode.s-skipped { opacity: .6; }
+.flowNodeHead { display: flex; gap: .5rem; align-items: center; width: 100%; height: 46px; padding: 0 .6rem; border: 0; background: none; color: inherit; text-align: left; cursor: grab; border-bottom: 1px solid var(--outline); font: inherit; }
+.flowNodeHead:active { cursor: grabbing; }
+.flowNodeHead .flowIcon { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--primary-soft); color: var(--link); flex: none; }
+.t-start .flowNodeHead .flowIcon { background: var(--good-soft); color: var(--good); }
+.t-if .flowNodeHead .flowIcon, .t-forEach .flowNodeHead .flowIcon { background: var(--warn-soft); color: var(--warn); }
+.t-end .flowNodeHead .flowIcon { background: var(--sunken); color: var(--ink); }
+.flowNodeText { display: grid; min-width: 0; }
+.flowNodeTitle { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flowNodeSub { font: 11px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flowIn { position: absolute; left: -6px; top: 17px; width: 10px; height: 10px; border-radius: 50%; background: var(--surface); border: 2px solid var(--muted); }
+.flowOut { position: absolute; right: -7px; height: 24px; display: flex; align-items: center; gap: .3rem; cursor: crosshair; }
+.flowPortLabel { font-size: 11px; color: var(--muted); }
+.flowDot { width: 10px; height: 10px; border-radius: 50%; background: var(--primary); border: 2px solid var(--surface); }
+.flowOut.port-failed .flowDot, .flowOut.port-false .flowDot { background: var(--danger); }
+.flowOut.port-done .flowDot { background: var(--good); }
+.flowSide { overflow: auto; border: 1px solid var(--outline); border-radius: var(--radius); background: var(--surface); padding: .7rem .8rem; display: grid; align-content: start; gap: .5rem; }
+.flowLog { max-height: 30vh; overflow: auto; border-top: 1px solid var(--outline); padding: .4rem 0 .6rem; }
+.flowSteps { margin: 0; padding-left: 1.6rem; display: grid; gap: .15rem; }
+.flowSteps li.s-failed::marker { color: var(--danger); }
+.flowSteps .pill { margin-left: .35rem; }
+.linkish { border: 0; background: none; padding: 0; color: var(--link); cursor: pointer; font: inherit; font-weight: 600; }
+@media (max-width: 760px) {
+  .flowBody { grid-template-columns: minmax(0, 1fr); }
+  .flowCanvas { min-height: 360px; }
+}

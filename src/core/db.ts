@@ -4,7 +4,7 @@ import { resetVaultForTests, secretsOf, seal, unseal, vaultKey } from './vault'
 
 /** Everything lives in this device's IndexedDB; nothing is sent anywhere except the requests you send. */
 const NAME = 'dispatch'
-const VERSION = 3
+const VERSION = 4
 export const HISTORY_LIMIT = 200
 let opening: Promise<IDBDatabase> | null = null
 
@@ -23,6 +23,7 @@ export function open(): Promise<IDBDatabase> {
       }
       if (ev.oldVersion < 2) db.createObjectStore('folders', { keyPath: 'id' })
       if (ev.oldVersion < 3) db.createObjectStore('backups', { keyPath: 'id' }).createIndex('at', 'at')
+      if (ev.oldVersion < 4) db.createObjectStore('flows', { keyPath: 'id' })
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
@@ -151,7 +152,8 @@ export async function getCookies(): Promise<unknown[]> {
 export async function putCookies(list: unknown[]) { await put('meta', await (await sealer())(JSON.stringify(list)), 'cookies') }
 
 /** Writes a whole workspace (imports) in one transaction. */
-export async function putMany(plain: { collections?: Collection[]; folders?: Folder[]; requests?: RequestDef[]; environments?: Environment[] }) {
+export async function putMany(plain: { collections?: Collection[]; folders?: Folder[]; requests?: RequestDef[]; environments?: Environment[]; flows?: Flow[] }) {
+  if (plain.flows?.length) for (const f of plain.flows) await putFlow(f)
   const f = await sealer()
   const data = {
     collections: plain.collections && await Promise.all(plain.collections.map((c) => secretsOf.collection(c, f))),
@@ -182,7 +184,7 @@ export async function getOpenTabs(): Promise<{ tabs: RequestDef[]; active: numbe
 
 // ---------- local backups ----------
 
-export interface BackupData { collections: Collection[]; folders: Folder[]; requests: RequestDef[]; environments: Environment[]; globals: KV[] }
+export interface BackupData { collections: Collection[]; folders: Folder[]; requests: RequestDef[]; environments: Environment[]; globals: KV[]; flows?: Flow[] }
 export interface BackupInfo { id: string; at: number; reason: 'daily' | 'manual' | 'before-restore'; counts: { collections: number; requests: number; environments: number } }
 export const BACKUP_KEEP = 10
 
@@ -195,6 +197,7 @@ export async function addBackup(plain: BackupData, reason: BackupInfo['reason'])
     requests: await Promise.all(plain.requests.map((r) => secretsOf.request(r, f))),
     environments: await Promise.all(plain.environments.map((e) => secretsOf.environment(e, f))),
     globals: await secretsOf.globals(plain.globals, f),
+    flows: plain.flows ?? [],
   }
   const info: BackupInfo = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, at: Date.now(), reason,
     counts: { collections: data.collections.length, requests: data.requests.length, environments: data.environments.length } }
@@ -223,6 +226,7 @@ export async function getBackup(id: string): Promise<BackupData | null> {
     requests: await Promise.all(b.data.requests.map((r) => secretsOf.request(normalizeRequest(r), f))),
     environments: await Promise.all(b.data.environments.map((e) => secretsOf.environment(e, f))),
     globals: await secretsOf.globals(b.data.globals ?? [], f),
+    flows: b.data.flows ?? [],
   }
 }
 
@@ -237,12 +241,13 @@ export async function replaceAll(data: BackupData) {
     globals: await secretsOf.globals(data.globals, f),
   }
   const db = await open()
-  const t = db.transaction(['collections', 'folders', 'requests', 'environments', 'meta'], 'readwrite')
+  const t = db.transaction(['collections', 'folders', 'requests', 'environments', 'meta', 'flows'], 'readwrite')
   for (const s of ['collections', 'folders', 'requests', 'environments'] as const) {
     t.objectStore(s).clear()
     for (const x of sealed[s]) t.objectStore(s).put(x)
   }
   t.objectStore('meta').put(sealed.globals, 'globals')
+  if (data.flows) { t.objectStore('flows').clear(); for (const x of data.flows) t.objectStore('flows').put(x) }
   await done(t)
 }
 
@@ -257,3 +262,9 @@ export const putScheduleRuns = (r: ScheduleRun[]) => put('meta', r, 'scheduleRun
 import { DEFAULT_SPACE, type Space } from './types'
 export const getSpaces = async (): Promise<Space[]> => { const s = await getMeta<Space[]>('spaces'); return s?.length ? s : [DEFAULT_SPACE] }
 export const putSpaces = (s: Space[]) => put('meta', s, 'spaces')
+
+// ---------- flows ----------
+import type { Flow } from './flows'
+export const listFlows = () => all<Flow>('flows')
+export const putFlow = (f: Flow) => put('flows', f)
+export const deleteFlow = (id: string) => del('flows', id)
