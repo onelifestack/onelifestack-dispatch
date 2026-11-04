@@ -6,8 +6,9 @@ import { parseSetCookie } from '../core/cookies'
 import { uid } from '../core/types'
 import type { WorkspaceApi } from './useWorkspace'
 import { CodeArea } from './CodeArea'
+import { ResponseHistory, useRequestHistory } from './ResponseHistory'
 
-type Tab = 'body' | 'preview' | 'visualize' | 'headers' | 'cookies' | 'tests' | 'sent'
+type Tab = 'body' | 'preview' | 'visualize' | 'headers' | 'cookies' | 'tests' | 'history' | 'sent'
 
 /** Shows long bodies in full only on request, so a huge response doesn't freeze the page. */
 const PREVIEW_LIMIT = 200_000
@@ -19,6 +20,8 @@ const extFor = (ct: string) => ct.includes('json') ? 'json' : ct.includes('html'
 
 export function ResponsePane({ ws, notify, saveFile }: { ws: WorkspaceApi; notify: (m: string) => void; saveFile?: FileSaver }) {
   const { result, sending } = ws
+  const earlier = useRequestHistory(ws)
+  const [showEarlier, setShowEarlier] = useState(false)
   const [tab, setTab] = useState<Tab>('body')
   const [raw, setRaw] = useState(false)
   const [full, setFull] = useState(false)
@@ -41,7 +44,9 @@ export function ResponsePane({ ws, notify, saveFile }: { ws: WorkspaceApi; notif
   const canPreview = !!res && (isHtml || isImage)
 
   // Keep the chosen tab when it exists for this response; otherwise fall back.
-  const avail: Tab[] = res ? ['body', ...(result?.visualizer ? ['visualize' as Tab] : []), ...(canPreview ? ['preview' as Tab] : []), 'headers', ...(cookies.length ? ['cookies' as Tab] : []), ...(tests.length ? ['tests' as Tab] : []), 'sent'] : [...(tests.length ? ['tests' as Tab] : []), 'sent']
+  // The newest history entry is usually this very response; leave it out of "earlier".
+  const older = earlier.filter((h) => !(res && h.response && h.response.timeMs === res.timeMs && h.response.size === res.size && h.response.status === res.status && h === earlier[0]))
+  const avail: Tab[] = res ? ['body', ...(result?.visualizer ? ['visualize' as Tab] : []), ...(canPreview ? ['preview' as Tab] : []), 'headers', ...(cookies.length ? ['cookies' as Tab] : []), ...(tests.length ? ['tests' as Tab] : []), ...(older.length ? ['history' as Tab] : []), 'sent'] : [...(tests.length ? ['tests' as Tab] : []), 'sent']
   const current: Tab = avail.includes(tab) ? tab : avail[0]
 
   const copy = async (text: string, what: string) => {
@@ -52,9 +57,13 @@ export function ResponsePane({ ws, notify, saveFile }: { ws: WorkspaceApi; notif
   if (!result) {
     return (
       <section className="response empty" aria-label="Response">
-        <div>
+        <div className="emptyInner">
           <p className="lead">Send a request to see the response here.</p>
           <p className="muted small">Tip: paste a curl command into the URL bar to import it.</p>
+          {earlier.length > 0 && <>
+            <button type="button" className="btn small" onClick={() => setShowEarlier(!showEarlier)}>{showEarlier ? 'Hide' : 'Show'} earlier responses ({earlier.length})</button>
+            {showEarlier && <ResponseHistory ws={ws} entries={earlier} current={null} />}
+          </>}
         </div>
       </section>
     )
@@ -63,6 +72,7 @@ export function ResponsePane({ ws, notify, saveFile }: { ws: WorkspaceApi; notif
   const label: Record<Tab, React.ReactNode> = {
     body: 'Body', preview: 'Preview', visualize: 'Visualize', headers: <>Headers<span className="badge">{res?.headers.length}</span></>,
     cookies: <>Cookies<span className="badge">{cookies.length}</span></>,
+    history: <>History<span className="badge">{older.length}</span></>,
     tests: <>Tests<span className={`badge ${passed === tests.length ? 'goodBadge' : 'badBadge'}`}>{passed}/{tests.length}</span></>, sent: 'Sent',
   }
 
@@ -138,6 +148,7 @@ export function ResponsePane({ ws, notify, saveFile }: { ws: WorkspaceApi; notif
             ))}
           </ul>
         )}
+        {current === 'history' && <ResponseHistory ws={ws} entries={older} current={res} />}
         {current === 'sent' && (
           <div>
             <p className="muted small">Exactly what was sent, after scripts, variables and auth.</p>

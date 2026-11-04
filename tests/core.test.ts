@@ -353,3 +353,19 @@ describe('server-sent events', () => {
     expect(p.push('retry: 3000\ndata:x\n\n')).toEqual([{ event: 'message', data: 'x', id: '7', retry: 3000 }])
   })
 })
+
+import { diffLines, withContext } from '../src/core/diff'
+describe('diff', () => {
+  it('finds added, removed and unchanged lines', () => {
+    const d = diffLines('a\nb\nc\nd', 'a\nc\nd\ne')
+    expect(d).toEqual([{ type: 'same', text: 'a' }, { type: 'del', text: 'b' }, { type: 'same', text: 'c' }, { type: 'same', text: 'd' }, { type: 'add', text: 'e' }])
+    expect(diffLines('x', 'x')).toEqual([{ type: 'same', text: 'x' }])
+  })
+  it('collapses long unchanged runs', () => {
+    const a = Array.from({ length: 20 }, (_, i) => `l${i}`).join('\n')
+    const b = a.replace('l10', 'L10')
+    const c = withContext(diffLines(a, b), 1)
+    expect(c[0]).toEqual({ type: 'gap', count: 9 })
+    expect(c.filter((x) => x.type !== 'gap').map((x) => (x as { text: string }).text)).toEqual(['l9', 'l10', 'L10', 'l11'])
+  })
+})

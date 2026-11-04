@@ -365,4 +365,24 @@ describe('Dispatch app', () => {
     expect(within(view).getByText(/1 requests, 0 passed, 0 failed/)).toBeTruthy()
     expect(within(view).getByText('passing')).toBeTruthy()
   })
+
+  it('lists earlier responses for a request and compares them', async () => {
+    await start()
+    typeUrl('https://api.test/stock')
+    t.next = { status: 200, statusText: 'OK', headers: [['content-type', 'application/json']], body: '{"apples":3,"pears":1}', binary: false, size: 22, timeMs: 5 }
+    fireEvent.click(screen.getByRole('button', { name: /^Send/ }))
+    await screen.findByText('200 OK')
+    t.next = { status: 200, statusText: 'OK', headers: [['content-type', 'application/json']], body: '{"apples":2,"pears":1}', binary: false, size: 22, timeMs: 6 }
+    fireEvent.click(screen.getByRole('button', { name: /^Send/ }))
+    await screen.findByText('6 ms')
+    const pane = screen.getByRole('region', { name: 'Response' })
+    fireEvent.click(within(pane).getByRole('tab', { name: /History/ }))
+    const table = within(pane).getByRole('table', { name: 'Earlier responses' })
+    expect(within(table).getAllByRole('row')).toHaveLength(1)
+    fireEvent.click(within(table).getByRole('button', { name: 'Compare' }))
+    const diff = within(pane).getByLabelText('Differences')
+    expect(diff.textContent).toContain('−   "apples": 3,')
+    expect(diff.textContent).toContain('+   "apples": 2,')
+    expect(within(pane).getByText(/time 5 ms → 6 ms/)).toBeTruthy()
+  })
 })
