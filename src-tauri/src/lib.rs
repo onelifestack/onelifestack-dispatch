@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
 
+pub mod grpc;
+
 #[derive(Deserialize)]
 pub struct SendRequest {
     id: u64,
@@ -328,7 +330,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(InFlight::default())
         .manage(std::sync::Arc::new(MockState::default()))
-        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply])
+        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call])
         .run(tauri::generate_context!())
         .expect("error while running Dispatch");
 }

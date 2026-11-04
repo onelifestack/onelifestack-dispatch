@@ -3,3 +3,5 @@ dist
 src-tauri/target
 src-tauri/gen
 dist-cli
+examples/grpc/node_modules
+examples/grpc/package*.json

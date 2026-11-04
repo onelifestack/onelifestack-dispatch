@@ -22,7 +22,7 @@ Order (each step: code + tests + typecheck + build, then commit and push):
 10. [x] Import OpenAPI 3 / Swagger 2 and HAR.
 11. [x] Response: HTML preview (sandboxed), JSON filter, save to file, timing breakdown, cookies; cookie jar.
 12. [x] Docs (Markdown) on collections/folders/requests; saved examples; local mock server (desktop).
-13. [ ] GraphQL (schema introspection, autocomplete), WebSocket (live log), MQTT (over WebSocket), gRPC (desktop).
+13. [x] GraphQL (schema introspection, autocomplete), WebSocket (live log), MQTT (over WebSocket), gRPC (desktop).
 14. [ ] Desktop build + Playwright visual pass; README/CLAUDE.md; PR.
 
 Progress notes go under each step as it lands.
@@ -65,3 +65,7 @@ Progress notes go under each step as it lands.
   graphql-js, explorer that inserts starter operations), WebSocket and MQTT-over-WebSocket panes (connections live
   per request across tab switches, variables in messages, saved messages, live log). Protocol picker per request.
   Startup bundle cut from 660 KB to 355 KB by loading YAML, chai and GraphQL on demand. gRPC: next.
+- Step 13 (part 2): gRPC on desktop (src-tauri/src/grpc.rs): tonic + prost-reflect + protox; server reflection v1 with
+  v1alpha fallback or a pasted .proto; unary, server, client and bidi streaming; metadata; status codes. Reflection
+  servers that omit imports or rename well-known-type files are handled (found with the grpc-js reflection server).
+  Live test: src-tauri/tests/grpc_live.rs against examples/grpc (passes, both reflection and .proto).

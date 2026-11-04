@@ -383,3 +383,4 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 .savedMsgs li { display: flex; align-items: center; gap: .4rem; }
 .savedMsgs .linkBtn { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mqttPub { display: grid; grid-template-columns: 1fr auto auto; gap: .5rem; align-items: end; }
+.grpcOpts { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin: .6rem 0; }

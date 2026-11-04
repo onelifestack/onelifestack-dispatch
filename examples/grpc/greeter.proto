@@ -1,0 +1,11 @@
+syntax = "proto3";
+package demo.v1;
+import "google/protobuf/timestamp.proto";
+message HelloRequest { string name = 1; int32 times = 2; }
+message HelloReply { string message = 1; google.protobuf.Timestamp at = 2; }
+message Count { int32 total = 1; }
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloReply);
+  rpc SayManyTimes (HelloRequest) returns (stream HelloReply);
+  rpc CountNames (stream HelloRequest) returns (Count);
+}
