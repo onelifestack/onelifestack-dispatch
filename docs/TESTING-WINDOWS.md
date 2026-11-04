@@ -276,6 +276,22 @@ Run these from the repo folder in PowerShell.
 
    Record exactly what you see for each.
 
+6.4c. **MCP over HTTP** (testing an HTTP MCP server from the desktop app):
+   1. In a new terminal: `node examples\mcp-http-server.mjs` (serves `http://localhost:4320/mcp`).
+   2. New request → protocol **MCP** → transport "HTTP (Streamable HTTP)" → URL `http://localhost:4320/mcp`.
+      Connect. The server shows as `dispatch-demo-mcp` with 4 tools: `add`, `echo`, `whoami`, `fail`.
+   3. Tools:
+      - `add` with `{"a": 40, "b": 2}` gives `42`.
+      - `fail` shows "The tool reported an error."
+   4. Resources: "Greeting for Ann" shows `Hello, Ann!`, and "Demo config" shows JSON.
+   5. Prompts: `review` with some code returns a message that contains it.
+   6. Disconnect. The server's terminal logs each call.
+   7. **With a token and event-stream replies.** Stop the server and start
+      `node examples\mcp-http-server.mjs --port 4322 --token tk --sse`. Then:
+      - Connect to `http://localhost:4322/mcp` with no auth. Expect a readable 401 error that mentions `Bearer`.
+      - Set the request's **Auth** tab to Bearer Token `tk` and connect again. It connects.
+      - `whoami` returns `Authorization: Bearer tk`.
+
 6.5. **gRPC** (optional; needs the extra packages in `examples\grpc\README.md`):
    1. Start `node examples\grpc\server.cjs`.
    2. New request → gRPC → `localhost:50051` → **Load services** → call `SayHello`.
