@@ -89,7 +89,7 @@ def shell(path, title, desc, body, current="", noindex=False):
 <footer class="site"><div class="wrap">
 <div><a class="brand" href="/"><img src="/assets/icon-32.png" width="32" height="32" alt="">Dispatch</a>
 <p>A local-first API client. No account, no cloud, no telemetry.</p></div>
-<div><h2>Dispatch</h2><ul><li><a href="/#features">Features</a></li><li><a href="/download/">Download</a></li><li><a href="/cli/">Command line</a></li><li>{app or '<a href="/download/">Web app</a>'}</li><li><a href="/changelog/">Changelog</a></li></ul></div>
+<div><h2>Dispatch</h2><ul><li><a href="/#features">Features</a></li><li><a href="/download/">Download</a></li><li><a href="/cli/">Command line</a></li><li>{app or '<a href="/download/">Web app</a>'}</li><li><a href="/changelog/">Changelog</a></li><li><a href="https://github.com/onelifestack/onelifestack-dispatch">Source code</a></li></ul></div>
 <div><h2>Fine print</h2><ul><li><a href="/privacy/">Privacy policy</a></li><li><a href="/terms/">Terms of use</a></li><li><a href="/support/">Support</a></li><li><a href="mailto:{EMAIL}">{EMAIL}</a></li></ul></div>
 <small>&copy; {DAY[:4]} OneLifeStack. Dispatch is part of <a href="https://onelifestack.com">OneLifeStack</a>. Other product and format names that appear on this site are used only to say what Dispatch can import or export; they belong to their owners, and Dispatch is independent of and not affiliated with them.</small>
 </div></footer></body></html>"""
@@ -107,16 +107,16 @@ FEATURES = [
  ("Scripts and tests", "Pre-request and post-response JavaScript with a `pm` API (variables, request edits, `pm.test`, `pm.expect`, `pm.sendRequest`). Scripts run in a sandbox with no network or storage access of their own. Common libraries can be loaded with `require`."),
  ("Browser logins", "On desktop, a Browser login request drives your installed Chrome or Edge through a login page: open, type, click, wait. It keeps the cookies (HttpOnly too) or the token from local storage as secret variables, so the requests after it are signed in. It also runs in the runner, schedules and the CLI."),
  ("Flows", "Wire saved requests together on a canvas with If, Script, Set variable, For each, Delay and End blocks. Requests branch on ok or failed, and each block shows its status live while the flow runs. Run flows in the app or with `dispatch-run flow`."),
- ("MCP", "Test MCP servers: connect over HTTP or, on desktop, start a local server command, then list and call tools, read resources and get prompts. `dispatch-run mcp` works the other way round and lets an AI assistant list, send and run your saved requests, limited to the methods you allow."),
+ ("MCP", "Test MCP servers: connect over HTTP or, on desktop, start a local server command, then list and call tools, read resources and get prompts. On desktop, sign in to servers that use OAuth; the sign-in is kept per environment as a secret. `dispatch-run mcp` works the other way round and lets an AI assistant list, send and run your saved requests, limited to the methods you allow."),
  ("Runner and data-driven runs", "Run a collection, a folder or a suite, with iterations, delays, CSV or JSON data files and stop-on-failure. Export JSON or JUnit reports."),
  ("Load testing", "Up to 200 virtual users with ramp-up, duration or loops, think time and pass/fail thresholds (p95, error rate, throughput). Latency and throughput charts, and a CSV of every sample."),
  ("Schedules", "On desktop, run a collection every few minutes and get a notification when it fails. Results are kept."),
  ("Mocks and docs", "Generated Markdown documentation per collection. A mock server that serves your saved examples, on desktop or with the CLI."),
- ("Collections as files", "On desktop, save a collection as a folder of YAML files written as you work, so it can live in git. The CLI runs those folders."),
+ ("Workspaces as files", "On desktop, keep a whole workspace (its collections, environments and flows) or a single collection as a folder of plain YAML files, written as you work, so it can live in git. Secret values stay on the device. If a file changes outside Dispatch, after a `git pull` for example, Dispatch leaves it alone and asks which version to keep. The CLI runs collection folders."),
  ("Import and export", "Import Postman collections and environments, Insomnia exports, Bruno folders, OpenAPI 3 and Swagger 2 (JSON or YAML), HAR files and curl commands. Export a Dispatch backup, one collection, or a Postman collection."),
  ("Code in 12 languages", "Copy any request as curl, JavaScript fetch, Node axios, Python requests, Go, Java, C#, PHP, Ruby, Rust, HTTPie or PowerShell."),
  ("The CLI", "`dispatch-run` runs collections, folders, suites and flows with environments and data files, runs load tests with pass/fail thresholds, serves mocks, and serves a collection to AI assistants over MCP. Built for CI."),
- ("Workspaces and tidy-ups", "Group collections and environments into workspaces. Duplicate an environment. Parameterize turns hard-coded hosts, tokens and IDs in a request into variables, and is offered right after you paste a curl command. A variable can hold named alternatives, such as the load balancer or one instance, and the runner can run once per alternative to compare them."),
+ ("Workspaces and tidy-ups", "Group collections, environments and flows into workspaces. Duplicate an environment. Parameterize turns hard-coded hosts, tokens and IDs in a request into variables, and is offered right after you paste a curl command. A variable can hold named alternatives, such as the load balancer or one instance, and the runner can run once per alternative to compare them."),
  ("Everyday comforts", "A code editor with syntax colours and `{{variable}}` completion, undo for every delete, daily local backups with restore, drag and drop in the sidebar, search across bodies and headers (Ctrl+K), and response history with side-by-side compare."),
 ]
 COMPARE = [
@@ -130,27 +130,29 @@ COMPARE = [
  ("Browser logins", "Yes, with your installed Chrome or Edge", "No"),
  ("MCP servers", "Over HTTP, or a local command", "Over HTTP, if the server allows CORS"),
  ("Mock server", "Yes", "No (use the CLI)"),
- ("Collections as files, schedules", "Yes", "No"),
+ ("Workspaces and collections as files, schedules", "Yes", "No"),
  ("Load tests", "No browser limits", "About six connections per server, and CORS applies"),
  ("Everything else", "Same", "Same: tabs, scripts, runner, docs, imports, code generation"),
 ]
 FAQ = [
  ("Is Dispatch free?", "Yes. There are no accounts, ads or paid tiers."),
- ("Where is my data stored?", "On your device. The desktop app and the web app both keep collections, environments and history in local storage (IndexedDB). With collections as files on desktop, the folder you choose holds them too. We run no server that receives your data."),
+ ("Is Dispatch open source?", "Yes, under the MIT licence. The source code is on <a href=\"https://github.com/onelifestack/onelifestack-dispatch\">GitHub</a>, so you can read it, build it yourself and report issues there."),
+ ("Where is my data stored?", "On your device. The desktop app and the web app both keep collections, environments and history in local storage (IndexedDB). If you link a workspace or collection to a folder on desktop, that folder holds them too. We run no server that receives your data."),
  ("Does it send anything besides my requests?", "No. Dispatch has no analytics, no crash reporting, no update check and no fonts or scripts from other sites. The only network traffic is the requests you send."),
  ("What happens to my secrets?", "Secret variables, passwords, tokens, keys and Authorization or Cookie headers are encrypted before they are stored, using a key that stays on the device and cannot be exported. A copy of the database moved to another device cannot read them. Exports and backups leave secrets out."),
  ("What if I clear my browser data?", "The web app keeps its data in that browser, so clearing site data erases it. Use Menu, Export backup now and then. The desktop app is not affected by browser data."),
  ("Why does the web app say servers must allow CORS?", "A web page can only read responses from servers that permit it. If a server does not, use the desktop app, which has no such rule."),
  ("Can it replace my current API client?", "It can import Postman collections and environments, Insomnia exports, Bruno folders, OpenAPI files, HAR files and curl commands, so you can try it on your own collections. Check the feature list for what you rely on."),
  ("Are the installers signed?", "Not yet. Windows SmartScreen and macOS Gatekeeper will warn on first launch. The <a href=\"/download/#unsigned\">download page</a> explains how to open them."),
- ("Does it sync between devices?", "Not now. Export a backup or keep a collection folder in git."),
+ ("Does it sync between devices?", "Not now. Export a backup, or link a workspace to a folder and keep it in git."),
  ("Is there a mobile app?", "No. The web app works in a phone browser but is built for a larger screen."),
  ("How do I get help or report a problem?", f"Write to <a href=\"mailto:{EMAIL}\">{EMAIL}</a>."),
 ]
 PRIVACY_KEEP = ["Collections, requests, environments, history and settings", "Secret values, encrypted with a key that stays on the device", "Daily local backups", "Everything the app saves, in local storage or in the folder you pick"]
 PRIVACY_NEVER = ["No account or sign-in", "No analytics, telemetry or crash reports", "No update checks or other calls home", "No fonts, scripts or images from other sites", "No server that receives your collections"]
 NEXT = [
- ("Sign-in for MCP servers", "Connect to MCP servers that need you to sign in with OAuth, with the token kept as a secret."),
+ ("Live folder updates", "A workspace folder reloads as its files change, for example after a git pull, instead of the next time Dispatch saves or you click Reload."),
+ ("Workspace folders in the CLI", "Run a workspace folder with `dispatch-run`, choosing its environment and flows, with secret values from environment variables in CI."),
  ("Signed installers", "Code-signed installers for Windows and macOS, so they open without a warning."),
 ]
 
@@ -173,9 +175,9 @@ def home():
 <h1>A local-first API client.</h1>
 <p class="lead">Build, send, test and document APIs. No account, no cloud, no telemetry. Your collections stay on your device.</p>
 <div class="cta-row">{app_buttons()}</div>
-<p class="note">Version {e(VERSION)}. Desktop for Windows, macOS and Linux, the same app in your browser, and a command-line runner for CI. Free.</p></div>
+<p class="note">Version {e(VERSION)}. Desktop for Windows, macOS and Linux, the same app in your browser, and a command-line runner for CI. Free and open source.</p></div>
 {figure("request", lazy=False, dark="request-dark")}</div></section>
-<div class="promise"><div class="wrap"><ul><li>No account</li><li>No cloud</li><li>No telemetry</li><li>Collections as files for git</li><li>CLI for CI</li></ul></div></div>
+<div class="promise"><div class="wrap"><ul><li>No account</li><li>No cloud</li><li>No telemetry</li><li>Workspaces as files for git</li><li>Open source (MIT)</li><li>CLI for CI</li></ul></div></div>
 <section id="features"><div class="wrap"><div class="section-head"><p class="eyebrow">What it does</p><h2>Everything you need to work with an API.</h2><p class="lead">One app for sending requests, checking responses, running them in bulk and documenting the result.</p></div>
 <div class="grid">{feats}</div></div></section>
 <section class="tint" id="tour"><div class="wrap">
@@ -209,7 +211,7 @@ def download():
         for a in RELEASE["assets"]: by.setdefault(a["os"].lower(), []).append(a)
         names = {"windows": "Windows", "macos": "macOS", "linux": "Linux"}
         cards = "".join(dl_card(k, names[k], by[k]) for k in ("windows", "macos", "linux") if k in by)
-        main = f'<p>Version <strong>{e(RELEASE["version"])}</strong>, released {e(RELEASE["date"])}.</p>{cards}<p class="note">Check a download against its SHA-256 checksum: <code>sha256sum file</code> on Linux, <code>shasum -a 256 file</code> on macOS, <code>Get-FileHash file</code> in PowerShell.</p>'
+        main = f'<p>Version <strong>{e(RELEASE["version"])}</strong>, released {e(RELEASE["date"])}.</p>{cards}<p>The same files are on the <a href="https://github.com/onelifestack/onelifestack-dispatch/releases">GitHub releases page</a>, with the release notes.</p><p class="note">Check a download against its SHA-256 checksum: <code>sha256sum file</code> on Linux, <code>shasum -a 256 file</code> on macOS, <code>Get-FileHash file</code> in PowerShell.</p>'
     else:
         main = '<div class="panel"><h2>Desktop downloads coming soon</h2><p>The installers are not public yet. Until they are, use the web app in your browser, or the command-line runner.</p></div>'
     web = f'<p><a class="btn primary" href="/app/">Open the web app</a></p>' if WEB else ""
@@ -269,7 +271,18 @@ def cli_page():
 def changelog():
     def rel(v, d, title, items): return f'<div class="release"><h2 id="v{v.replace(".", "-")}">{v} <span class="muted">{d}</span></h2><p>{title}</p>{ul(items)}</div>'
     return "<h1>Changelog</h1><p class=\"lead\">What changed in each release, newest first.</p>" + \
-    rel("0.4.0", "2026-11-04", "Browser logins, flows and MCP. 0.4.1 and 0.4.2 fixed Windows issues found in testing.", [
+    rel("0.5.0", "2026-11-05", "Workspaces as folders of files, and Dispatch is now open source.", [
+        "Desktop: link a workspace to a folder and it is kept there as plain files, one per request, environment and flow, ready for git. Secret values are never written to the folder.",
+        "Open a workspace folder, such as a teammate's clone, to add that workspace.",
+        "Files changed outside Dispatch, in an editor or by a `git pull`, are never overwritten. Dispatch shows them as conflicts: use the folder's version (a backup is taken first) or keep yours. Collection folders get the same protection.",
+        "Dispatch is open source under the MIT licence.",
+    ]) + rel("0.4.4", "2026-11-05", "Fixes from testing on Windows.", [
+        "A deleted flow no longer comes back after a restart or in an exported backup.",
+        "Sign out from an MCP server now sticks, even when a token was being refreshed at that moment.",
+    ]) + rel("0.4.3", "2026-11-04", "Sign in to MCP servers.", [
+        "Desktop: sign in to MCP servers that use OAuth (discovery, client registration and PKCE). The sign-in is kept per environment as a secret and refreshed when it runs out.",
+        "Suggestions for well-known MCP servers.",
+    ]) + rel("0.4.0", "2026-11-04", "Browser logins, flows and MCP. 0.4.1 and 0.4.2 fixed Windows issues found in testing.", [
         "Browser login requests: drive an installed Chrome or Edge through a login page and keep its cookies or token as secret variables (desktop, runner, schedules and CLI).",
         "Flows: wire requests together on a canvas with If, Script, Set variable, For each, Delay and End blocks, with live status and a run log. `dispatch-run flow` runs them from an export.",
         "MCP requests: test MCP servers over HTTP or, on desktop, a local command; list and call tools, read resources, get prompts.",
@@ -320,7 +333,7 @@ def privacy():
     return f"""<h1>Privacy policy</h1><p class="updated">Last updated {DAY}.</p>
 <p>Dispatch is built so that we never receive your data. This page says what that means.</p>
 <h2>What Dispatch stores</h2>
-<p>Your collections, requests, environments, variables, history, cookies, settings and backups. They stay on your device: in your browser&rsquo;s local storage (IndexedDB) for the web app, in the app&rsquo;s local storage for the desktop app, and in a folder you choose if you turn on collections as files. We have no server that receives any of it.</p>
+<p>Your collections, requests, environments, variables, history, cookies, settings and backups. They stay on your device: in your browser&rsquo;s local storage (IndexedDB) for the web app, in the app&rsquo;s local storage for the desktop app, and in a folder you choose if you link a workspace or collection to one. We have no server that receives any of it.</p>
 <h2>Secrets</h2>
 <p>Secret variables, passwords, tokens, keys, and Authorization and Cookie headers are encrypted before they are saved, using a key that stays on the device and cannot be exported. Exports and backups you download leave secrets out.</p>
 <h2>Requests you send</h2>
@@ -348,7 +361,7 @@ def terms():
 <h2>No warranty</h2>
 <p>Dispatch is provided &ldquo;as is&rdquo;, without warranties of any kind. It is a developer tool, and it can send requests that change or delete data on the servers you point it at. To the extent the law allows, OneLifeStack is not liable for loss or damage from using Dispatch, including lost data or requests sent in error.</p>
 <h2>Installers</h2>
-<p>Desktop installers are not code-signed yet, so your system may warn when you open them. Check the SHA-256 checksum published with each download, and download only from this website.</p>
+<p>Desktop installers are not code-signed yet, so your system may warn when you open them. Check the SHA-256 checksum published with each download, and download only from this website or the project&rsquo;s GitHub releases page.</p>
 <h2>Changes and contact</h2>
 <p>We may update these terms; the date above will change. Questions: <a href="mailto:{EMAIL}">{EMAIL}</a>.</p>"""
 
