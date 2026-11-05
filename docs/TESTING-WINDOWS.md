@@ -1,4 +1,4 @@
-# Testing Dispatch 0.4.3 on Windows
+# Testing Dispatch 0.4.4 on Windows
 
 Instructions for a tester (a person or an AI agent) on a Windows 10/11 machine. Work through each section, record
 **PASS / FAIL / BLOCKED** for every numbered check, and write the results into a report (template at the end).
@@ -45,7 +45,7 @@ cd onelifestack-dispatch           # stay on main: it has the demo login page an
 npm ci
 npm run build:cli          # builds dist-cli\dispatch-run.mjs
 mkdir ..\installers
-gh release download v0.4.3 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
+gh release download v0.4.4 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
 ```
 
 The release is a **draft**, so it's only visible to accounts with access to the repo. If `gh release download`
@@ -73,7 +73,7 @@ What the demo API offers:
 
 ## 1. Install, first launch, uninstall
 
-1.1. Run `Dispatch_0.4.3_x64-setup.exe`. SmartScreen will warn because the installer isn't code-signed yet: click
+1.1. Run `Dispatch_0.4.4_x64-setup.exe`. SmartScreen will warn because the installer isn't code-signed yet: click
      "More info" → "Run anyway". Record the exact warning text. The install must finish without errors.
 
 1.2. Start Dispatch from the Start menu. A window titled Dispatch opens and shows the request editor (URL field,
@@ -97,8 +97,9 @@ What the demo API offers:
    3. Reopen it. History, open tabs and settings must still be there.
 
 1.6. *(Do this at the very end.)* Uninstall from Settings → Apps and confirm it's gone from the Start menu. Then
-     install the `.msi` instead, launch it once, and uninstall it too. Record whether your data survived a
-     reinstall. Either outcome is acceptable, but write down which happened.
+     install the `.msi` instead, launch it once, and uninstall it too. The msi installs for all users, so it needs
+     administrator rights (a UAC prompt; a non-elevated `msiexec /qn` fails with Error 1925). Record whether your
+     data survived a reinstall. Either outcome is acceptable, but write down which happened.
 
 ## 2. HTTP basics
 
@@ -214,8 +215,10 @@ This drives Microsoft Edge (or Chrome) in the background to log in through a web
    3. Expect 3 runs of that request: ids 1 to 3 give 200, 404 or similar depending on how many orders exist.
    4. Wire the request's "failed" port to nothing and check what happens on a 404: the flow stops and says why.
 
-4.7. Close the app, reopen it, and check that flows and their layout are still there. Then delete a flow and use
-     **Undo**.
+4.7. Close the app, reopen it, and check that flows and their layout are still there. Then:
+   1. Delete a flow and use **Undo**: it comes back.
+   2. Delete a flow (open it first, so its editor closes on delete) and don't undo. Close and reopen the app: it
+      stays gone. Menu (≡) → **Export backup** doesn't contain it either (fixed in 0.4.4, issue #14).
 
 4.8. Menu (≡) → **Export backup**. Import that file again and confirm the flows are in it and still point at the
      right requests (no "doesn't point at a saved request" warnings).
@@ -305,7 +308,8 @@ Run these from the repo folder in PowerShell.
    5. Wait more than 60 s and call `add` again. It still works, and the server logs `refreshed a token`.
    6. Disconnect, switch the environment to **No environment** and connect again. The sign-in banner comes back,
       because sign-ins are kept per environment. Switch back to Demo local and connect: no sign-in needed.
-   7. Click **Sign out**, then connect. The banner comes back.
+   7. While still connected, click **Sign out**. The panel no longer says "Signed in", and the server logs no
+      `refreshed a token` at that moment. Connect again: the banner comes back (fixed in 0.4.4, issue #15).
    8. Press Deny on the consent page instead: Dispatch shows a readable "Login failed: access_denied" and nothing
       hangs.
    9. Optional, only with your own account: pick **Well-known servers… → Linear** (or Notion, Sentry, …), connect,
@@ -360,7 +364,7 @@ comment (drag them into the comment box, or `gh issue comment <number> --repo on
 failure, titled `[Windows] <problem>`, and link it from the report.
 
 ```markdown
-# Dispatch 0.4.3 — Windows test report
+# Dispatch 0.4.4 — Windows test report
 
 - Date / tester:
 - Windows version (winver) and build:

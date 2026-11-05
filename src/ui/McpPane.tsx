@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { HttpWire, LineWire, McpAuthError, McpClient, type McpLogEntry, type McpPrompt, type McpResource, type McpTool, type McpWireAuth, argumentsTemplate } from '../core/mcp'
 import { MCP_SUGGESTIONS, type McpSignIn, expiring, findSignIn, refreshSignIn, signIn } from '../core/mcpAuth'
 import * as db from '../core/db'
@@ -48,15 +48,19 @@ export function McpPane({ ws, notify, confirm, ask }: { ws: WorkspaceApi; notify
   const serverUrl = m.transport === 'http' && /^https?:\/\//i.test(ws.prepared.url) ? ws.prepared.url : ''
   useEffect(() => { let live = true; void loadSignIns().then((l) => { if (live) setMine(serverUrl ? findSignIn(l, envId, serverUrl) : undefined) }); return () => { live = false } }, [serverUrl, envId])
   const sendOpts = () => sendOptions(d, ws.settings)
+  /** Bumped by Sign out, so a refresh still in flight can't save the sign-in again (#15). */
+  const authGen = useRef(0)
 
   /** The token for this server and environment, refreshed first when it has run out. */
   const wireAuth = (): McpWireAuth | undefined => {
     if (!serverUrl) return undefined
     let current = signIns ? findSignIn(signIns, envId, serverUrl) : undefined
     if (!current) return undefined
+    const gen = authGen.current
     const renew = async () => {
+      if (gen !== authGen.current) return false
       const n = await refreshSignIn(current!, ws.transport, sendOpts())
-      if (!n) return false
+      if (!n || gen !== authGen.current) return false
       current = n; await saveSignIn(n); setMine(n); return true
     }
     return {
@@ -94,8 +98,10 @@ export function McpPane({ ws, notify, confirm, ask }: { ws: WorkspaceApi; notify
   }
   const signOut = async () => {
     if (!mine) return
-    await saveSignIn(null, { envId: mine.envId, serverUrl: mine.serverUrl }); setMine(undefined)
+    // Stop refreshes first, then close the connection (closing sends a request), then forget the sign-in.
+    authGen.current++
     await disconnect()
+    await saveSignIn(null, { envId: mine.envId, serverUrl: mine.serverUrl }); setMine(undefined)
     notify('Signed out. The token is forgotten on this device.')
   }
 

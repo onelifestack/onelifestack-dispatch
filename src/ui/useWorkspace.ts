@@ -87,6 +87,8 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   const [backups, setBackups] = useState<db.BackupInfo[]>([])
   const [spaces, setSpacesState] = useState<Space[]>([DEFAULT_SPACE])
   const [flows, setFlows] = useState<Flow[]>([])
+  /** Flows deleted in this session. A late save (an editor closing, a pending timer) must not bring them back (#14). */
+  const deletedFlows = useRef(new Set<string>())
   const aborts = useRef(new Map<string, AbortController>())
   const [engine] = useState<ScriptEngine>(() => opts.engine ?? new WorkerEngine())
   const [pipeline] = useState<Pipeline>(() => {
@@ -398,6 +400,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
       environments: w0.environments.map((e) => (known(e.workspaceId) && e.workspaceId !== DEFAULT_SPACE.id ? e : { ...e, workspaceId: here })),
       flows: w0.flows?.map((x) => (known(x.workspaceId) && x.workspaceId !== DEFAULT_SPACE.id ? x : { ...x, workspaceId: here })),
     }
+    for (const f of w.flows ?? []) deletedFlows.current.delete(f.id) // Undo and imports bring flows back on purpose.
     await db.putMany(w)
     setCollections((cs) => [...cs, ...w.collections].sort(byName))
     setFolders((fs) => [...fs, ...w.folders])
@@ -416,6 +419,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     await db.putFlow(f); setFlows((fs) => [...fs, f]); return f
   }, [])
   const updateFlow = useCallback(async (f: Flow) => {
+    if (deletedFlows.current.has(f.id)) return
     const next = { ...f, updatedAt: Date.now() }
     setFlows((fs) => fs.map((x) => (x.id === f.id ? next : x))); await db.putFlow(next)
   }, [])
@@ -425,6 +429,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   }, [])
   const removeFlow = useCallback(async (id: string) => {
     const f = flows.find((x) => x.id === id)
+    deletedFlows.current.add(id)
     await db.deleteFlow(id); setFlows((fs) => fs.filter((x) => x.id !== id))
     setView((v) => (v.kind === 'flow' && v.id === id ? { kind: 'request' } : v))
     if (f) toTrash(`“${f.name}”`, { flows: [f] })
@@ -560,6 +565,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     if (!data) return false
     await db.addBackup(snapshot(), 'before-restore')
     await db.replaceAll(data)
+    deletedFlows.current.clear()
     setCollections(data.collections.sort(byName)); setFolders(data.folders); setRequests(data.requests)
     setEnvironments(data.environments.sort(byName)); setGlobalsState(data.globals); if (data.flows) setFlows(data.flows)
     setBackups(await db.listBackups()); setView({ kind: 'request' })
