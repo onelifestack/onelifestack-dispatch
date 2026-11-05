@@ -1,5 +1,7 @@
-import { useEffect, useReducer, useState } from 'react'
-import { HttpWire, LineWire, McpClient, type McpLogEntry, type McpPrompt, type McpResource, type McpTool, argumentsTemplate } from '../core/mcp'
+import { useEffect, useReducer, useRef, useState } from 'react'
+import { HttpWire, LineWire, McpAuthError, McpClient, type McpLogEntry, type McpPrompt, type McpResource, type McpTool, type McpWireAuth, argumentsTemplate } from '../core/mcp'
+import { MCP_SUGGESTIONS, type McpSignIn, expiring, findSignIn, refreshSignIn, signIn } from '../core/mcpAuth'
+import * as db from '../core/db'
 import { shellWords } from '../core/curl'
 import { interpolate } from '../core/vars'
 import { scopeFor } from '../core/prepare'
@@ -14,8 +16,18 @@ const conns = new Map<string, Conn>()
 /** Commands the user agreed to run this session. */
 const approved = new Set<string>()
 
+/** MCP sign-ins (all environments), loaded once and kept in step with the vault. */
+let signIns: McpSignIn[] | null = null
+const loadSignIns = async () => (signIns ??= await db.getMcpSignIns())
+async function saveSignIn(s: McpSignIn | null, remove?: { envId: string | null; serverUrl: string }) {
+  const list = (await loadSignIns()).filter((x) => !(x.envId === (s ?? remove)!.envId && x.serverUrl === (s ?? remove)!.serverUrl))
+  signIns = s ? [...list, s] : list
+  await db.putMcpSignIns(signIns)
+}
+const ago = (ms: number) => { const m = Math.round(ms / 60_000); return m < 1 ? 'just now' : m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} d` }
+
 /** MCP requests: connect to an MCP server (HTTP, or a local process on desktop), list and call its tools. */
-export function McpPane({ ws, notify, confirm }: { ws: WorkspaceApi; notify: (m: string) => void; confirm: (m: string) => Promise<boolean> }) {
+export function McpPane({ ws, notify, confirm, ask }: { ws: WorkspaceApi; notify: (m: string) => void; confirm: (m: string) => Promise<boolean>; ask: (title: string, initial?: string) => Promise<string | null> }) {
   const d = ws.draft
   const m = d.mcp
   const set = (patch: Partial<RequestDef['mcp']>) => ws.setDraft((x) => ({ ...x, mcp: { ...x.mcp, ...patch } }))
@@ -28,6 +40,70 @@ export function McpPane({ ws, notify, confirm }: { ws: WorkspaceApi; notify: (m:
   const [promptArgs, setPromptArgs] = useState<Record<string, string>>({})
   const fill = (t: string) => interpolate(t, scopeFor(prepareContext(ws.runContext(d), d)))
   const desktop = ws.transport.unrestricted
+  const envId = ws.environment?.id ?? null
+  const [mine, setMine] = useState<McpSignIn | undefined>(undefined)
+  /** The server's 401, when it wants a sign-in. */
+  const [needSignIn, setNeedSignIn] = useState<{ www: string | null } | null>(null)
+  const [signingIn, setSigningIn] = useState(false)
+  const serverUrl = m.transport === 'http' && /^https?:\/\//i.test(ws.prepared.url) ? ws.prepared.url : ''
+  useEffect(() => { let live = true; void loadSignIns().then((l) => { if (live) setMine(serverUrl ? findSignIn(l, envId, serverUrl) : undefined) }); return () => { live = false } }, [serverUrl, envId])
+  const sendOpts = () => sendOptions(d, ws.settings)
+  /** Bumped by Sign out, so a refresh still in flight can't save the sign-in again (#15). */
+  const authGen = useRef(0)
+
+  /** The token for this server and environment, refreshed first when it has run out. */
+  const wireAuth = (): McpWireAuth | undefined => {
+    if (!serverUrl) return undefined
+    let current = signIns ? findSignIn(signIns, envId, serverUrl) : undefined
+    if (!current) return undefined
+    const gen = authGen.current
+    const renew = async () => {
+      if (gen !== authGen.current) return false
+      const n = await refreshSignIn(current!, ws.transport, sendOpts())
+      if (!n || gen !== authGen.current) return false
+      current = n; await saveSignIn(n); setMine(n); return true
+    }
+    return {
+      header: async () => { if (current && expiring(current) && current.refreshToken) await renew(); return current ? `Bearer ${current.accessToken}` : null },
+      renew,
+    }
+  }
+
+  const doSignIn = async () => {
+    if (!serverUrl) return
+    if (!desktop) { notify('Signing in to an MCP server needs the desktop app. In the web app, paste a token in the request’s Auth tab.'); return }
+    setSigningIn(true)
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const s = await signIn({
+        serverUrl, envId, wwwAuthenticate: needSignIn?.www ?? null, transport: ws.transport, opts: sendOpts(), previous: mine,
+        openAndWait: async (url, redirect) => {
+          const r = new URL(redirect)
+          const waiting = invoke<string>('oauth_listen', { port: Number(r.port), path: r.pathname, timeoutSecs: 300 })
+          await invoke('open_url', { url })
+          return waiting
+        },
+        askClient: async ({ issuer, redirectUri }) => {
+          const id = await ask(`This server doesn’t let apps register themselves. Register an OAuth app with ${new URL(issuer).host} using the redirect URL ${redirectUri}, then enter its client ID`)
+          if (!id) return null
+          const secret = await ask('Client secret (leave empty if the app has none)')
+          return { clientId: id, clientSecret: secret ?? '' }
+        },
+      })
+      if (!s) return
+      await saveSignIn(s); setMine(s); setNeedSignIn(null)
+      notify(`Signed in${ws.environment ? ` for ${ws.environment.name}` : ''}. Connecting…`)
+      await connect()
+    } catch (e) { notify(e instanceof Error ? e.message : String(e)) } finally { setSigningIn(false) }
+  }
+  const signOut = async () => {
+    if (!mine) return
+    // Stop refreshes first, then close the connection (closing sends a request), then forget the sign-in.
+    authGen.current++
+    await disconnect()
+    await saveSignIn(null, { envId: mine.envId, serverUrl: mine.serverUrl }); setMine(undefined)
+    notify('Signed out. The token is forgotten on this device.')
+  }
 
   const connect = async () => {
     setBusy(true); setResult(null)
@@ -38,7 +114,8 @@ export function McpPane({ ws, notify, confirm }: { ws: WorkspaceApi; notify: (m:
       const log = (e: McpLogEntry) => { c.log = [...c.log, e].slice(-500); c.listeners.forEach((l) => l()) }
       if (m.transport === 'http') {
         if (!/^https?:\/\//i.test(ws.prepared.url)) { notify('Enter the MCP server’s URL, e.g. http://localhost:3000/mcp.'); return }
-        c.client = new McpClient(new HttpWire(ws.prepared, ws.transport, sendOptions(d, ws.settings)), log)
+        await loadSignIns()
+        c.client = new McpClient(new HttpWire(ws.prepared, ws.transport, sendOptions(d, ws.settings), wireAuth()), log)
         c.label = ws.prepared.url
       } else {
         if (!desktop) { notify('Running a local MCP server (stdio) needs the desktop app.'); return }
@@ -68,8 +145,10 @@ export function McpPane({ ws, notify, confirm }: { ws: WorkspaceApi; notify: (m:
       ;[c.tools, c.resources, c.prompts] = await Promise.all([c.client.listTools(), c.client.listResources(), c.client.listPrompts()])
       if (!m.tool && c.tools[0]) set({ tool: c.tools[0].name, arguments: argumentsTemplate(c.tools[0].inputSchema) })
       tick()
+      setNeedSignIn(null)
       notify(`Connected to ${c.client.serverInfo.name ?? 'the server'}: ${c.tools.length} tools, ${c.resources.length} resources, ${c.prompts.length} prompts.`)
     } catch (e) {
+      if (e instanceof McpAuthError) { conns.delete(d.id); tick(); setNeedSignIn({ www: e.wwwAuthenticate }) }
       notify(e instanceof Error ? e.message : String(e))
     } finally { setBusy(false) }
   }
@@ -94,7 +173,30 @@ export function McpPane({ ws, notify, confirm }: { ws: WorkspaceApi; notify: (m:
         {conn ? <button type="button" className="btn" onClick={() => void disconnect()}>Disconnect</button>
           : <button type="button" className="btn primary" disabled={busy} onClick={() => void connect()}>{busy ? 'Connecting…' : 'Connect'}</button>}
       </div>
-      {m.transport === 'http' && <p className="muted small">Headers and auth come from the request (switch the protocol to HTTP to edit them).</p>}
+      {m.transport === 'http' && <>
+        <div className="mcpAuthRow small">
+          <label className="field inline"><span className="sr">Suggested servers</span>
+            <select aria-label="Suggested servers" value="" onChange={(e) => { const s = MCP_SUGGESTIONS.find((x) => x.url === e.target.value); if (s) { ws.setDraft((x) => ({ ...x, url: s.url, name: x.name && x.name !== 'New request' && x.name !== 'Untitled' ? x.name : s.name })); setNeedSignIn(null) } }}>
+              <option value="">Well-known servers…</option>
+              <optgroup label="Sign in with your account">{MCP_SUGGESTIONS.filter((s) => s.signIn === 'auto').map((s) => <option key={s.url} value={s.url}>{s.name}</option>)}</optgroup>
+              <optgroup label="Sign in with an app you register">{MCP_SUGGESTIONS.filter((s) => s.signIn === 'client').map((s) => <option key={s.url} value={s.url}>{s.name}</option>)}</optgroup>
+              <optgroup label="Open, no sign-in">{MCP_SUGGESTIONS.filter((s) => s.signIn === 'none').map((s) => <option key={s.url} value={s.url}>{s.name}</option>)}</optgroup>
+            </select>
+          </label>
+          {mine ? <>
+            <span className="goodText">Signed in{ws.environment ? ` for ${ws.environment.name}` : ''}</span>
+            <span className="muted">{mine.expiresAt ? (mine.expiresAt > Date.now() ? `token valid for ${ago(mine.expiresAt - Date.now())}` : `token ran out${mine.refreshToken ? '; renews on use' : ''}`) : `since ${ago(Date.now() - mine.signedInAt)} ago`}</span>
+            <button type="button" className="btn small" onClick={() => void signOut()}>Sign out</button>
+          </> : <span className="muted">Headers and auth come from the request (switch the protocol to HTTP to edit them).</span>}
+        </div>
+        {needSignIn && !mine && (
+          <div className="infoLine small" role="status">
+            This server needs you to sign in{ws.environment ? ` (kept for the ${ws.environment.name} environment)` : ''}.{' '}
+            {desktop ? <button type="button" className="btn small primary" disabled={signingIn} onClick={() => void doSignIn()}>{signingIn ? 'Waiting for the browser…' : 'Sign in'}</button>
+              : <>Signing in needs the desktop app; here, paste a token in the request’s Auth tab.</>}
+          </div>
+        )}
+      </>}
       {m.transport === 'stdio' && (
         <details className="small"><summary>Environment variables and working folder</summary>
           <KVTable label="MCP environment" keyPlaceholder="Name" rows={m.env} onChange={(env) => set({ env })} />

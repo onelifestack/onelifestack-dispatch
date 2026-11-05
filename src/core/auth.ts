@@ -179,8 +179,8 @@ export function getClientToken(a: Auth, t: Transport, o: SendOptions) {
     ? tokenRequest(a, { grant_type: 'password', username: a.username, password: a.password }, t, o)
     : tokenRequest(a, { grant_type: 'client_credentials' }, t, o)
 }
-export function refreshToken(a: Auth, t: Transport, o: SendOptions) {
-  return tokenRequest(a, { grant_type: 'refresh_token', refresh_token: a.refreshToken }, t, o)
+export function refreshToken(a: Auth, t: Transport, o: SendOptions, extra: Record<string, string> = {}) {
+  return tokenRequest(a, { grant_type: 'refresh_token', refresh_token: a.refreshToken, ...extra }, t, o)
 }
 
 export interface AuthCodeStart { url: string; state: string; verifier: string }
@@ -205,7 +205,7 @@ export async function startAuthCode(a: Auth): Promise<AuthCodeStart> {
 }
 
 /** Takes the URL the browser landed on after login (or just the code) and swaps the code for a token. */
-export async function finishAuthCode(a: Auth, start: AuthCodeStart, landed: string, t: Transport, o: SendOptions): Promise<TokenResult> {
+export async function finishAuthCode(a: Auth, start: AuthCodeStart, landed: string, t: Transport, o: SendOptions, extra: Record<string, string> = {}): Promise<TokenResult> {
   let code = landed.trim()
   if (/^https?:|^[a-z][a-z0-9+.-]*:\/\//i.test(code) || code.startsWith('?')) {
     const q = new URL(code.startsWith('?') ? `http://x/${code}` : code).searchParams
@@ -217,7 +217,7 @@ export async function finishAuthCode(a: Auth, start: AuthCodeStart, landed: stri
   const params: Record<string, string> = { grant_type: 'authorization_code', code }
   if (a.redirectUri) params.redirect_uri = a.redirectUri
   if (a.usePkce) params.code_verifier = start.verifier
-  return tokenRequest(a, params, t, o)
+  return tokenRequest(a, { ...params, ...extra }, t, o)
 }
 
 // ---------- pipeline ----------

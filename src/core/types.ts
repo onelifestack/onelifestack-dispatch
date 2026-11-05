@@ -158,7 +158,17 @@ export interface Collection {
 export interface Environment { id: string; name: string; variables: KV[]; updatedAt: number; workspaceId?: string }
 
 /** A workspace: a group of collections and environments ("spaces" in code; Workspace names the backup data). */
-export interface Space { id: string; name: string }
+export interface Space {
+  id: string; name: string
+  /** Desktop: a folder this workspace is kept in as files (docs/DESIGN-linked-workspaces.md). */
+  linkedDir?: string
+  /**
+   * The id written into a linked folder. Every device's first workspace has the id "default", so that one gets a
+   * unique id for its folder; other workspaces use their own id.
+   */
+  folderId?: string
+}
+export const folderIdOf = (s: Space) => s.folderId ?? s.id
 export const DEFAULT_SPACE: Space = { id: 'default', name: 'My workspace' }
 export const spaceOf = (x: { workspaceId?: string }) => x.workspaceId || DEFAULT_SPACE.id
 

@@ -3,7 +3,7 @@ import { exportWorkspace } from '../core/backup'
 import type { WorkspaceApi } from './useWorkspace'
 import { saveTextFile } from './files'
 
-const REASON = { daily: 'Daily', manual: 'Made by you', 'before-restore': 'Before a restore' } as const
+const REASON = { daily: 'Daily', manual: 'Made by you', 'before-restore': 'Before a restore', 'before-folder': 'Before reading a folder' } as const
 
 /** Local backups: a daily snapshot plus ones you make; restore replaces everything (after backing up first). */
 export function BackupsView({ ws, notify, confirm }: { ws: WorkspaceApi; notify: (m: string) => void; confirm: (m: string) => Promise<boolean> }) {

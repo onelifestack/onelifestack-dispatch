@@ -45,6 +45,7 @@ export function FlowView({ ws, flowId, notify, confirm }: { ws: WorkspaceApi; fl
   const [drag, setDrag] = useState<{ from: string; port: string; x: number; y: number } | null>(null)
   const canvas = useRef<HTMLDivElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()
+  const dirty = useRef(false)
   const latest = useRef(flow); latest.current = flow
 
   useEffect(() => { if (stored && stored.id !== flow?.id) setFlow(stored) }, [stored, flow?.id])
@@ -54,11 +55,13 @@ export function FlowView({ ws, flowId, notify, confirm }: { ws: WorkspaceApi; fl
       if (!f) return f
       const next = fn(f)
       clearTimeout(saveTimer.current)
-      saveTimer.current = setTimeout(() => void ws.updateFlow(next), 300)
+      dirty.current = true
+      saveTimer.current = setTimeout(() => { dirty.current = false; void ws.updateFlow(next) }, 300)
       return next
     })
   }, [ws])
-  useEffect(() => () => { clearTimeout(saveTimer.current); if (latest.current) void ws.updateFlow(latest.current) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // On close, save only edits that are still waiting; saving an unchanged flow could bring back one just deleted (#14).
+  useEffect(() => () => { clearTimeout(saveTimer.current); if (dirty.current && latest.current) void ws.updateFlow(latest.current) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const problems = useMemo(() => (flow ? checkFlow(flow, ws.requests) : []), [flow, ws.requests])
   const node = selected?.kind === 'node' ? flow?.nodes.find((n) => n.id === selected.id) : undefined
@@ -134,7 +137,7 @@ export function FlowView({ ws, flowId, notify, confirm }: { ws: WorkspaceApi; fl
 
   const run = async () => {
     if (!flow) return
-    clearTimeout(saveTimer.current); await ws.updateFlow(flow)
+    clearTimeout(saveTimer.current); dirty.current = false; await ws.updateFlow(flow)
     const ctrl = new AbortController()
     setRunning(ctrl); setStatus({}); setSteps([]); setResult(null)
     try {

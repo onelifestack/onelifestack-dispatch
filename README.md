@@ -28,6 +28,10 @@ network traffic is the requests you send.
 - Browser login requests: drive an installed Chrome or Edge through a login form (open, type, click, wait) and keep
   the cookies (HttpOnly too) or the token from localStorage/sessionStorage as secret variables and in the cookie
   jar. Runs in the desktop app, the runner, schedules, `dispatch-run` and MCP.
+- MCP sign-in (desktop): when an MCP server asks for one, Dispatch finds its login, registers itself, and signs
+  in with OAuth (PKCE, resource indicators). Tokens are kept per environment, encrypted, renewed automatically and
+  never exported. A list of well-known MCP servers (Linear, Notion, Atlassian, Sentry, Stripe, GitHub, …) to start
+  from.
 - Flows: a canvas where you wire saved requests together with If, Script, Set variable, For each, Delay and End
   blocks, n8n-style. Requests branch on “ok”/“failed”; live status per block and a run log. Run them in the app,
   with `dispatch-run flow`, or from an AI assistant (`run_flow` over MCP). Flows are part of backups and exports.
@@ -95,3 +99,7 @@ OneLifeStack sync (needs a design), gRPC in the browser, AI assistance (needs a 
 ## Build
 
 See [CLAUDE.md](CLAUDE.md).
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).

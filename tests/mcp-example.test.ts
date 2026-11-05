@@ -22,7 +22,7 @@ const base = (port: number, headers: [string, string][] = []): PreparedRequest =
 describe('example MCP server over HTTP', () => {
   for (const [label, port, headers] of [['JSON answers', 4361, []], ['event-stream answers with a bearer token', 4362, [['Authorization', 'Bearer tk']]]] as const) {
     it(label, async () => {
-      const c = new McpClient(new HttpWire(base(port, [...headers]), new FetchTransport(), opts))
+      const c = new McpClient(new HttpWire(base(port, headers.map(([k, v]) => [k, v] as [string, string])), new FetchTransport(), opts))
       await c.initialize()
       expect(c.serverInfo.name).toBe('dispatch-demo-mcp')
       expect((await c.listTools()).map((t) => t.name)).toEqual(['add', 'echo', 'whoami', 'fail'])

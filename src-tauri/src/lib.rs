@@ -445,25 +445,32 @@ fn notify_desktop(app: tauri::AppHandle, title: String, body: String) -> Result<
 fn safe_join(root: &std::path::Path, rel: &str) -> Result<std::path::PathBuf, String> {
     let rel = std::path::Path::new(rel);
     if rel.is_absolute() || rel.components().any(|c| !matches!(c, std::path::Component::Normal(_))) {
-        return Err(format!("Refusing to write outside the collection folder: {}", rel.display()));
+        return Err(format!("Refusing to write outside the folder: {}", rel.display()));
     }
     Ok(root.join(rel))
 }
 
-const OURS: [&str; 3] = [".req.yaml", "_folder.yaml", "dispatch.collection.yaml"];
+/// File names Dispatch owns inside a linked folder; nothing else there is ever read, written or deleted.
+const OURS: [&str; 6] = [".req.yaml", "_folder.yaml", "dispatch.collection.yaml", ".env.yaml", ".flow.yaml", "dispatch.workspace.yaml"];
+fn is_ours(name: &str) -> bool { OURS.iter().any(|s| name.ends_with(s)) }
+
+/// FNV-1a 64 of the text, as hex. Stable across builds, so the app can keep it between runs.
+pub fn text_hash(text: &str) -> String {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in text.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(0x100000001b3); }
+    format!("{h:016x}")
+}
 
 #[tauri::command]
 async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
     app.dialog().file().blocking_pick_folder().and_then(|p| p.into_path().ok()).map(|p| p.display().to_string())
 }
 
-/// Every Dispatch file under `root` (skips .git and node_modules; files over 2 MB are left out).
-#[tauri::command]
-fn read_collection_dir(root: String) -> Result<Vec<(String, String)>, String> { collection_dir_read(root) }
-
-pub fn collection_dir_read(root: String) -> Result<Vec<(String, String)>, String> {
-    let root = std::path::PathBuf::from(&root);
-    if !root.join("dispatch.collection.yaml").exists() { return Err(format!("{} has no dispatch.collection.yaml.", root.display())); }
+/// Every Dispatch file under `root` as (relative path, text, hash). Skips .git and node_modules and files over 2 MB.
+/// A folder that doesn't exist yet reads as empty.
+pub fn folder_read(root: &str) -> Result<Vec<(String, String, String)>, String> {
+    let root = std::path::PathBuf::from(root);
+    if !root.exists() { return Ok(vec![]); }
     let mut out = vec![];
     let mut stack = vec![root.clone()];
     while let Some(dir) = stack.pop() {
@@ -472,48 +479,97 @@ pub fn collection_dir_read(root: String) -> Result<Vec<(String, String)>, String
             let p = e.path();
             let name = e.file_name().to_string_lossy().to_string();
             if p.is_dir() { if name != ".git" && name != "node_modules" { stack.push(p); } continue; }
-            if !OURS.iter().any(|s| name.ends_with(s)) { continue; }
+            if !is_ours(&name) || name.ends_with(".dispatch-tmp") { continue; }
             if e.metadata().map(|m| m.len() > 2 * 1024 * 1024).unwrap_or(true) { continue; }
             let rel = p.strip_prefix(&root).map_err(|e| e.to_string())?.to_string_lossy().replace('\\', "/");
             let text = std::fs::read_to_string(&p).map_err(|e| format!("Couldn’t read {rel}: {e}"))?;
-            out.push((rel, text));
+            let hash = text_hash(&text);
+            out.push((rel, text, hash));
         }
     }
+    out.sort();
     Ok(out)
 }
 
-/// Writes the files; with `prune`, also removes Dispatch files that aren't in the list (renames, moves,
-/// deletes) and then empty folders. Never touches other files.
 #[tauri::command]
-fn write_collection_dir(root: String, files: Vec<(String, String)>, prune: bool) -> Result<(), String> { collection_dir_write(root, files, prune) }
+fn read_folder(root: String) -> Result<Vec<(String, String, String)>, String> { folder_read(&root) }
 
-pub fn collection_dir_write(root: String, files: Vec<(String, String)>, prune: bool) -> Result<(), String> {
-    let root = std::path::PathBuf::from(&root);
-    std::fs::create_dir_all(&root).map_err(|e| format!("Couldn’t create {}: {e}", root.display()))?;
-    let mut keep = HashSet::new();
+#[derive(Serialize, Debug, Default)]
+pub struct SyncOutcome {
+    /// Hash of every Dispatch file as the app now knows it (what it wrote or found unchanged). A file in conflict
+    /// keeps its previous hash, so it stays in conflict until the user picks a side.
+    pub known: HashMap<String, String>,
+    /// Files changed, added or deleted outside the app since it last saw them. They were left alone.
+    pub conflicts: Vec<String>,
+}
+
+/// Writes `files` into `root` and removes Dispatch files the app no longer has, but only where the disk still
+/// holds what the app last saw (`known`: path → hash). Anything changed outside the app (an editor, `git pull`)
+/// is left alone and reported. `known: None` overwrites and prunes regardless ("keep mine").
+/// Each file is written to a temporary file and renamed, so a crash never leaves half a file.
+pub fn folder_sync(root: &str, files: Vec<(String, String)>, known: Option<HashMap<String, String>>) -> Result<SyncOutcome, String> {
+    let root_p = std::path::PathBuf::from(root);
+    std::fs::create_dir_all(&root_p).map_err(|e| format!("Couldn’t create {}: {e}", root_p.display()))?;
+    let force = known.is_none();
+    let known = known.unwrap_or_default();
+    let mut out = SyncOutcome::default();
+    let mut wanted = HashSet::new();
     for (rel, text) in &files {
-        let p = safe_join(&root, rel)?;
+        let p = safe_join(&root_p, rel)?;
+        wanted.insert(rel.clone());
+        let disk = std::fs::read_to_string(&p).ok();
+        let new_hash = text_hash(text);
+        if disk.as_deref() == Some(text.as_str()) { out.known.insert(rel.clone(), new_hash); continue; }
+        let disk_hash = disk.as_deref().map(text_hash);
+        if !force && disk_hash.as_ref() != known.get(rel) {
+            // Changed or deleted outside since we last saw it, or added outside before we ever saw it.
+            out.conflicts.push(rel.clone());
+            if let Some(k) = known.get(rel) { out.known.insert(rel.clone(), k.clone()); }
+            continue;
+        }
         if let Some(parent) = p.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
-        if std::fs::read_to_string(&p).ok().as_deref() != Some(text.as_str()) {
-            std::fs::write(&p, text).map_err(|e| format!("Couldn’t write {rel}: {e}"))?;
-        }
-        keep.insert(p);
+        let tmp = p.with_file_name(format!(".{}.dispatch-tmp", p.file_name().unwrap().to_string_lossy()));
+        std::fs::write(&tmp, text).map_err(|e| format!("Couldn’t write {rel}: {e}"))?;
+        std::fs::rename(&tmp, &p).map_err(|e| { let _ = std::fs::remove_file(&tmp); format!("Couldn’t write {rel}: {e}") })?;
+        out.known.insert(rel.clone(), new_hash);
     }
-    if prune {
-        let mut dirs = vec![];
-        let mut stack = vec![root.clone()];
-        while let Some(dir) = stack.pop() {
-            for e in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
-                let p = e.path();
-                let name = e.file_name().to_string_lossy().to_string();
-                if p.is_dir() { if name != ".git" && name != "node_modules" { dirs.push(p.clone()); stack.push(p); } continue; }
-                if OURS.iter().any(|s| name.ends_with(s)) && !keep.contains(&p) { let _ = std::fs::remove_file(&p); }
-            }
+    // Prune: Dispatch files the app no longer has. Only ones it last saw unchanged (or all, when forced).
+    let mut dirs = vec![];
+    let mut stack = vec![root_p.clone()];
+    while let Some(dir) = stack.pop() {
+        for e in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+            let p = e.path();
+            let name = e.file_name().to_string_lossy().to_string();
+            if p.is_dir() { if name != ".git" && name != "node_modules" { dirs.push(p.clone()); stack.push(p); } continue; }
+            if !is_ours(&name) { continue; }
+            let rel = p.strip_prefix(&root_p).map_err(|e| e.to_string())?.to_string_lossy().replace('\\', "/");
+            if wanted.contains(&rel) { continue; }
+            let disk_hash = std::fs::read_to_string(&p).ok().as_deref().map(text_hash);
+            if force || (disk_hash.is_some() && disk_hash.as_ref() == known.get(&rel)) { let _ = std::fs::remove_file(&p); }
+            else { out.conflicts.push(rel.clone()); if let Some(k) = known.get(&rel) { out.known.insert(rel, k.clone()); } }
         }
-        dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
-        for d in dirs { let _ = std::fs::remove_dir(&d); } // only succeeds when empty
     }
-    Ok(())
+    dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
+    for d in dirs { let _ = std::fs::remove_dir(&d); } // only succeeds when empty
+    out.conflicts.sort();
+    Ok(out)
+}
+
+#[tauri::command]
+fn sync_folder(root: String, files: Vec<(String, String)>, known: Option<HashMap<String, String>>) -> Result<SyncOutcome, String> { folder_sync(&root, files, known) }
+
+/// Older API, kept for tests and callers that read a single collection folder.
+pub fn collection_dir_read(root: String) -> Result<Vec<(String, String)>, String> {
+    if !std::path::Path::new(&root).join("dispatch.collection.yaml").exists() { return Err(format!("{root} has no dispatch.collection.yaml.")); }
+    Ok(folder_read(&root)?.into_iter().map(|(p, t, _)| (p, t)).collect())
+}
+/// Older API: writes and (with `prune`) removes stale Dispatch files without checking for outside changes.
+pub fn collection_dir_write(root: String, files: Vec<(String, String)>, prune: bool) -> Result<(), String> {
+    if prune { folder_sync(&root, files, None).map(|_| ()) } else {
+        let r = std::path::PathBuf::from(&root);
+        for (rel, text) in &files { let p = safe_join(&r, rel)?; if let Some(d) = p.parent() { std::fs::create_dir_all(d).map_err(|e| e.to_string())?; } std::fs::write(&p, text).map_err(|e| e.to_string())?; }
+        Ok(())
+    }
 }
 
 // ---------- Mock server ----------
@@ -636,7 +692,7 @@ pub fn run() {
         .manage(McpProcs::default())
         .manage(Browsers::default())
         .manage(std::sync::Arc::new(MockState::default()))
-        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call, pick_folder, read_collection_dir, write_collection_dir, notify_desktop, sse_open, sse_close, mcp_stdio_start, mcp_stdio_send, mcp_stdio_stop, browser_launch, browser_close])
+        .invoke_handler(tauri::generate_handler![send_request, cancel_request, save_text_file, save_base64_file, open_url, oauth_listen, mock_start, mock_stop, mock_reply, grpc::grpc_describe, grpc::grpc_call, pick_folder, read_folder, sync_folder, notify_desktop, sse_open, sse_close, mcp_stdio_start, mcp_stdio_send, mcp_stdio_stop, browser_launch, browser_close])
         .run(tauri::generate_context!())
         .expect("error while running Dispatch");
 }

@@ -42,7 +42,7 @@ export class McpClient {
     return answer.result
   }
 
-  async initialize(clientVersion = '0.4.2') {
+  async initialize(clientVersion = '0.5.0') {
     const r = await this.call('initialize', { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: 'Dispatch', version: clientVersion } })
     this.serverInfo = r?.serverInfo ?? {}
     this.capabilities = r?.capabilities ?? {}
@@ -73,6 +73,14 @@ export class McpClient {
   close = () => this.wire.close()
 }
 
+/** The server wants a sign-in (401). `wwwAuthenticate` says where to find out how. */
+export class McpAuthError extends SendError {
+  constructor(message: string, readonly wwwAuthenticate: string | null) { super(message) }
+}
+
+/** A signed-in token for HTTP MCP: `header` gives the Authorization value; `renew` gets a new one after a 401. */
+export interface McpWireAuth { header(): Promise<string | null>; renew(): Promise<boolean> }
+
 /**
  * Streamable HTTP: each message is a POST; the server answers with JSON, or with an event stream that carries the
  * answer (and maybe other messages). The session id from initialize is sent on later requests.
@@ -80,16 +88,30 @@ export class McpClient {
 export class HttpWire implements McpWire {
   private session: string | null = null
   private protocol: string | null = null
-  constructor(private readonly base: PreparedRequest, private readonly transport: Transport, private readonly opts: SendOptions) {}
+  constructor(private readonly base: PreparedRequest, private readonly transport: Transport, private readonly opts: SendOptions, private readonly auth?: McpWireAuth) {}
 
-  private async post(msg: RpcMessage): Promise<RpcMessage[]> {
+  /** The request's own Authorization header wins; otherwise the sign-in's token. */
+  private async authHeader(): Promise<[string, string][]> {
+    if (!this.auth || this.base.headers.some(([k]) => k.toLowerCase() === 'authorization')) return []
+    const v = await this.auth.header()
+    return v ? [['Authorization', v]] : []
+  }
+
+  private async post(msg: RpcMessage, retried = false): Promise<RpcMessage[]> {
     const headers: [string, string][] = [
       ...this.base.headers.filter(([k]) => !/^(content-type|accept|mcp-session-id)$/i.test(k)),
+      ...(await this.authHeader()),
       ['Content-Type', 'application/json'], ['Accept', 'application/json, text/event-stream'],
     ]
     if (this.session) headers.push(['Mcp-Session-Id', this.session])
     if (this.protocol) headers.push(['MCP-Protocol-Version', this.protocol])
     const res = await this.transport.send({ ...this.base, method: 'POST', headers, body: JSON.stringify(msg), multipart: null, bodyFile: null }, this.opts)
+    if (res.status === 401) {
+      // A token that ran out: renew once and try again; otherwise the caller offers a sign-in.
+      if (!retried && this.auth && (await this.authHeader()).length && await this.auth.renew()) return this.post(msg, true)
+      const www = res.headers.find(([k]) => k.toLowerCase() === 'www-authenticate')?.[1] ?? null
+      throw new McpAuthError(`The server needs you to sign in (401)${res.body ? `: ${res.body.slice(0, 200)}` : '.'}`, www)
+    }
     const sid = res.headers.find(([k]) => k.toLowerCase() === 'mcp-session-id')?.[1]
     if (sid) this.session = sid
     if (msg.method === 'initialize') this.protocol = PROTOCOL_VERSION
@@ -105,7 +127,7 @@ export class HttpWire implements McpWire {
   notify = async (msg: RpcMessage) => { await this.post(msg) }
   close = async () => {
     if (!this.session) return
-    try { await this.transport.send({ ...this.base, method: 'DELETE', headers: [...this.base.headers, ['Mcp-Session-Id', this.session]], body: null, multipart: null, bodyFile: null }, this.opts) } catch { /* fine */ }
+    try { await this.transport.send({ ...this.base, method: 'DELETE', headers: [...this.base.headers, ...(await this.authHeader()), ['Mcp-Session-Id', this.session]], body: null, multipart: null, bodyFile: null }, this.opts) } catch { /* fine */ }
   }
 }
 

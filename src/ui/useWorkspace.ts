@@ -16,6 +16,9 @@ import { type Flow, type FlowRun, type FlowStep, newFlow, runFlow } from '../cor
 import { FAKE } from '../core/fake'
 import { authPipeline } from '../core/auth'
 
+/** A linked folder's last sync: files changed outside the app that it left alone, or an error. */
+export interface FolderStatus { conflicts: string[]; error?: string; at: number }
+
 export type View =
   | { kind: 'request' }
   | { kind: 'collection'; id: string }
@@ -87,6 +90,8 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   const [backups, setBackups] = useState<db.BackupInfo[]>([])
   const [spaces, setSpacesState] = useState<Space[]>([DEFAULT_SPACE])
   const [flows, setFlows] = useState<Flow[]>([])
+  /** Flows deleted in this session. A late save (an editor closing, a pending timer) must not bring them back (#14). */
+  const deletedFlows = useRef(new Set<string>())
   const aborts = useRef(new Map<string, AbortController>())
   const [engine] = useState<ScriptEngine>(() => opts.engine ?? new WorkerEngine())
   const [pipeline] = useState<Pipeline>(() => {
@@ -398,6 +403,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
       environments: w0.environments.map((e) => (known(e.workspaceId) && e.workspaceId !== DEFAULT_SPACE.id ? e : { ...e, workspaceId: here })),
       flows: w0.flows?.map((x) => (known(x.workspaceId) && x.workspaceId !== DEFAULT_SPACE.id ? x : { ...x, workspaceId: here })),
     }
+    for (const f of w.flows ?? []) deletedFlows.current.delete(f.id) // Undo and imports bring flows back on purpose.
     await db.putMany(w)
     setCollections((cs) => [...cs, ...w.collections].sort(byName))
     setFolders((fs) => [...fs, ...w.folders])
@@ -416,6 +422,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     await db.putFlow(f); setFlows((fs) => [...fs, f]); return f
   }, [])
   const updateFlow = useCallback(async (f: Flow) => {
+    if (deletedFlows.current.has(f.id)) return
     const next = { ...f, updatedAt: Date.now() }
     setFlows((fs) => fs.map((x) => (x.id === f.id ? next : x))); await db.putFlow(next)
   }, [])
@@ -425,6 +432,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   }, [])
   const removeFlow = useCallback(async (id: string) => {
     const f = flows.find((x) => x.id === id)
+    deletedFlows.current.add(id)
     await db.deleteFlow(id); setFlows((fs) => fs.filter((x) => x.id !== id))
     setView((v) => (v.kind === 'flow' && v.id === id ? { kind: 'request' } : v))
     if (f) toTrash(`“${f.name}”`, { flows: [f] })
@@ -444,7 +452,13 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   const visibleCollections = useMemo(() => collections.filter((c) => spaceOf(c) === activeSpaceId), [collections, activeSpaceId])
   const visibleFlows = useMemo(() => flows.filter((f) => spaceOf(f) === activeSpaceId), [flows, activeSpaceId])
   const visibleEnvironments = useMemo(() => environments.filter((e) => spaceOf(e) === activeSpaceId), [environments, activeSpaceId])
-  const saveSpaces = useCallback(async (next: Space[]) => { setSpacesState(next); await db.putSpaces(next) }, [])
+  const spacesRef = useRef(spaces); spacesRef.current = spaces
+  const saveSpaces = useCallback(async (next: Space[]) => { spacesRef.current = next; setSpacesState(next); await db.putSpaces(next) }, [])
+  /** Linked folders' state for the Workspaces page and collection pages, keyed like db.FolderState. */
+  const [folderStatus, setFolderStatusState] = useState<Record<string, FolderStatus>>({})
+  const setFolderStatus = useCallback((key: string, st: FolderStatus | null) => setFolderStatusState((m) => {
+    const next = { ...m }; if (st) next[key] = st; else delete next[key]; return next
+  }), [])
   /** Shows another workspace, and picks up the environment last used there. */
   const switchSpace = useCallback((id: string) => {
     const s = settingsRef.current
@@ -455,9 +469,20 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   }, [environments, setSettings])
   const addSpace = useCallback(async (name: string) => {
     const sp = { id: uid(), name }
-    await saveSpaces([...spaces, sp])
+    await saveSpaces([...spacesRef.current, sp])
     return sp
-  }, [spaces, saveSpaces])
+  }, [saveSpaces])
+  /** Adds a workspace read from a folder, keeping its id (so reading the folder again finds it). */
+  const addSpaceFrom = useCallback(async (sp: Space) => {
+    if (!spacesRef.current.some((x) => x.id === sp.id)) await saveSpaces([...spacesRef.current, sp])
+  }, [saveSpaces])
+  const setSpaceFolderId = useCallback(async (id: string, folderId: string) => {
+    await saveSpaces(spacesRef.current.map((x) => (x.id === id ? { ...x, folderId } : x)))
+  }, [saveSpaces])
+  /** Links a workspace to a folder (desktop), or unlinks it with `undefined`. */
+  const setSpaceFolder = useCallback(async (id: string, dir: string | undefined) => {
+    await saveSpaces(spacesRef.current.map((x) => (x.id === id ? { ...x, linkedDir: dir } : x)))
+  }, [saveSpaces])
   const renameSpace = useCallback((id: string, name: string) => saveSpaces(spaces.map((x) => (x.id === id ? { ...x, name } : x))), [spaces, saveSpaces])
   /** Only empty workspaces can be removed (move or delete their collections and environments first). */
   const removeSpace = useCallback(async (id: string) => {
@@ -522,6 +547,32 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   }, [folders, requests])
 
   /** Replaces a collection's contents (e.g. reloaded from its folder); adds it if it's new. */
+  /**
+   * Makes a workspace hold exactly what a folder holds (the folder wins): items in the workspace that the folder
+   * doesn't have are removed, the folder's items are added or updated (ids kept, moved here if they were elsewhere).
+   * Collections with a folder of their own are left alone. Callers take a backup first.
+   */
+  const replaceSpaceContents = useCallback(async (spaceId: string, w: { collections: Collection[]; folders: Folder[]; requests: RequestDef[]; environments: Environment[]; flows: Flow[] }) => {
+    const inSpace = <T extends { workspaceId?: string }>(x: T) => spaceOf(x) === spaceId
+    const goneCols = collections.filter((c) => inSpace(c) && !c.linkedDir && !w.collections.some((x) => x.id === c.id)).map((c) => c.id)
+    const goneEnvs = environments.filter((e) => inSpace(e) && !w.environments.some((x) => x.id === e.id)).map((e) => e.id)
+    const goneFlows = flows.filter((f) => inSpace(f) && !w.flows.some((x) => x.id === f.id)).map((f) => f.id)
+    const colIds = new Set([...goneCols, ...w.collections.map((c) => c.id)])
+    for (const id of colIds) await db.deleteCollection(id)
+    for (const id of goneEnvs) await db.deleteEnvironment(id)
+    for (const id of goneFlows) { deletedFlows.current.add(id); await db.deleteFlow(id) }
+    for (const f of w.flows) deletedFlows.current.delete(f.id)
+    await db.putMany(w)
+    setCollections((cs) => [...cs.filter((c) => !colIds.has(c.id)), ...w.collections].sort(byName))
+    setFolders((fs) => [...fs.filter((f) => !colIds.has(f.collectionId)), ...w.folders])
+    setRequests((rs) => [...rs.filter((r) => !r.collectionId || !colIds.has(r.collectionId)), ...w.requests])
+    setEnvironments((es) => [...es.filter((e) => !goneEnvs.includes(e.id) && !w.environments.some((x) => x.id === e.id)), ...w.environments].sort(byName))
+    setFlows((fs) => [...fs.filter((f) => !goneFlows.includes(f.id) && !w.flows.some((x) => x.id === f.id)), ...w.flows])
+    setTabs((ts) => ts.map((t) => { const r = w.requests.find((x) => x.id === t.draft.id); return r ? { ...t, draft: structuredClone(r) } : t }))
+    if (settingsRef.current.activeEnvId && goneEnvs.includes(settingsRef.current.activeEnvId)) setSettings({ activeEnvId: null })
+    setView((v) => (v.kind === 'flow' && goneFlows.includes(v.id) ? { kind: 'request' } : v))
+  }, [collections, environments, flows, setSettings])
+
   const replaceCollection = useCallback(async (w: Workspace) => {
     const c = w.collections[0]
     await db.deleteCollection(c.id)
@@ -560,6 +611,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     if (!data) return false
     await db.addBackup(snapshot(), 'before-restore')
     await db.replaceAll(data)
+    deletedFlows.current.clear()
     setCollections(data.collections.sort(byName)); setFolders(data.folders); setRequests(data.requests)
     setEnvironments(data.environments.sort(byName)); setGlobalsState(data.globals); if (data.flows) setFlows(data.flows)
     setBackups(await db.listBackups()); setView({ kind: 'request' })
@@ -569,7 +621,8 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   return {
     trash, undoDelete, backups, backupNow, restoreBackup, placeItems, removeRequests, replaceCollection,
     flows: visibleFlows, allFlows: flows, addFlow, updateFlow, duplicateFlow, removeFlow, runFlowNow,
-    spaces, activeSpaceId, switchSpace, addSpace, renameSpace, removeSpace, moveToSpace,
+    spaces, activeSpaceId, switchSpace, addSpace, addSpaceFrom, setSpaceFolder, setSpaceFolderId, renameSpace, removeSpace, moveToSpace,
+    replaceSpaceContents, folderStatus, setFolderStatus,
     /** Everything, across workspaces (exports, backups, file sync). The plain lists below are this workspace's. */
     allCollections: collections, allEnvironments: environments,
     ready, transport, collections: visibleCollections, folders, requests, environments: visibleEnvironments, globals, history, settings, logs,

@@ -23,6 +23,9 @@ and an import format; never copy its name, branding, icons or UI.
   - browser logins: `cdp.ts` (minimal DevTools-protocol client), `browser.ts` (steps, launcher interface),
     `browserPipeline.ts` (the `Pipeline.browser` hook); launchers in `src/node/browserLauncher.ts` (CLI) and
     `src/ui/desktopBrowser.ts` (Tauri `browser_launch`)
+  - `mcpAuth.ts`: MCP sign-in (discovery → registration → PKCE + `resource` → refresh), `MCP_SUGGESTIONS`; sign-ins
+    sealed in IndexedDB meta `mcpSignIns`, keyed by environment + server. `examples/mcp-http-server.mjs --oauth` is
+    a complete local sign-in server for tests and the Windows guide.
   - `flows.ts`: flow graph (nodes, wires from output ports) and `runFlow`; straight chains run in a loop, recursion
     only for branches and For each (deep recursion overflowed the stack). Stored in IndexedDB v4 `flows`.
 - `src/ui/` — `useWorkspace.ts` holds all state and actions; one component per view (RequestPane, ResponsePane,
@@ -89,12 +92,80 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 - Browser-login tests use Playwright's Chromium with `DISPATCH_BROWSER_ARGS=--no-sandbox` (AppArmor blocks its
   sandbox here). Never add `--no-sandbox` by default.
 - A `<select>` inside a `<label>` gets its options in its accessible name; give it an `aria-label`.
+- Never push to `main` without `npm run typecheck`: vitest passes code that the CI typecheck rejects (this happened
+  once with a readonly tuple in a test).
+- Desktop webview ↔ Chrome DevTools: Chrome refuses WebSocket connections that send an `Origin` header unless that
+  origin is allowed with `--remote-allow-origins`. The desktop launcher passes exactly `location.origin`.
+- Windows: Rust's `Command::new` only looks for `.exe` (use `resolve_command` for `npx`/`npm`), and child processes
+  need `CREATE_NO_WINDOW` (`no_console`). `shellWords` keeps a backslash before an ordinary character, for Windows
+  paths.
+- Don't `npx` remote packages from tool calls; that's blocked here. Local examples (`examples/*.mjs`) cover MCP.
+- MCP sign-in redirects to `http://127.0.0.1:33418/callback`, which a registered client is bound to; tests use 33419.
 
 ## Where we left off
 
-2026-11-04: inbox item 5 (browser automation) built on `feature/flows` (based on `feature/inbox`, PR #4): browser
-login requests and visual flows. Merged to main (PRs #4 and #5). v0.4.0 and v0.4.1 (Windows fixes, PR #7) tagged as draft releases. Windows test plan: docs/TESTING-WINDOWS.md, issue #8 (the test agent reports there).
+Updated 2026-11-05. Everything is on `main`; the latest tag is **v0.5.0**.
 
-v0.3 built autonomously 2026-11-04 on `feature/v0.3` (PR to main; not merged). Plan and notes:
-`docs/PLAN-v0.3.md`. Desktop app still hasn't been opened on a real display; that's the owner's next step.
-Waiting on the owner: code-signing certificates and the updater key (docs/RELEASING.md), sync design.
+**The repo is public (MIT) since 2026-11-05.** GitHub billing blocked Actions on the private repo, so the owner
+made it public. To keep a personal e-mail out of the public history, the old repo was renamed
+`onelifestack/onelifestack-dispatch-archive` (private; keeps PRs #1–#18, the old issues #8–#15 with the Windows
+reports, and the draft releases up to v0.4.4) and this repo was pushed fresh with rewritten history. Issue and PR
+numbers restarted here; below, numbers marked *archive* refer to the old repo. Locally, remote `archive` is the old
+repo. Never commit with any address other than the noreply one (see the folder CLAUDE.md).
+
+**Releases.** Every release is a *draft*: the owner publishes. Tags in order:
+- v0.2.0
+- v0.4.0: workspaces, MCP, flows, browser login
+- v0.4.1: Windows process fixes
+- v0.4.2: browser-login origin fix (archive #9)
+- v0.4.3: MCP sign-in (archive #11 / PR #13)
+- v0.4.4: deleted flows stay deleted (archive #14), MCP Sign out sticks (archive #15)
+- v0.5.0: linked workspaces, phase 1 (a workspace kept as a folder of files; docs/DESIGN-linked-workspaces.md);
+  MIT licence; the first release built in the public repo
+
+Releases up to v0.4.4 are drafts in the archive repo only.
+
+Releases 0.4.1–0.4.3 have no macOS `.dmg` (0.4.4 has one): GitHub's macOS arm64 runners weren't available ("The job was not acquired
+by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for the tag's run.
+
+**Windows test (issue #2; rounds 1–2 in archive #8).**
+- An agent on the owner's Windows machine follows `docs/TESTING-WINDOWS.md`, which is copied into the issue body,
+  and posts reports as comments on #2. The repo is public, so the guide tells it to strip personal details.
+- Round 1 (on 0.4.1, built from source): 29 of 35 checks passed and it found archive #9 (fixed in 0.4.2).
+- Round 2 (installed 0.4.3, 2026-11-05): 35 of 42 passed, 2 failed (archive #14, #15, both fixed in 0.4.4), 5 partial.
+  Not covered: 150%/200% scaling, multiple monitors, 6.4d step 9 (a real provider), SmartScreen text.
+- Round 3 requested on the installed 0.5.0 (issue #2, 2026-11-05): retest 4.7 and 6.4d step 7, the new
+  6.6 step 5 and 6.6b (linked folders), plus a smoke list. #2's body holds the 0.5.0 guide.
+- **Next step:** read the newest comment on #2 and any `[Windows] …` issues or `test/windows-*` branches the agent
+  opened. Then fix in a PR, bump the version (package.json, tauri.conf.json, Cargo.toml + lock, `VERSION` in
+  `src/cli/main.ts`, `clientVersion` in `src/core/mcp.ts`, the version in `docs/TESTING-WINDOWS.md`), tag, add
+  release notes, and refresh #2's body from the guide.
+
+**Open on GitHub.**
+- PR #1 (`site/v0.4-copy`, from another session; was archive PR #12): site copy for v0.4. Not merged.
+- Minor findings from round 2, not filed yet: no Duplicate in the collection menu; static-token servers show the
+  Sign in banner and the Auth tab can't be reached for MCP; MCP results from the previous tab stay visible; two
+  blocks named "End" can't be told apart in flow selects; import messages don't mention flows, and importing a
+  backup into the same workspace duplicates everything; error texts include Rust internals (`os error 10061`).
+- Issue #2: the Windows test.
+
+**Waiting on the owner.**
+- Publishing the draft releases.
+- Code-signing certificates and the updater key (`docs/RELEASING.md`).
+- Sync design.
+- The site's DNS (see `site/README.md`).
+
+**Design canvas.** "Dispatch — Complete UX Redesign" (https://claude.ai/artifact/VxFK9bQ6zCXUV3wb36YLE7) was
+gap-analysed against 0.4.4 on 2026-11-05. The owner keeps the node-graph flow editor (the canvas proposed a list).
+Biggest unbuilt items: environment kinds + production guard, flow run evidence (screenshots, why it failed, re-run
+from a step), richer schedules (times/cron, flows and saved suites), a real Ctrl+K palette.
+
+**Linked workspaces** (owner chose "option B" over the canvas's Desk): phase 1 shipped in 0.5.0. Next: phase 2 (a
+folder watcher: live reload and conflicts as files change) and phase 3 (`dispatch-run` on workspace folders,
+`--env`, `--flow`, `DISPATCH_SECRET_*`). Code: `src/core/workspaceFiles.ts`, `src/ui/linkedDirs.ts`,
+`folder_read`/`folder_sync` in `src-tauri/src/lib.rs`.
+
+**Ideas not started.**
+- UI assertions and screenshots in browser steps (deferred by the owner).
+- An interactive MCP sign-in in the CLI (today the CLI takes a pasted token).
+- A Windows-friendly cURL snippet (2.9 in the report; minor).

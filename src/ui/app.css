@@ -503,3 +503,10 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
   .flowBody { grid-template-columns: minmax(0, 1fr); }
   .flowCanvas { min-height: 360px; }
 }
+.mcpAuthRow { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: 0 0 .4rem; }
+.mcpAuthRow select { max-width: 16rem; }
+/* A warning box (linked folders: files changed outside the app). The text says what happened, not the colour alone. */
+.note { border: 1px solid var(--outline); border-radius: var(--radius); padding: 8px 12px; margin: 8px 0; }
+.note.warn { background: var(--warn-soft); border-color: var(--warn); }
+.note p { margin: 0; }
+.note code { overflow-wrap: anywhere; }

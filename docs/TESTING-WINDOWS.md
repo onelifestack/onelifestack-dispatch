@@ -1,4 +1,4 @@
-# Testing Dispatch 0.4.2 on Windows
+# Testing Dispatch 0.5.0 on Windows
 
 Instructions for a tester (a person or an AI agent) on a Windows 10/11 machine. Work through each section, record
 **PASS / FAIL / BLOCKED** for every numbered check, and write the results into a report (template at the end).
@@ -21,11 +21,14 @@ yet. Expect to find real bugs; that's the point.
   - any text in the app's **Console** (bottom-left of the status bar)
 - If a check is blocked by an earlier failure, mark it BLOCKED and move on.
 - Make a note of anything that looks broken, cramped or confusing, even if it "works".
+- **The repository is public**, and so are its issues and comments. Before posting, take out anything personal:
+  replace your Windows user name in paths with `<you>`, and leave out machine names, e-mail addresses, tokens and
+  cookies. Crop screenshots that show any of these.
 
 ## 0. Setup
 
-You need: Windows 10 or 11 (x64), PowerShell, Git, the GitHub CLI (`gh`) logged in with access to the private repo
-`onelifestack/onelifestack-dispatch`, Node.js 20 or newer, and Microsoft Edge (built into Windows; Chrome works too).
+You need: Windows 10 or 11 (x64), PowerShell, Git, the GitHub CLI (`gh`) logged in with write access to
+`onelifestack/onelifestack-dispatch` (the repo is public, but the draft release isn't), Node.js 20 or newer, and Microsoft Edge (built into Windows; Chrome works too).
 
 ```powershell
 winget install --id Git.Git -e
@@ -45,10 +48,10 @@ cd onelifestack-dispatch           # stay on main: it has the demo login page an
 npm ci
 npm run build:cli          # builds dist-cli\dispatch-run.mjs
 mkdir ..\installers
-gh release download v0.4.2 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
+gh release download v0.5.0 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
 ```
 
-The release is a **draft**, so it's only visible to accounts with access to the repo. If `gh release download`
+The release is a **draft**, so it's only visible to accounts with write access to the repo. If `gh release download`
 says "release not found", run `gh release list --repo onelifestack/onelifestack-dispatch`: the draft must be listed
 with its installers (the build can take 20+ minutes after the tag). Also check `gh auth status`. If only an older
 draft is there, stop and report that rather than testing a build you made yourself.
@@ -73,7 +76,7 @@ What the demo API offers:
 
 ## 1. Install, first launch, uninstall
 
-1.1. Run `Dispatch_0.4.2_x64-setup.exe`. SmartScreen will warn because the installer isn't code-signed yet: click
+1.1. Run `Dispatch_0.5.0_x64-setup.exe`. SmartScreen will warn because the installer isn't code-signed yet: click
      "More info" → "Run anyway". Record the exact warning text. The install must finish without errors.
 
 1.2. Start Dispatch from the Start menu. A window titled Dispatch opens and shows the request editor (URL field,
@@ -97,8 +100,9 @@ What the demo API offers:
    3. Reopen it. History, open tabs and settings must still be there.
 
 1.6. *(Do this at the very end.)* Uninstall from Settings → Apps and confirm it's gone from the Start menu. Then
-     install the `.msi` instead, launch it once, and uninstall it too. Record whether your data survived a
-     reinstall. Either outcome is acceptable, but write down which happened.
+     install the `.msi` instead, launch it once, and uninstall it too. The msi installs for all users, so it needs
+     administrator rights (a UAC prompt; a non-elevated `msiexec /qn` fails with Error 1925). Record whether your
+     data survived a reinstall. Either outcome is acceptable, but write down which happened.
 
 ## 2. HTTP basics
 
@@ -138,7 +142,7 @@ What the demo API offers:
      PowerShell. The cURL snippet is multi-line bash (`\` continuations), so it's for Git Bash or WSL, not
      PowerShell. That's a known limitation; just note whether it runs in Git Bash if you have it.
 
-## 3. Browser login (new in 0.4; fixed for the desktop app in 0.4.2, issue #9)
+## 3. Browser login (new in 0.4; fixed for the desktop app in 0.4.2)
 
 This drives Microsoft Edge (or Chrome) in the background to log in through a web form and keep the token.
 
@@ -214,8 +218,10 @@ This drives Microsoft Edge (or Chrome) in the background to log in through a web
    3. Expect 3 runs of that request: ids 1 to 3 give 200, 404 or similar depending on how many orders exist.
    4. Wire the request's "failed" port to nothing and check what happens on a 404: the flow stops and says why.
 
-4.7. Close the app, reopen it, and check that flows and their layout are still there. Then delete a flow and use
-     **Undo**.
+4.7. Close the app, reopen it, and check that flows and their layout are still there. Then:
+   1. Delete a flow and use **Undo**: it comes back.
+   2. Delete a flow (open it first, so its editor closes on delete) and don't undo. Close and reopen the app: it
+      stays gone. Menu (≡) → **Export backup** doesn't contain it either (fixed in 0.5.0).
 
 4.8. Menu (≡) → **Export backup**. Import that file again and confirm the flows are in it and still point at the
      right requests (no "doesn't point at a saved request" warnings).
@@ -265,7 +271,7 @@ Run these from the repo folder in PowerShell.
    4. Call `run_flow` with name "Login then orders". The result starts with `Passed`.
    5. Disconnect. Check Task Manager: no `node.exe` left over from this.
 
-6.4b. **Windows fixes from 0.4.1**: confirmed from a source build in the first test run (#8). Check them again in
+6.4b. **Windows fixes from 0.4.1**: confirmed from a source build in the first test run. Check them again in
      the installed app:
    - The command from 6.4 with **backslashes** in the paths (`node C:\Users\<you>\...\dispatch-run.mjs mcp ...`)
      also connects. In 0.4.0 the backslashes were dropped.
@@ -292,6 +298,26 @@ Run these from the repo folder in PowerShell.
       - Set the request's **Auth** tab to Bearer Token `tk` and connect again. It connects.
       - `whoami` returns `Authorization: Bearer tk`.
 
+6.4d. **MCP sign-in** (new; only runs in the desktop app, so this is its first real test):
+   1. Start `node examples\mcp-http-server.mjs --port 4323 --oauth --token-ttl 60`. Tokens last 60 s, so renewal
+      gets tested too.
+   2. Select the **Demo local** environment. Make a new MCP request with transport HTTP and URL
+      `http://localhost:4323/mcp`, then Connect. Expect a blue banner: "This server needs you to sign in (kept for the
+      Demo local environment)", with a **Sign in** button.
+   3. Click **Sign in**. Your default browser opens a page "Allow Dispatch?". Click **Allow**. The browser shows
+      "You're signed in", and Dispatch shows "Signed in for Demo local" and connects (4 tools). The server's terminal
+      logs `registered client-…` and `signed in client-…`. Record whether Windows Firewall asks about anything.
+   4. `whoami` returns `Authorization: Bearer <a token>`.
+   5. Wait more than 60 s and call `add` again. It still works, and the server logs `refreshed a token`.
+   6. Disconnect, switch the environment to **No environment** and connect again. The sign-in banner comes back,
+      because sign-ins are kept per environment. Switch back to Demo local and connect: no sign-in needed.
+   7. While still connected, click **Sign out**. The panel no longer says "Signed in", and the server logs no
+      `refreshed a token` at that moment. Connect again: the banner comes back (fixed in 0.5.0).
+   8. Press Deny on the consent page instead: Dispatch shows a readable "Login failed: access_denied" and nothing
+      hangs.
+   9. Optional, only with your own account: pick **Well-known servers… → Linear** (or Notion, Sentry, …), connect,
+      sign in, and check that tools are listed. Don't call tools that change anything.
+
 6.5. **gRPC** (optional; needs the extra packages in `examples\grpc\README.md`):
    1. Start `node examples\grpc\server.cjs`.
    2. New request → gRPC → `localhost:50051` → **Load services** → call `SayHello`.
@@ -301,6 +327,21 @@ Run these from the repo folder in PowerShell.
    2. YAML files appear, one per request. Edit a request in the app and check the file changes.
    3. Edit a `.req.yaml` in Notepad, then **Reload from folder**: the change shows in the app.
    4. Check how Windows path separators and long names behave.
+   5. Edit a `.req.yaml` in Notepad, then edit the same request in the app **without** reloading. The file keeps
+      the Notepad edit, and the collection page says "1 file changed outside Dispatch" with **Use the folder's
+      version** and **Keep mine**. Try both.
+
+6.6b. **Workspaces as files** (new in 0.5):
+   1. Menu → Workspaces → **Link to a folder…** on your workspace, and pick an empty folder such as
+      `C:\Temp\dispatch-ws`. If a collection was linked in 6.6, accept moving it in. Files appear:
+      `dispatch.workspace.yaml`, `collections\…`, `environments\*.env.yaml`, `flows\*.flow.yaml`. No secret value
+      appears in any file (search the folder for a secret you know).
+   2. Rename a flow in the app: its file is renamed. Change an environment variable: its file changes.
+   3. In Notepad, change a flow's `name:`, then change the same flow in the app. The Workspaces page shows the
+      conflict and the file keeps the Notepad edit. **Use the folder's version**: the app shows the Notepad name.
+   4. Close Dispatch, edit an environment file in Notepad, reopen Dispatch: the Workspaces page reports it.
+   5. **Unlink**, add a new workspace, and use **Open a workspace folder…** on `C:\Temp\dispatch-ws`. It opens as
+      its own workspace with the same collections, environments and flows, and secret values are empty.
 
 6.7. **Schedules:**
    1. Create a schedule for "Demo shop", every 1 minute, with failure notifications on.
@@ -341,7 +382,7 @@ comment (drag them into the comment box, or `gh issue comment <number> --repo on
 failure, titled `[Windows] <problem>`, and link it from the report.
 
 ```markdown
-# Dispatch 0.4.2 — Windows test report
+# Dispatch 0.5.0 — Windows test report
 
 - Date / tester:
 - Windows version (winver) and build:
