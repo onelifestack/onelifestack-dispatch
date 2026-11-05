@@ -4,7 +4,8 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { useWorkspace } from '../src/ui/useWorkspace'
 import { type FolderApi, linkSpace, openSpaceFolder, reloadSpace, useFolderSync } from '../src/ui/linkedDirs'
 import { resetForTests } from '../src/core/db'
-import { kv } from '../src/core/types'
+import { kv, newCollection, newRequest } from '../src/core/types'
+import { newFlow, newNode } from '../src/core/flows'
 import type { Transport } from '../src/core/transport'
 
 /** Folders in memory. The "hash" is the text itself; the compare-before-write rules match the Rust side. */
@@ -107,6 +108,60 @@ describe('linked workspaces', () => {
     expect(b.h.result.current.activeSpaceId).toBe(opened.id)
     const env = b.h.result.current.allEnvironments.find((e) => e.name === 'Staging')!
     expect(env.variables.map((v) => [v.key, v.value, !!v.secret])).toEqual([['token', '', true]])
+  })
+
+  it('opens a copied folder with a new workspace id as copies, leaving the original workspace alone', async () => {
+    // Windows round 3: a copy of a linked folder, with only the workspace id edited, moved the original's records
+    // (and their secrets) into the new workspace, because the record ids matched.
+    const { h } = mount()
+    await waitFor(() => expect(h.result.current.ready).toBe(true))
+    const col = newCollection('Shop API')
+    const req = newRequest({ name: 'Orders', collectionId: col.id, url: 'https://s.test/orders' })
+    const flow = newFlow('Smoke')
+    const node = { ...newNode('request', 200, 140), config: { requestId: req.id } }
+    await act(async () => {
+      await h.result.current.importWorkspace({ collections: [col], folders: [], requests: [req], environments: [], flows: [{ ...flow, nodes: [...flow.nodes, node], edges: [{ id: 'e1', from: flow.nodes[0].id, port: 'next', to: node.id }] }] })
+      const env = await h.result.current.addEnvironment('Staging')
+      await h.result.current.updateEnvironment({ ...env, variables: [kv('token', 'top-secret', true, { secret: true })] })
+    })
+    const original = h.result.current.spaces[0]
+    await act(async () => { await linkSpace(h.result.current, fs, original, '/repo', yes) })
+    await waitFor(() => expect(filesIn('/repo')).toContain('flows/smoke.flow.yaml'), { timeout: 3000 })
+
+    // The copy: same files, but someone gave the workspace a new id and name.
+    const copy = new Map(fs.dir('/repo'))
+    const head = copy.get('dispatch.workspace.yaml')!
+    copy.set('dispatch.workspace.yaml', head.replace(/^id: .*$/m, 'id: copied-workspace').replace(/^name: .*$/m, 'name: Copy'))
+    fs.dirs.set('/copy', copy)
+    let msg = ''
+    await act(async () => { msg = await openSpaceFolder(h.result.current, fs, '/copy', yes) })
+    expect(msg).toMatch(/^Opened “Copy”/)
+
+    const ws = h.result.current
+    const copySpace = ws.spaces.find((x) => x.linkedDir === '/copy')!
+    const inSpace = (id: string) => ({
+      cols: ws.allCollections.filter((c) => (c.workspaceId ?? 'default') === id),
+      envs: ws.allEnvironments.filter((e) => (e.workspaceId ?? 'default') === id),
+      flows: ws.allFlows.filter((f) => (f.workspaceId ?? 'default') === id),
+    })
+    // The original keeps everything, with its secret and its own ids.
+    const a = inSpace(original.id)
+    expect([a.cols.length, a.envs.length, a.flows.length]).toEqual([1, 1, 1])
+    expect(a.cols[0].id).toBe(col.id)
+    expect(a.envs[0].variables[0].value).toBe('top-secret')
+    expect(ws.requests.filter((r) => r.collectionId === col.id).map((r) => r.id)).toEqual([req.id])
+    // The copy has its own records, no secret values, and its flow points at its own request.
+    const b = inSpace(copySpace.id)
+    expect([b.cols.length, b.envs.length, b.flows.length]).toEqual([1, 1, 1])
+    expect(b.cols[0].id).not.toBe(col.id)
+    expect(b.envs[0].id).not.toBe(a.envs[0].id)
+    expect(b.envs[0].variables.map((v) => [v.key, v.value])).toEqual([['token', '']])
+    const copyReqs = ws.requests.filter((r) => r.collectionId === b.cols[0].id)
+    expect(copyReqs.map((r) => r.name)).toEqual(['Orders'])
+    expect(copyReqs[0].id).not.toBe(req.id)
+    expect(b.flows[0].id).not.toBe(a.flows[0].id)
+    expect(b.flows[0].nodes.find((n) => n.type === 'request')?.config.requestId).toBe(copyReqs[0].id)
+    expect(a.flows[0].nodes.find((n) => n.type === 'request')?.config.requestId).toBe(req.id)
   })
 
   it('refuses folders that hold something else', async () => {

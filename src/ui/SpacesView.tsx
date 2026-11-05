@@ -48,7 +48,7 @@ export function SpacesView({ ws, ask, confirm, notify }: { ws: WorkspaceApi; ask
             const st = ws.folderStatus[`space:${x.id}`]
             return (
               <tr key={x.id} className={x.id === ws.activeSpaceId ? 'on' : ''}>
-                <td><b>{x.name}</b>{x.id === ws.activeSpaceId && <span className="pill">open</span>}</td>
+                <td style={{ whiteSpace: 'nowrap' }}><b>{x.name}</b>{x.id === ws.activeSpaceId && <span className="pill">open</span>}</td>
                 <td>{cols}</td>
                 <td>{envs}</td>
                 <td>{flows}</td>

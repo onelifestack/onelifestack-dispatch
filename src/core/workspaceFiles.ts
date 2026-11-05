@@ -143,3 +143,31 @@ export function filesToWorkspace(files: FileEntry[], parse: Parse, local: LocalI
   return out
 }
 
+/**
+ * Gives a new id to every item whose id is in `taken` (it already belongs to another workspace on this device, as
+ * in a copied folder with an edited workspace id), and points the references at the new ids: folders and requests
+ * at their collection and parent, flow request blocks at their request. Without this, reading such a folder would
+ * move the other workspace's items (and their secrets) into this one.
+ */
+export function reIdTaken(w: WorkspaceRead, taken: Set<string>): WorkspaceRead {
+  const map = new Map<string, string>()
+  for (const x of [...w.collections, ...w.folders, ...w.requests, ...w.environments, ...w.flows]) {
+    if (taken.has(x.id) && !map.has(x.id)) map.set(x.id, crypto.randomUUID())
+  }
+  if (!map.size) return w
+  const id = (s: string) => map.get(s) ?? s
+  const opt = (s: string | null) => (s === null ? null : id(s))
+  return {
+    ...w,
+    collections: w.collections.map((c) => ({ ...c, id: id(c.id) })),
+    folders: w.folders.map((f) => ({ ...f, id: id(f.id), collectionId: id(f.collectionId), parentId: opt(f.parentId) })),
+    requests: w.requests.map((r) => ({ ...r, id: id(r.id), collectionId: opt(r.collectionId), folderId: opt(r.folderId) })),
+    environments: w.environments.map((e) => ({ ...e, id: id(e.id) })),
+    flows: w.flows.map((f) => ({
+      ...f, id: id(f.id),
+      nodes: f.nodes.map((n) => (n.config.requestId && map.has(n.config.requestId) ? { ...n, config: { ...n.config, requestId: id(n.config.requestId) } } : n)),
+    })),
+    warnings: [...w.warnings, `${map.size} item${map.size > 1 ? 's' : ''} in this folder already belong${map.size > 1 ? '' : 's'} to another workspace on this device (a copied folder?), so this workspace got ${map.size > 1 ? 'copies' : 'a copy'} with new ids.`],
+  }
+}
+

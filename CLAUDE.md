@@ -122,6 +122,7 @@ repo. Never commit with any address other than the noreply one (see the folder C
 - v0.4.4: deleted flows stay deleted (archive #14), MCP Sign out sticks (archive #15)
 - v0.5.0: linked workspaces, phase 1 (a workspace kept as a folder of files; docs/DESIGN-linked-workspaces.md);
   MIT licence; the first release built in the public repo
+- v0.5.1: round 3 fixes (copied workspace folders, import message, dialog and table layout)
 
 Releases up to v0.4.4 are drafts in the archive repo only.
 
@@ -134,20 +135,26 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
 - Round 1 (on 0.4.1, built from source): 29 of 35 checks passed and it found archive #9 (fixed in 0.4.2).
 - Round 2 (installed 0.4.3, 2026-11-05): 35 of 42 passed, 2 failed (archive #14, #15, both fixed in 0.4.4), 5 partial.
   Not covered: 150%/200% scaling, multiple monitors, 6.4d step 9 (a real provider), SmartScreen text.
-- Round 3 requested on the installed 0.5.0 (issue #2, 2026-11-05): retest 4.7 and 6.4d step 7, the new
-  6.6 step 5 and 6.6b (linked folders), plus a smoke list. #2's body holds the 0.5.0 guide.
+- Round 3 (installed 0.5.0 over 0.4.3, issue #2, 2026-11-05): 24 of 26 passed, 0 failed, 2 partial. Data survived
+  the upgrade; both retests pass. Found: a copied workspace folder with an edited id moved the original's items and
+  secrets (fixed in 0.5.1 with `reIdTaken`); guide 6.6b step 5 described the wrong behaviour (corrected, new step 6);
+  import message skipped flows, long commands overflowed the confirm dialog, workspace names wrapped (all fixed in
+  0.5.1). Flows deleted in 0.4.x stay in the data after upgrading (noted in the 0.5.1 release notes).
 - **Next step:** read the newest comment on #2 and any `[Windows] …` issues or `test/windows-*` branches the agent
   opened. Then fix in a PR, bump the version (package.json, tauri.conf.json, Cargo.toml + lock, `VERSION` in
   `src/cli/main.ts`, `clientVersion` in `src/core/mcp.ts`, the version in `docs/TESTING-WINDOWS.md`), tag, add
   release notes, and refresh #2's body from the guide.
 
 **Open on GitHub.**
-- PR #1 (`site/v0.4-copy`, from another session; was archive PR #12): site copy for v0.4. Not merged.
 - Minor findings from round 2, not filed yet: no Duplicate in the collection menu; static-token servers show the
   Sign in banner and the Auth tab can't be reached for MCP; MCP results from the previous tab stay visible; two
-  blocks named "End" can't be told apart in flow selects; import messages don't mention flows, and importing a
+  blocks named "End" can't be told apart in flow selects; importing a
   backup into the same workspace duplicates everything; error texts include Rust internals (`os error 10061`).
 - Issue #2: the Windows test.
+
+**Site.** dispatch.onelifestack.com shows 0.5.0 with downloads from the public release (`site/release.json`). After
+each published release, regenerate `site/release.json` and ask the owner to run `scripts/publish-site.sh` (auto mode
+blocks Claude from publishing).
 
 **Waiting on the owner.**
 - Publishing the draft releases.
