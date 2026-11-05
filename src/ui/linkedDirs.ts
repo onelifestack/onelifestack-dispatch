@@ -7,7 +7,7 @@
 import { useEffect, useRef } from 'react'
 import * as db from '../core/db'
 import { type FileEntry, collectionToFiles, filesToCollection, literalSecrets } from '../core/fileFormat'
-import { type WorkspaceContent, filesToWorkspace, workspaceHeader, workspaceToFiles } from '../core/workspaceFiles'
+import { type WorkspaceContent, filesToWorkspace, reIdTaken, workspaceHeader, workspaceToFiles } from '../core/workspaceFiles'
 import { type Collection, DEFAULT_SPACE, type Space, folderIdOf, spaceOf } from '../core/types'
 import type { WorkspaceApi } from './useWorkspace'
 
@@ -92,7 +92,17 @@ export async function reloadSpace(ws: WorkspaceApi, fs: FolderApi, space: Space,
   if (!space.linkedDir) return []
   const files = read ?? await fs.read(space.linkedDir)
   const { parse } = await yaml()
-  const r = filesToWorkspace(files, parse, { collections: ws.allCollections, folders: ws.folders, requests: ws.requests, environments: ws.allEnvironments })
+  // Only this workspace's own items may lend their secrets or keep their ids; another workspace's never move here.
+  const cols = ws.allCollections.filter((c) => spaceOf(c) === space.id)
+  const colIds = new Set(cols.map((c) => c.id))
+  const own = {
+    collections: cols, folders: ws.folders.filter((f) => colIds.has(f.collectionId)),
+    requests: ws.requests.filter((q) => q.collectionId !== null && colIds.has(q.collectionId)),
+    environments: ws.allEnvironments.filter((e) => spaceOf(e) === space.id),
+  }
+  const mine = new Set([...own.collections, ...own.folders, ...own.requests, ...own.environments, ...ws.allFlows.filter((f) => spaceOf(f) === space.id)].map((x) => x.id))
+  const taken = new Set([...ws.allCollections, ...ws.folders, ...ws.requests, ...ws.allEnvironments, ...ws.allFlows].map((x) => x.id).filter((x) => !mine.has(x)))
+  const r = reIdTaken(filesToWorkspace(files, parse, own), taken)
   if (r.space.id !== folderIdOf(space)) throw new Error(`That folder now holds a different workspace (“${r.space.name}”).`)
   await ws.backupNow('before-folder')
   const here = <T extends { workspaceId?: string }>(x: T) => ({ ...x, workspaceId: space.id })

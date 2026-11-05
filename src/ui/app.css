@@ -179,6 +179,7 @@ pre.out { margin: 0; padding: .7rem .8rem; background: var(--sunken); border-rad
 .dialog { border: 1px solid var(--outline); border-radius: 14px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); padding: 1.2rem; width: min(440px, calc(100vw - 32px)); }
 .dialog::backdrop { background: rgba(20, 10, 40, .4); }
 .dialog h2 { margin-top: 0; }
+.dialog p { overflow-wrap: anywhere; white-space: pre-wrap; } /* long commands and paths wrap instead of scrolling */
 .dialog form { display: grid; gap: .7rem; }
 .toast { position: fixed; bottom: 2.4rem; left: 50%; transform: translateX(-50%); max-width: min(640px, calc(100vw - 32px)); background: var(--ink); color: var(--bg); padding: .6rem 1rem; border-radius: 10px; box-shadow: var(--shadow); z-index: 60; cursor: pointer; }
 

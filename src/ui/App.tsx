@@ -177,7 +177,7 @@ export function App({ transport, engine, browserLauncher, extras = {} }: { trans
       r ??= await importFileAsync(text)
       await ws.importWorkspace(r)
       const n = (x: number, w: string) => x && `${x} ${w}${x > 1 ? 's' : ''}`
-      const what = [n(r.collections.length, 'collection'), n(r.folders.length, 'folder'), n(r.requests.length, 'request'), n(r.environments.length, 'environment')].filter(Boolean).join(', ')
+      const what = [n(r.collections.length, 'collection'), n(r.folders.length, 'folder'), n(r.requests.length, 'request'), n(r.environments.length, 'environment'), n(r.flows?.length ?? 0, 'flow')].filter(Boolean).join(', ')
       notify(`Imported ${what || 'nothing'}.${r.warnings.length ? ` ${r.warnings.length} note${r.warnings.length > 1 ? 's' : ''}: ${r.warnings.slice(0, 3).join(' ')}${r.warnings.length > 3 ? ' …' : ''}` : ''}`)
     } catch (e) {
       notify(e instanceof Error ? e.message : String(e))

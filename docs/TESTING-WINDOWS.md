@@ -1,4 +1,4 @@
-# Testing Dispatch 0.5.0 on Windows
+# Testing Dispatch 0.5.1 on Windows
 
 Instructions for a tester (a person or an AI agent) on a Windows 10/11 machine. Work through each section, record
 **PASS / FAIL / BLOCKED** for every numbered check, and write the results into a report (template at the end).
@@ -48,7 +48,7 @@ cd onelifestack-dispatch           # stay on main: it has the demo login page an
 npm ci
 npm run build:cli          # builds dist-cli\dispatch-run.mjs
 mkdir ..\installers
-gh release download v0.5.0 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
+gh release download v0.5.1 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
 ```
 
 The release is a **draft**, so it's only visible to accounts with write access to the repo. If `gh release download`
@@ -76,7 +76,7 @@ What the demo API offers:
 
 ## 1. Install, first launch, uninstall
 
-1.1. Run `Dispatch_0.5.0_x64-setup.exe`. SmartScreen will warn because the installer isn't code-signed yet: click
+1.1. Run `Dispatch_0.5.1_x64-setup.exe`. SmartScreen will warn because the installer isn't code-signed yet: click
      "More info" → "Run anyway". Record the exact warning text. The install must finish without errors.
 
 1.2. Start Dispatch from the Start menu. A window titled Dispatch opens and shows the request editor (URL field,
@@ -340,8 +340,14 @@ Run these from the repo folder in PowerShell.
    3. In Notepad, change a flow's `name:`, then change the same flow in the app. The Workspaces page shows the
       conflict and the file keeps the Notepad edit. **Use the folder's version**: the app shows the Notepad name.
    4. Close Dispatch, edit an environment file in Notepad, reopen Dispatch: the Workspaces page reports it.
-   5. **Unlink**, add a new workspace, and use **Open a workspace folder…** on `C:\Temp\dispatch-ws`. It opens as
-      its own workspace with the same collections, environments and flows, and secret values are empty.
+   5. **Unlink**, then use **Open a workspace folder…** on `C:\Temp\dispatch-ws`. Dispatch recognises its own
+      workspace and asks "You already have this workspace… Link it to this folder and use the folder's version?".
+      Accept: it is linked again and the secret values are still there.
+   6. Copy `C:\Temp\dispatch-ws` to `C:\Temp\dispatch-copy` and, in the copy's `dispatch.workspace.yaml`, change
+      `id:` to any new text and `name:` to "Copy". **Open a workspace folder…** on the copy: it opens as its own
+      workspace "Copy" with the same collections, environments and flows, and secret values are empty there. The
+      original workspace still has everything, with its secrets (it lost them in 0.5.0). In "Copy", a flow's request
+      block runs the copy's request.
 
 6.7. **Schedules:**
    1. Create a schedule for "Demo shop", every 1 minute, with failure notifications on.
@@ -382,7 +388,7 @@ comment (drag them into the comment box, or `gh issue comment <number> --repo on
 failure, titled `[Windows] <problem>`, and link it from the report.
 
 ```markdown
-# Dispatch 0.5.0 — Windows test report
+# Dispatch 0.5.1 — Windows test report
 
 - Date / tester:
 - Windows version (winver) and build:
