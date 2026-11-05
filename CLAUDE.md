@@ -104,7 +104,7 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 
 ## Where we left off
 
-Updated 2026-11-04 (evening). Everything is on `main`; the latest tag is **v0.4.3**.
+Updated 2026-11-05. The latest tag is **v0.4.4** (once PR for #14/#15 is merged and tagged).
 
 **Releases.** Every release is a *draft*: the owner publishes. Tags in order:
 - v0.2.0
@@ -112,6 +112,7 @@ Updated 2026-11-04 (evening). Everything is on `main`; the latest tag is **v0.4.
 - v0.4.1: Windows process fixes
 - v0.4.2: browser-login origin fix, #9
 - v0.4.3: MCP sign-in, #11 / PR #13
+- v0.4.4: deleted flows stay deleted (#14), MCP Sign out sticks (#15)
 
 Releases since 0.4.1 have no macOS `.dmg`: GitHub's macOS arm64 runners weren't available ("The job was not acquired
 by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for the tag's run.
@@ -120,8 +121,9 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
 - An agent on the owner's Windows machine follows `docs/TESTING-WINDOWS.md`, which is copied into the issue body,
   and posts reports as comments on #8.
 - Round 1 (on 0.4.1, built from source): 29 of 35 checks passed and it found #9 (fixed in 0.4.2).
-- Round 2 has been requested on the **installed 0.4.3**, including 6.4c (MCP over HTTP) and 6.4d (MCP sign-in,
-  never run on a real machine).
+- Round 2 (installed 0.4.3, 2026-11-05): 35 of 42 passed, 2 failed (#14, #15, both fixed in 0.4.4), 5 partial.
+  Not covered: 150%/200% scaling, multiple monitors, 6.4d step 9 (a real provider), SmartScreen text.
+- Round 3 (installed 0.4.4) is a short retest of 4.7 and 6.4d step 7, plus a quick smoke run.
 - **Next step:** read the newest comment on #8 and any `[Windows] …` issues or `test/windows-*` branches the agent
   opened. Then fix in a PR, bump the version (package.json, tauri.conf.json, Cargo.toml + lock, `VERSION` in
   `src/cli/main.ts`, `clientVersion` in `src/core/mcp.ts`, the version in `docs/TESTING-WINDOWS.md`), tag, add
@@ -129,6 +131,10 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
 
 **Open on GitHub.**
 - PR #12 (`site/v0.4-copy`, from another session): site copy for v0.4. Not merged.
+- Minor findings from round 2, not filed yet: no Duplicate in the collection menu; static-token servers show the
+  Sign in banner and the Auth tab can't be reached for MCP; MCP results from the previous tab stay visible; two
+  blocks named "End" can't be told apart in flow selects; import messages don't mention flows, and importing a
+  backup into the same workspace duplicates everything; error texts include Rust internals (`os error 10061`).
 - Issue #8: the Windows test.
 
 **Waiting on the owner.**

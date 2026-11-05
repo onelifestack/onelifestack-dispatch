@@ -1,6 +1,6 @@
 [package]
 name = "dispatch"
-version = "0.4.3"
+version = "0.4.4"
 description = "Dispatch by OneLifeStack: a local-first API client"
 edition = "2021"
 rust-version = "1.80"
