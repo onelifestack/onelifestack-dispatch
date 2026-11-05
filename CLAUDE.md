@@ -104,7 +104,7 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 
 ## Where we left off
 
-Updated 2026-11-05. The latest tag is **v0.4.4** (once PR for #14/#15 is merged and tagged).
+Updated 2026-11-05. Everything is on `main`; the latest tag is **v0.4.4** (PR #16).
 
 **Releases.** Every release is a *draft*: the owner publishes. Tags in order:
 - v0.2.0
@@ -114,7 +114,7 @@ Updated 2026-11-05. The latest tag is **v0.4.4** (once PR for #14/#15 is merged 
 - v0.4.3: MCP sign-in, #11 / PR #13
 - v0.4.4: deleted flows stay deleted (#14), MCP Sign out sticks (#15)
 
-Releases since 0.4.1 have no macOS `.dmg`: GitHub's macOS arm64 runners weren't available ("The job was not acquired
+Releases 0.4.1–0.4.3 have no macOS `.dmg` (0.4.4 has one): GitHub's macOS arm64 runners weren't available ("The job was not acquired
 by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for the tag's run.
 
 **Windows test (issue #8).**
@@ -123,7 +123,8 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
 - Round 1 (on 0.4.1, built from source): 29 of 35 checks passed and it found #9 (fixed in 0.4.2).
 - Round 2 (installed 0.4.3, 2026-11-05): 35 of 42 passed, 2 failed (#14, #15, both fixed in 0.4.4), 5 partial.
   Not covered: 150%/200% scaling, multiple monitors, 6.4d step 9 (a real provider), SmartScreen text.
-- Round 3 (installed 0.4.4) is a short retest of 4.7 and 6.4d step 7, plus a quick smoke run.
+- Round 3 requested on the installed 0.4.4 (comment on #8, 2026-11-05): retest 4.7 and 6.4d step 7, plus a
+  smoke list. #8's body holds the 0.4.4 guide.
 - **Next step:** read the newest comment on #8 and any `[Windows] …` issues or `test/windows-*` branches the agent
   opened. Then fix in a PR, bump the version (package.json, tauri.conf.json, Cargo.toml + lock, `VERSION` in
   `src/cli/main.ts`, `clientVersion` in `src/core/mcp.ts`, the version in `docs/TESTING-WINDOWS.md`), tag, add
@@ -142,6 +143,12 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
 - Code-signing certificates and the updater key (`docs/RELEASING.md`).
 - Sync design.
 - The site's DNS (see `site/README.md`).
+
+**Design canvas.** "Dispatch — Complete UX Redesign" (https://claude.ai/artifact/VxFK9bQ6zCXUV3wb36YLE7) was
+gap-analysed against 0.4.4 on 2026-11-05. The owner keeps the node-graph flow editor (the canvas proposed a list).
+Biggest unbuilt items: environment kinds + production guard, flow run evidence (screenshots, why it failed, re-run
+from a step), richer schedules (times/cron, flows and saved suites), a real Ctrl+K palette. Workspace → "Desk"
+(one folder per workspace) is undecided.
 
 **Ideas not started.**
 - UI assertions and screenshots in browser steps (deferred by the owner).
