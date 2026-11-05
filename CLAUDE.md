@@ -104,40 +104,50 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 
 ## Where we left off
 
-Updated 2026-11-05. Everything is on `main`; the latest tag is **v0.5.0** (PR #18).
+Updated 2026-11-05. Everything is on `main`; the latest tag is **v0.5.0**.
+
+**The repo is public (MIT) since 2026-11-05.** GitHub billing blocked Actions on the private repo, so the owner
+made it public. To keep a personal e-mail out of the public history, the old repo was renamed
+`onelifestack/onelifestack-dispatch-archive` (private; keeps PRs #1–#18, the old issues #8–#15 with the Windows
+reports, and the draft releases up to v0.4.4) and this repo was pushed fresh with rewritten history. Issue and PR
+numbers restarted here; below, numbers marked *archive* refer to the old repo. Locally, remote `archive` is the old
+repo. Never commit with any address other than the noreply one (see the folder CLAUDE.md).
 
 **Releases.** Every release is a *draft*: the owner publishes. Tags in order:
 - v0.2.0
 - v0.4.0: workspaces, MCP, flows, browser login
 - v0.4.1: Windows process fixes
-- v0.4.2: browser-login origin fix, #9
-- v0.4.3: MCP sign-in, #11 / PR #13
-- v0.4.4: deleted flows stay deleted (#14), MCP Sign out sticks (#15)
-- v0.5.0: linked workspaces, phase 1 (a workspace kept as a folder of files; docs/DESIGN-linked-workspaces.md)
+- v0.4.2: browser-login origin fix (archive #9)
+- v0.4.3: MCP sign-in (archive #11 / PR #13)
+- v0.4.4: deleted flows stay deleted (archive #14), MCP Sign out sticks (archive #15)
+- v0.5.0: linked workspaces, phase 1 (a workspace kept as a folder of files; docs/DESIGN-linked-workspaces.md);
+  MIT licence; the first release built in the public repo
+
+Releases up to v0.4.4 are drafts in the archive repo only.
 
 Releases 0.4.1–0.4.3 have no macOS `.dmg` (0.4.4 has one): GitHub's macOS arm64 runners weren't available ("The job was not acquired
 by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for the tag's run.
 
-**Windows test (issue #8).**
+**Windows test (issue #2; rounds 1–2 in archive #8).**
 - An agent on the owner's Windows machine follows `docs/TESTING-WINDOWS.md`, which is copied into the issue body,
-  and posts reports as comments on #8.
-- Round 1 (on 0.4.1, built from source): 29 of 35 checks passed and it found #9 (fixed in 0.4.2).
-- Round 2 (installed 0.4.3, 2026-11-05): 35 of 42 passed, 2 failed (#14, #15, both fixed in 0.4.4), 5 partial.
+  and posts reports as comments on #2. The repo is public, so the guide tells it to strip personal details.
+- Round 1 (on 0.4.1, built from source): 29 of 35 checks passed and it found archive #9 (fixed in 0.4.2).
+- Round 2 (installed 0.4.3, 2026-11-05): 35 of 42 passed, 2 failed (archive #14, #15, both fixed in 0.4.4), 5 partial.
   Not covered: 150%/200% scaling, multiple monitors, 6.4d step 9 (a real provider), SmartScreen text.
-- Round 3 requested on the installed 0.5.0 (comments on #8, 2026-11-05): retest 4.7 and 6.4d step 7, the new
-  6.6 step 5 and 6.6b (linked folders), plus a smoke list. #8's body holds the 0.5.0 guide.
-- **Next step:** read the newest comment on #8 and any `[Windows] …` issues or `test/windows-*` branches the agent
+- Round 3 requested on the installed 0.5.0 (issue #2, 2026-11-05): retest 4.7 and 6.4d step 7, the new
+  6.6 step 5 and 6.6b (linked folders), plus a smoke list. #2's body holds the 0.5.0 guide.
+- **Next step:** read the newest comment on #2 and any `[Windows] …` issues or `test/windows-*` branches the agent
   opened. Then fix in a PR, bump the version (package.json, tauri.conf.json, Cargo.toml + lock, `VERSION` in
   `src/cli/main.ts`, `clientVersion` in `src/core/mcp.ts`, the version in `docs/TESTING-WINDOWS.md`), tag, add
-  release notes, and refresh #8's body from the guide.
+  release notes, and refresh #2's body from the guide.
 
 **Open on GitHub.**
-- PR #12 (`site/v0.4-copy`, from another session): site copy for v0.4. Not merged.
+- PR #1 (`site/v0.4-copy`, from another session; was archive PR #12): site copy for v0.4. Not merged.
 - Minor findings from round 2, not filed yet: no Duplicate in the collection menu; static-token servers show the
   Sign in banner and the Auth tab can't be reached for MCP; MCP results from the previous tab stay visible; two
   blocks named "End" can't be told apart in flow selects; import messages don't mention flows, and importing a
   backup into the same workspace duplicates everything; error texts include Rust internals (`os error 10061`).
-- Issue #8: the Windows test.
+- Issue #2: the Windows test.
 
 **Waiting on the owner.**
 - Publishing the draft releases.
