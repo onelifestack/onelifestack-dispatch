@@ -20,7 +20,7 @@ Preview locally: `npx serve -c site/serve.json site/dist` (or any static server 
 `src/assets/shots/*.png` (1440x900) are real captures of the built web app (Playwright, headless Chromium) with `examples/demo-shop.postman_collection.json` imported and requests sent to `examples/demo-server.mjs` on :4318: request and response (light and dark), scripts and tests, runner with `examples/users.csv`, a load test of the flaky endpoint, and the generated docs. Retake them when the UI changes (recipe in CLAUDE.md, "Visual check without a desktop"). `og.png` is 1200x630.
 
 ## Desktop downloads (`site/release.json`, optional)
-The source repo is private, so the installers CI builds are not public. To offer them: create a release on the public `onelifestack/dispatch-site` repo, attach the installers from the draft release in the private repo, then write `site/release.json` (see `release.example.json`):
+The source repo is public (since 0.5.0), so `site/release.json` points straight at the installers on its published GitHub release. After publishing a release, regenerate `site/release.json` (see `release.example.json`):
 `{version, date, assets:[{os: windows|macos|linux, arch, kind, url, size_mb, sha256}]}`, with each `url` an https link to the attached asset. Compute checksums with `sha256sum`. Without the file the page says "Desktop downloads coming soon" and points to the web app and CLI. The installers are **unsigned** (no certificates yet), so Windows SmartScreen and macOS Gatekeeper warn; the download page says so and explains how to open them. Update `release.json` and rerun the publish script for each version.
 
 ## Publishing (owner steps)
@@ -28,5 +28,5 @@ The source repo is private, so the installers CI builds are not public. To offer
 2. `scripts/publish-site.sh` (builds, checks, pushes `site/dist` to `main`; commits as Omprakash Gautam).
 3. Cloudflare DNS: CNAME `dispatch` -> `onelifestack.github.io`, DNS only (grey cloud). The build writes `CNAME` with `dispatch.onelifestack.com`.
 4. When GitHub issues the certificate, tick Enforce HTTPS in the Pages settings.
-5. Optional: attach installers to a release on `dispatch-site`, add `site/release.json`, republish.
+5. After each published release: regenerate `site/release.json` from the release (checksums are in the GitHub API `digest` field), republish.
 6. Add Dispatch to the developer site (`~/projects/developer`, "Keep in sync" table).
