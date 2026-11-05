@@ -14,7 +14,7 @@ import { RunnerView } from './RunnerView'
 import { LoadView } from './LoadView'
 import { getOAuthToken } from './oauth'
 import { importBruno, toPostmanCollection } from '../core/interop'
-import { pickFolder, readCollectionDir, useLinkedDirSync } from './linkedDirs'
+import { desktopFolders, openCollectionFolder, openSpaceFolder, useFolderSync } from './linkedDirs'
 import { SchedulesView, useScheduler } from './Schedules'
 import { layeredVars, selectLayer } from '../core/layers'
 import { FlowView } from './FlowView'
@@ -121,7 +121,7 @@ export function App({ transport, engine, browserLauncher, extras = {} }: { trans
     setToast({ text: msg, action }); clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), action ? 9000 : msg.length > 80 ? 8000 : 3500)
   }, [])
-  useLinkedDirSync(ws, notify)
+  useFolderSync(ws, notify)
   const sched = useScheduler(ws)
   // Every delete can be undone from the toast.
   const trashCount = useRef(0)
@@ -252,12 +252,15 @@ export function App({ transport, engine, browserLauncher, extras = {} }: { trans
             {ws.transport.unrestricted && <button type="button" role="menuitem" onClick={async (e) => {
               closeMenu(e)
               try {
-                const dir = await pickFolder(); if (!dir) return
-                const r = await readCollectionDir(ws, dir)
-                await ws.replaceCollection(r)
+                const dir = await desktopFolders.pick(); if (!dir) return
+                const r = await openCollectionFolder(ws, desktopFolders, dir)
                 notify(`Opened ${r.collections[0].name} from ${dir}; changes are saved back to the folder.${r.warnings.length ? ` ${r.warnings[0]}` : ''}`)
               } catch (err) { notify(String(err)) }
             }}>Open a collection folder…</button>}
+            {ws.transport.unrestricted && <button type="button" role="menuitem" onClick={async (e) => {
+              closeMenu(e)
+              try { const dir = await desktopFolders.pick(); if (dir) notify(await openSpaceFolder(ws, desktopFolders, dir, confirm)) } catch (err) { notify(String(err)) }
+            }}>Open a workspace folder…</button>}
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); void onExport() }}>Export backup</button>
             <button type="button" role="menuitem" onClick={(e) => { closeMenu(e); ws.setView({ kind: 'backups' }) }}>Local backups…</button>
             <hr />
@@ -285,7 +288,7 @@ export function App({ transport, engine, browserLauncher, extras = {} }: { trans
           : viewed.kind === 'globals' ? <GlobalsEditor ws={ws} />
           : viewed.kind === 'runner' ? <RunnerView key={`${viewed.collectionId}:${viewed.folderId}`} ws={ws} notify={notify} start={viewed.collectionId ? { collectionId: viewed.collectionId, folderId: viewed.folderId } : null} />
           : viewed.kind === 'flow' ? <FlowView key={viewed.id} ws={ws} flowId={viewed.id} notify={notify} confirm={confirm} />
-          : viewed.kind === 'spaces' ? <SpacesView ws={ws} ask={ask} notify={notify} />
+          : viewed.kind === 'spaces' ? <SpacesView ws={ws} ask={ask} confirm={confirm} notify={notify} />
           : viewed.kind === 'schedules' ? <SchedulesView ws={ws} sched={sched} notify={notify} />
           : viewed.kind === 'settings' ? <SettingsView ws={ws} notify={notify} />
           : viewed.kind === 'cookies' ? <CookiesView ws={ws} notify={notify} />

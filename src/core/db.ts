@@ -185,7 +185,7 @@ export async function getOpenTabs(): Promise<{ tabs: RequestDef[]; active: numbe
 // ---------- local backups ----------
 
 export interface BackupData { collections: Collection[]; folders: Folder[]; requests: RequestDef[]; environments: Environment[]; globals: KV[]; flows?: Flow[] }
-export interface BackupInfo { id: string; at: number; reason: 'daily' | 'manual' | 'before-restore'; counts: { collections: number; requests: number; environments: number } }
+export interface BackupInfo { id: string; at: number; reason: 'daily' | 'manual' | 'before-restore' | 'before-folder'; counts: { collections: number; requests: number; environments: number } }
 export const BACKUP_KEEP = 10
 
 /** Saves a snapshot of everything (secrets stay sealed) and keeps the newest BACKUP_KEEP. */
@@ -262,6 +262,15 @@ export const putScheduleRuns = (r: ScheduleRun[]) => put('meta', r, 'scheduleRun
 import { DEFAULT_SPACE, type Space } from './types'
 export const getSpaces = async (): Promise<Space[]> => { const s = await getMeta<Space[]>('spaces'); return s?.length ? s : [DEFAULT_SPACE] }
 export const putSpaces = (s: Space[]) => put('meta', s, 'spaces')
+
+/**
+ * Linked folders: the hash of each file as the app last wrote or read it (path → hash), so it can tell its own
+ * files from ones changed outside it. 'force' means the next write overwrites ("keep mine"). Keyed by
+ * `space:<id>` or `collection:<id>`.
+ */
+export type FolderState = Record<string, string> | 'force'
+export const getFolderState = (key: string) => getMeta<FolderState>(`folder:${key}`)
+export const putFolderState = (key: string, v: FolderState | undefined) => put('meta', v, `folder:${key}`)
 
 // ---------- flows ----------
 import type { Flow } from './flows'
