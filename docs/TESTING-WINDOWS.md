@@ -21,11 +21,14 @@ yet. Expect to find real bugs; that's the point.
   - any text in the app's **Console** (bottom-left of the status bar)
 - If a check is blocked by an earlier failure, mark it BLOCKED and move on.
 - Make a note of anything that looks broken, cramped or confusing, even if it "works".
+- **The repository is public**, and so are its issues and comments. Before posting, take out anything personal:
+  replace your Windows user name in paths with `<you>`, and leave out machine names, e-mail addresses, tokens and
+  cookies. Crop screenshots that show any of these.
 
 ## 0. Setup
 
-You need: Windows 10 or 11 (x64), PowerShell, Git, the GitHub CLI (`gh`) logged in with access to the private repo
-`onelifestack/onelifestack-dispatch`, Node.js 20 or newer, and Microsoft Edge (built into Windows; Chrome works too).
+You need: Windows 10 or 11 (x64), PowerShell, Git, the GitHub CLI (`gh`) logged in with write access to
+`onelifestack/onelifestack-dispatch` (the repo is public, but the draft release isn't), Node.js 20 or newer, and Microsoft Edge (built into Windows; Chrome works too).
 
 ```powershell
 winget install --id Git.Git -e
@@ -48,7 +51,7 @@ mkdir ..\installers
 gh release download v0.5.0 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
 ```
 
-The release is a **draft**, so it's only visible to accounts with access to the repo. If `gh release download`
+The release is a **draft**, so it's only visible to accounts with write access to the repo. If `gh release download`
 says "release not found", run `gh release list --repo onelifestack/onelifestack-dispatch`: the draft must be listed
 with its installers (the build can take 20+ minutes after the tag). Also check `gh auth status`. If only an older
 draft is there, stop and report that rather than testing a build you made yourself.
@@ -139,7 +142,7 @@ What the demo API offers:
      PowerShell. The cURL snippet is multi-line bash (`\` continuations), so it's for Git Bash or WSL, not
      PowerShell. That's a known limitation; just note whether it runs in Git Bash if you have it.
 
-## 3. Browser login (new in 0.4; fixed for the desktop app in 0.4.2, issue #9)
+## 3. Browser login (new in 0.4; fixed for the desktop app in 0.4.2)
 
 This drives Microsoft Edge (or Chrome) in the background to log in through a web form and keep the token.
 
@@ -218,7 +221,7 @@ This drives Microsoft Edge (or Chrome) in the background to log in through a web
 4.7. Close the app, reopen it, and check that flows and their layout are still there. Then:
    1. Delete a flow and use **Undo**: it comes back.
    2. Delete a flow (open it first, so its editor closes on delete) and don't undo. Close and reopen the app: it
-      stays gone. Menu (≡) → **Export backup** doesn't contain it either (fixed in 0.5.0, issue #14).
+      stays gone. Menu (≡) → **Export backup** doesn't contain it either (fixed in 0.5.0).
 
 4.8. Menu (≡) → **Export backup**. Import that file again and confirm the flows are in it and still point at the
      right requests (no "doesn't point at a saved request" warnings).
@@ -268,7 +271,7 @@ Run these from the repo folder in PowerShell.
    4. Call `run_flow` with name "Login then orders". The result starts with `Passed`.
    5. Disconnect. Check Task Manager: no `node.exe` left over from this.
 
-6.4b. **Windows fixes from 0.4.1**: confirmed from a source build in the first test run (#8). Check them again in
+6.4b. **Windows fixes from 0.4.1**: confirmed from a source build in the first test run. Check them again in
      the installed app:
    - The command from 6.4 with **backslashes** in the paths (`node C:\Users\<you>\...\dispatch-run.mjs mcp ...`)
      also connects. In 0.4.0 the backslashes were dropped.
@@ -309,7 +312,7 @@ Run these from the repo folder in PowerShell.
    6. Disconnect, switch the environment to **No environment** and connect again. The sign-in banner comes back,
       because sign-ins are kept per environment. Switch back to Demo local and connect: no sign-in needed.
    7. While still connected, click **Sign out**. The panel no longer says "Signed in", and the server logs no
-      `refreshed a token` at that moment. Connect again: the banner comes back (fixed in 0.5.0, issue #15).
+      `refreshed a token` at that moment. Connect again: the banner comes back (fixed in 0.5.0).
    8. Press Deny on the consent page instead: Dispatch shows a readable "Login failed: access_denied" and nothing
       hangs.
    9. Optional, only with your own account: pick **Well-known servers… → Linear** (or Notion, Sentry, …), connect,
