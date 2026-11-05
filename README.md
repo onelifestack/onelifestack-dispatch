@@ -99,3 +99,7 @@ OneLifeStack sync (needs a design), gRPC in the browser, AI assistance (needs a 
 ## Build
 
 See [CLAUDE.md](CLAUDE.md).
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
