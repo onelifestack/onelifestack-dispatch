@@ -271,7 +271,12 @@ def cli_page():
 def changelog():
     def rel(v, d, title, items): return f'<div class="release"><h2 id="v{v.replace(".", "-")}">{v} <span class="muted">{d}</span></h2><p>{title}</p>{ul(items)}</div>'
     return "<h1>Changelog</h1><p class=\"lead\">What changed in each release, newest first.</p>" + \
-    rel("0.5.0", "2026-11-05", "Workspaces as folders of files, and Dispatch is now open source.", [
+    rel("0.5.1", "2026-11-05", "Fixes from testing on Windows.", [
+        "A copy of a workspace folder with a new workspace id now opens as its own copy. Before, it moved the original workspace's items and secrets into the copy.",
+        "The import message counts flows too.",
+        "Long commands and paths wrap in confirmation dialogs.",
+        "Flows deleted in 0.4.x can still be in the data and show up in Export backup: delete them again to remove them for good.",
+    ]) + rel("0.5.0", "2026-11-05", "Workspaces as folders of files, and Dispatch is now open source.", [
         "Desktop: link a workspace to a folder and it is kept there as plain files, one per request, environment and flow, ready for git. Secret values are never written to the folder.",
         "Open a workspace folder, such as a teammate's clone, to add that workspace.",
         "Files changed outside Dispatch, in an editor or by a `git pull`, are never overwritten. Dispatch shows them as conflicts: use the folder's version (a backup is taken first) or keep yours. Collection folders get the same protection.",
