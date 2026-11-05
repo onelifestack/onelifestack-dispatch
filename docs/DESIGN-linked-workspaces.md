@@ -1,6 +1,6 @@
 # Linked workspaces: a workspace kept as a folder of files
 
-Status: **proposed** (2026-11-05). The owner chose option B from the gap analysis against the UX redesign canvas:
+Status: **accepted** (2026-11-05); phase 1 built. The owner chose option B from the gap analysis against the UX redesign canvas:
 workspaces stay as they are, and any workspace can *optionally* be linked to a folder on disk. This replaces the
 canvas's "Desk" (every workspace is always a folder).
 
@@ -50,6 +50,12 @@ payments/                          ← the linked folder (often a git repo)
   saved request" warning.
 - **File names** come from item names (`slug()`); ids live inside the files. Renaming an item renames its file. Two
   files with the same id (for example, a copied file) are noticed on read and the copy gets a new id.
+- **Renames while a file changed outside:** if an item is renamed in the app while its old file changed outside the
+  app, the old file can't be deleted, so the renamed copy is held back too (otherwise the folder would hold two
+  files for one item). It's written once the user picks a side.
+- **The workspace's id in the folder:** every device's first workspace has the id `default`, so that workspace gets
+  a unique id for its folder (`Space.folderId`) when it is first linked. Otherwise opening a teammate's first
+  workspace would offer to replace your own.
 - **Not in the folder (for now):** globals (still device-wide), data files (the runner and flows pick them per run),
   and mock settings (mocks are built from saved examples, which are in the collection files).
 
@@ -143,10 +149,9 @@ Each phase is its own PR and release.
 - A UI test for a conflict.
 - A Linux check that a `git pull` into a linked folder while the app is open shows up in the app and nothing is lost.
 
-## Questions for the owner
+## Decided with the owner (2026-11-05)
 
-1. **Globals:** keep them device-wide (proposed for now), or give each linked workspace its own globals in
-   `dispatch.workspace.yaml`?
-2. **Schedules** stay on the device and out of the folder (proposed). Agree?
-3. **Collections with their own folder:** offer to move them under the workspace folder when it's linked (proposed),
-   or always leave them where they are?
+1. **Globals** stay device-wide for now; they aren't written to the folder.
+2. **Schedules** stay on the device and out of the folder.
+3. **Collections that already have their own folder:** when their workspace is linked, Dispatch offers to move them
+   into the workspace folder. If you decline, they keep their own folder and aren't written into the workspace folder.

@@ -324,6 +324,21 @@ Run these from the repo folder in PowerShell.
    2. YAML files appear, one per request. Edit a request in the app and check the file changes.
    3. Edit a `.req.yaml` in Notepad, then **Reload from folder**: the change shows in the app.
    4. Check how Windows path separators and long names behave.
+   5. Edit a `.req.yaml` in Notepad, then edit the same request in the app **without** reloading. The file keeps
+      the Notepad edit, and the collection page says "1 file changed outside Dispatch" with **Use the folder's
+      version** and **Keep mine**. Try both.
+
+6.6b. **Workspaces as files** (new in 0.5):
+   1. Menu → Workspaces → **Link to a folder…** on your workspace, and pick an empty folder such as
+      `C:\Temp\dispatch-ws`. If a collection was linked in 6.6, accept moving it in. Files appear:
+      `dispatch.workspace.yaml`, `collections\…`, `environments\*.env.yaml`, `flows\*.flow.yaml`. No secret value
+      appears in any file (search the folder for a secret you know).
+   2. Rename a flow in the app: its file is renamed. Change an environment variable: its file changes.
+   3. In Notepad, change a flow's `name:`, then change the same flow in the app. The Workspaces page shows the
+      conflict and the file keeps the Notepad edit. **Use the folder's version**: the app shows the Notepad name.
+   4. Close Dispatch, edit an environment file in Notepad, reopen Dispatch: the Workspaces page reports it.
+   5. **Unlink**, add a new workspace, and use **Open a workspace folder…** on `C:\Temp\dispatch-ws`. It opens as
+      its own workspace with the same collections, environments and flows, and secret values are empty.
 
 6.7. **Schedules:**
    1. Create a schedule for "Demo shop", every 1 minute, with failure notifications on.
