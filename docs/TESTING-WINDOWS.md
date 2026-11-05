@@ -1,4 +1,4 @@
-# Testing Dispatch 0.4.4 on Windows
+# Testing Dispatch 0.5.0 on Windows
 
 Instructions for a tester (a person or an AI agent) on a Windows 10/11 machine. Work through each section, record
 **PASS / FAIL / BLOCKED** for every numbered check, and write the results into a report (template at the end).
@@ -45,7 +45,7 @@ cd onelifestack-dispatch           # stay on main: it has the demo login page an
 npm ci
 npm run build:cli          # builds dist-cli\dispatch-run.mjs
 mkdir ..\installers
-gh release download v0.4.4 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
+gh release download v0.5.0 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
 ```
 
 The release is a **draft**, so it's only visible to accounts with access to the repo. If `gh release download`
@@ -73,7 +73,7 @@ What the demo API offers:
 
 ## 1. Install, first launch, uninstall
 
-1.1. Run `Dispatch_0.4.4_x64-setup.exe`. SmartScreen will warn because the installer isn't code-signed yet: click
+1.1. Run `Dispatch_0.5.0_x64-setup.exe`. SmartScreen will warn because the installer isn't code-signed yet: click
      "More info" → "Run anyway". Record the exact warning text. The install must finish without errors.
 
 1.2. Start Dispatch from the Start menu. A window titled Dispatch opens and shows the request editor (URL field,
@@ -218,7 +218,7 @@ This drives Microsoft Edge (or Chrome) in the background to log in through a web
 4.7. Close the app, reopen it, and check that flows and their layout are still there. Then:
    1. Delete a flow and use **Undo**: it comes back.
    2. Delete a flow (open it first, so its editor closes on delete) and don't undo. Close and reopen the app: it
-      stays gone. Menu (≡) → **Export backup** doesn't contain it either (fixed in 0.4.4, issue #14).
+      stays gone. Menu (≡) → **Export backup** doesn't contain it either (fixed in 0.5.0, issue #14).
 
 4.8. Menu (≡) → **Export backup**. Import that file again and confirm the flows are in it and still point at the
      right requests (no "doesn't point at a saved request" warnings).
@@ -309,7 +309,7 @@ Run these from the repo folder in PowerShell.
    6. Disconnect, switch the environment to **No environment** and connect again. The sign-in banner comes back,
       because sign-ins are kept per environment. Switch back to Demo local and connect: no sign-in needed.
    7. While still connected, click **Sign out**. The panel no longer says "Signed in", and the server logs no
-      `refreshed a token` at that moment. Connect again: the banner comes back (fixed in 0.4.4, issue #15).
+      `refreshed a token` at that moment. Connect again: the banner comes back (fixed in 0.5.0, issue #15).
    8. Press Deny on the consent page instead: Dispatch shows a readable "Login failed: access_denied" and nothing
       hangs.
    9. Optional, only with your own account: pick **Well-known servers… → Linear** (or Notion, Sentry, …), connect,
@@ -324,6 +324,21 @@ Run these from the repo folder in PowerShell.
    2. YAML files appear, one per request. Edit a request in the app and check the file changes.
    3. Edit a `.req.yaml` in Notepad, then **Reload from folder**: the change shows in the app.
    4. Check how Windows path separators and long names behave.
+   5. Edit a `.req.yaml` in Notepad, then edit the same request in the app **without** reloading. The file keeps
+      the Notepad edit, and the collection page says "1 file changed outside Dispatch" with **Use the folder's
+      version** and **Keep mine**. Try both.
+
+6.6b. **Workspaces as files** (new in 0.5):
+   1. Menu → Workspaces → **Link to a folder…** on your workspace, and pick an empty folder such as
+      `C:\Temp\dispatch-ws`. If a collection was linked in 6.6, accept moving it in. Files appear:
+      `dispatch.workspace.yaml`, `collections\…`, `environments\*.env.yaml`, `flows\*.flow.yaml`. No secret value
+      appears in any file (search the folder for a secret you know).
+   2. Rename a flow in the app: its file is renamed. Change an environment variable: its file changes.
+   3. In Notepad, change a flow's `name:`, then change the same flow in the app. The Workspaces page shows the
+      conflict and the file keeps the Notepad edit. **Use the folder's version**: the app shows the Notepad name.
+   4. Close Dispatch, edit an environment file in Notepad, reopen Dispatch: the Workspaces page reports it.
+   5. **Unlink**, add a new workspace, and use **Open a workspace folder…** on `C:\Temp\dispatch-ws`. It opens as
+      its own workspace with the same collections, environments and flows, and secret values are empty.
 
 6.7. **Schedules:**
    1. Create a schedule for "Demo shop", every 1 minute, with failure notifications on.
@@ -364,7 +379,7 @@ comment (drag them into the comment box, or `gh issue comment <number> --repo on
 failure, titled `[Windows] <problem>`, and link it from the report.
 
 ```markdown
-# Dispatch 0.4.4 — Windows test report
+# Dispatch 0.5.0 — Windows test report
 
 - Date / tester:
 - Windows version (winver) and build:

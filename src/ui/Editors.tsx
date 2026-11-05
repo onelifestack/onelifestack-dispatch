@@ -7,7 +7,7 @@ import type { WorkspaceApi } from './useWorkspace'
 import type { AuthActions } from './RequestPane'
 import { effectiveAuth } from '../core/prepare'
 import { folderChain } from '../core/runtime'
-import { newRequest, uid } from '../core/types'
+import { newRequest, spaceOf, uid } from '../core/types'
 import type { KV } from '../core/types'
 import { hasLayers, selectLayer, setOptions, startLayers } from '../core/layers'
 import { toPostmanEnvironment } from '../core/interop'
@@ -82,29 +82,48 @@ export function CollectionEditor({ ws, confirm, collection, authActions, renderD
 /** Desktop: keep the collection as files in a folder (for git). */
 function FilesSection({ ws, c, setC }: { ws: WorkspaceApi; c: Collection; setC: (c: Collection) => void }) {
   const [note, setNote] = useState<string | null>(null)
+  const status = ws.folderStatus[`collection:${c.id}`]
+  const spaceDir = ws.spaces.find((x) => x.id === spaceOf(c))?.linkedDir
+  const run = (fn: () => Promise<string | void>) => async () => { try { const m = await fn(); if (m) setNote(m) } catch (e) { setNote(String(e)) } }
+  if (!c.linkedDir && spaceDir) return <>
+    <h2>Files</h2>
+    <p className="small">Kept as files with the rest of this workspace in <code>{spaceDir}</code>.</p>
+  </>
   return <>
     <h2>Files</h2>
     {c.linkedDir ? <>
       <p className="small">Saved as files in <code>{c.linkedDir}</code>. Changes are written there as you work, ready to commit with git.</p>
+      {status?.error && <p className="small badText">{status.error}</p>}
+      {!!status?.conflicts.length && <div className="note warn small" role="status">
+        <p><b>{status.conflicts.length} file{status.conflicts.length > 1 ? 's' : ''} changed outside Dispatch</b> and {status.conflicts.length > 1 ? 'were' : 'was'} left alone: <code>{status.conflicts.slice(0, 3).join(', ')}{status.conflicts.length > 3 ? ', …' : ''}</code></p>
+      </div>}
       <div className="actions">
-        <button type="button" className="btn small" onClick={async () => {
-          const { readCollectionDir } = await import('./linkedDirs')
-          try { const r = await readCollectionDir(ws, c.linkedDir); await ws.replaceCollection(r); setNote(`Reloaded ${r.requests.length} requests from the folder.${r.warnings.length ? ` ${r.warnings.join(' ')}` : ''}`) } catch (e) { setNote(String(e)) }
-        }}>Reload from folder</button>
-        <button type="button" className="btn small ghost" onClick={() => { setC({ ...c, linkedDir: '' }); setNote('Unlinked; the files stay where they are.') }}>Unlink</button>
+        <button type="button" className="btn small" onClick={run(async () => {
+          const { desktopFolders, reloadCollection } = await import('./linkedDirs')
+          const r = await reloadCollection(ws, desktopFolders, c)
+          return `Read ${r.requests.length} requests from the folder.${r.warnings.length ? ` ${r.warnings.join(' ')}` : ''}`
+        })}>{status?.conflicts.length ? 'Use the folder’s version' : 'Reload from folder'}</button>
+        {!!status?.conflicts.length && <button type="button" className="btn small" onClick={run(async () => {
+          const { desktopFolders, syncCollection } = await import('./linkedDirs')
+          await syncCollection(ws, desktopFolders, c, true)
+          return 'Wrote this collection’s version to the folder.'
+        })}>Keep mine</button>}
+        <button type="button" className="btn small ghost" onClick={run(async () => {
+          const { unlinkCollection } = await import('./linkedDirs')
+          await unlinkCollection(ws, c)
+          return 'Unlinked; the files stay where they are.'
+        })}>Unlink</button>
       </div>
     </> : <>
-      <p className="muted small">Keep this collection as a folder of YAML files (one per request) so it can live in a git repo and be reviewed in pull requests. Literal secrets are never written; use <code>{'{{variables}}'}</code>.</p>
+      <p className="muted small">Keep this collection as a folder of YAML files (one per request) so it can live in a git repo and be reviewed in pull requests. Literal secrets are never written; use <code>{'{{variables}}'}</code>. To keep a whole workspace as files, link it on the Workspaces page.</p>
       <div className="actions">
-        <button type="button" className="btn small" onClick={async () => {
-          const { pickFolder, writeCollectionDir } = await import('./linkedDirs')
-          try {
-            const dir = await pickFolder(); if (!dir) return
-            const left = await writeCollectionDir(ws, c, dir)
-            setC({ ...c, linkedDir: dir })
-            setNote(left.length ? `Saved. Literal secrets in ${left.join(', ')} weren’t written to the files; move them into variables.` : 'Saved to the folder.')
-          } catch (e) { setNote(String(e)) }
-        }}>Save to a folder…</button>
+        <button type="button" className="btn small" onClick={run(async () => {
+          const { desktopFolders, linkCollection } = await import('./linkedDirs')
+          const dir = await desktopFolders.pick(); if (!dir) return
+          const left = await linkCollection(ws, desktopFolders, c, dir)
+          setC({ ...c, linkedDir: dir })
+          return left.length ? `Saved. Literal secrets in ${left.join(', ')} weren’t written to the files; move them into variables.` : 'Saved to the folder.'
+        })}>Save to a folder…</button>
       </div>
     </>}
     {note && <p className="small muted">{note}</p>}
