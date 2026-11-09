@@ -4,6 +4,7 @@ import { uid } from '../core/types'
 import { formatMs } from '../core/format'
 import type { WorkspaceApi } from './useWorkspace'
 import { CodeArea } from './CodeArea'
+import { DND_ITEMS, carries, requestsOf, takeItems } from './dnd'
 
 /** Block geometry on the canvas (px). */
 const W = 184
@@ -96,6 +97,30 @@ export function FlowView({ ws, flowId, notify, confirm }: { ws: WorkspaceApi; fl
     setSelected({ kind: 'node', id: n.id })
   }
 
+  /** Saved requests (or folders of them) dragged from the sidebar become request blocks where they're dropped, wired in order. */
+  const [dropping, setDropping] = useState(false)
+  const dropRequests = (e: React.DragEvent) => {
+    e.preventDefault(); setDropping(false)
+    if (!flow || !canvas.current) return
+    const reqs = requestsOf(takeItems(e.dataTransfer), ws)
+    if (!reqs.length) return
+    const p = point(e)
+    // Without pointer coordinates (keyboard-driven drops, tests), go below the existing blocks.
+    const at = Number.isFinite(p.x) && Number.isFinite(p.y) ? p : { x: 60 + W / 2, y: Math.max(0, ...flow.nodes.map((x) => x.y + nodeHeight(x))) + 60 + HEAD / 2 }
+    const port = PORTS.request[0]
+    const made = reqs.map((r, i) => {
+      const n = newNode('request', Math.max(10, Math.round(at.x - W / 2) + i * (W + 70)), Math.max(10, Math.round(at.y - HEAD / 2)))
+      n.config.requestId = r.id; n.label = r.name
+      return n
+    })
+    change((f) => ({
+      ...f,
+      nodes: [...f.nodes, ...made],
+      edges: [...f.edges, ...made.slice(1).map((n, i) => ({ id: uid(), from: made[i].id, port, to: n.id }))],
+    }))
+    setSelected({ kind: 'node', id: made[made.length - 1].id })
+  }
+
   // Keyboard: Delete removes the selected block or wire.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -175,12 +200,16 @@ export function FlowView({ ws, flowId, notify, confirm }: { ws: WorkspaceApi; fl
           <button key={b.type} type="button" className="btn small" title={b.help} onClick={() => addBlock(b.type)}><span aria-hidden="true" className="flowIcon">{ICON[b.type]}</span> {b.label}</button>
         ))}
         <span className="grow" />
-        <span className="muted tiny">Drag blocks to move them; drag from a dot to wire it. Delete removes the selection.</span>
+        <span className="muted tiny">Drag requests here from the sidebar; drag blocks to move them; drag from a dot to wire it. Delete removes the selection.</span>
       </div>
       {problems.length > 0 && <ul className="flowProblems small">{problems.map((p) => <li key={p}>{p}</li>)}</ul>}
 
       <div className="flowBody">
-        <div className="flowCanvas" ref={canvas} onPointerDown={(e) => { if (e.target === e.currentTarget || (e.target as Element).tagName === 'svg') setSelected(null) }}>
+        <div className={`flowCanvas ${dropping ? 'dropInto' : ''}`} ref={canvas}
+          onDragOver={(e) => { if (!carries(e.dataTransfer, DND_ITEMS)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDropping(true) }}
+          onDragLeave={(e) => { if (e.target === e.currentTarget) setDropping(false) }}
+          onDrop={dropRequests}
+          onPointerDown={(e) => { if (e.target === e.currentTarget || (e.target as Element).tagName === 'svg') setSelected(null) }}>
           <svg className="flowWires" width={width} height={height} aria-hidden="true">
             {flow.edges.map((e) => {
               const a = byId.get(e.from), b = byId.get(e.to)

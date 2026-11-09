@@ -24,6 +24,7 @@ import { BrowserPane } from './BrowserPane'
 import type { BrowserLauncher } from '../core/browser'
 import { DocsView } from './DocsView'
 import { MockView } from './MockView'
+import { DND_TAB } from './dnd'
 import { Markdown } from './Markdown'
 import { ProtocolPicker, RealtimePane } from './RealtimePane'
 import { GrpcPane } from './GrpcPane'
@@ -75,7 +76,8 @@ function TabBar({ ws, onClose }: { ws: WorkspaceApi; onClose: (id: string) => vo
         const on = t.id === ws.activeId && ws.view.kind === 'request'
         const dirty = ws.isDirty(t.draft)
         return (
-          <div key={t.id} className={`reqTab ${on ? 'on' : ''}`}>
+          <div key={t.id} className={`reqTab ${on ? 'on' : ''}`} draggable title="Drag onto a collection or folder to save it there"
+            onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData(DND_TAB, t.id); e.dataTransfer.setData('text/plain', t.draft.name) }}>
             <button type="button" role="tab" aria-selected={on} className="reqTabMain" onClick={() => ws.selectTab(t.id)} title={t.draft.url || t.draft.name}
               onAuxClick={(e) => { if (e.button === 1) onClose(t.id) }}>
               <span className={`mtag m-${t.draft.protocol === 'http' ? t.draft.method : 'proto'}`}>{t.draft.protocol !== 'http' ? ({ ws: 'WS', mqtt: 'MQTT', grpc: 'gRPC', sse: 'SSE', socketio: 'SIO', mcp: 'MCP', browser: 'WEB' } as Record<string, string>)[t.draft.protocol] : t.draft.method === 'DELETE' ? 'DEL' : t.draft.method === 'OPTIONS' ? 'OPT' : t.draft.method}</span>

@@ -3,11 +3,13 @@ import { type RunItem, type RunResult, type RunSummary, collectItems, failed, ru
 import { parseDataFile } from '../core/csv'
 import { formatMs, statusTone } from '../core/format'
 import type { WorkspaceApi } from './useWorkspace'
+import { DND_ITEMS, carries, takeItems } from './dnd'
 import { folderOptions } from './Dialogs'
 import { saveTextFile } from './files'
 import { layerRows, layeredVars } from '../core/layers'
 
-interface Target { collectionId: string; folderId: string | null }
+/** A collection, a folder, or (dropped from the sidebar) one request. */
+interface Target { collectionId: string; folderId: string | null; requestId?: string }
 interface Pick extends RunItem { on: boolean; key: string }
 
 const readText = (file: File) => new Promise<string>((resolve, reject) => {
@@ -39,7 +41,10 @@ export function RunnerView({ ws, notify, start }: { ws: WorkspaceApi; notify: (m
     for (const t of targets) {
       const c = ws.collections.find((x) => x.id === t.collectionId)
       if (!c) continue
-      for (const it of collectItems(c, t.folderId, ws.folders, ws.requests)) fresh.push({ ...it, on: true, key: `${t.collectionId}:${t.folderId}:${it.request.id}` })
+      for (const it of collectItems(c, t.folderId, ws.folders, ws.requests)) {
+        if (t.requestId && it.request.id !== t.requestId) continue
+        fresh.push({ ...it, on: true, key: `${t.collectionId}:${t.folderId}:${it.request.id}${t.requestId ? ':one' : ''}` })
+      }
     }
     setPicks((old) => fresh.map((p) => ({ ...p, on: old.find((o) => o.key === p.key)?.on ?? true })))
   }, [targetKey, ws.collections, ws.folders, ws.requests]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -47,6 +52,25 @@ export function RunnerView({ ws, notify, start }: { ws: WorkspaceApi; notify: (m
   const chosen = picks.filter((p) => p.on)
   const its = layers.length ? layers.length : data && iterations === 0 ? data.rows.length : Math.max(1, iterations)
   const move = (i: number, d: -1 | 1) => setPicks((ps) => { const n = [...ps]; const j = i + d; if (j < 0 || j >= n.length) return ps; [n[i], n[j]] = [n[j], n[i]]; return n })
+
+  /** Requests and folders dragged from the sidebar join the suite (in the order dragged). */
+  const [dropping, setDropping] = useState(false)
+  const dropTargets = (e: React.DragEvent) => {
+    e.preventDefault(); setDropping(false)
+    const add: Target[] = []
+    for (const it of takeItems(e.dataTransfer)) {
+      if (it.kind === 'folder') { const fo = ws.folders.find((x) => x.id === it.id); if (fo) add.push({ collectionId: fo.collectionId, folderId: fo.id }) }
+      else { const r = ws.requests.find((x) => x.id === it.id); if (r?.collectionId) add.push({ collectionId: r.collectionId, folderId: r.folderId ?? null, requestId: r.id }) }
+    }
+    if (!add.length) return
+    setTargets((ts) => {
+      const same = (a: Target, b: Target) => a.collectionId === b.collectionId && a.folderId === b.folderId && a.requestId === b.requestId
+      // A drop onto the untouched default (the first collection, whole) replaces it.
+      const base = ts.length === 1 && !start && !ts[0].folderId && !ts[0].requestId && ts[0].collectionId === ws.collections[0]?.id ? [] : ts
+      return [...base, ...add.filter((a) => !base.some((b) => same(a, b)))]
+    })
+    notify(`Added ${add.length} to the run`)
+  }
 
   const run = async () => {
     if (!chosen.length) { notify('Pick at least one request to run.'); return }
@@ -101,9 +125,17 @@ export function RunnerView({ ws, notify, start }: { ws: WorkspaceApi; notify: (m
       <p className="muted small">Requests run in order with their scripts and tests. Add more than one collection or folder to run a suite. Use a data file to run once per row; its columns become <code>{'{{variables}}'}</code>.</p>
 
       <div className="runGrid">
-        <div>
+        <div className={dropping ? 'dropInto' : ''} onDragOver={(e) => { if (!carries(e.dataTransfer, DND_ITEMS)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDropping(true) }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false) }} onDrop={dropTargets}>
           <h2>What to run</h2>
-          {targets.map((t, i) => (
+          <p className="muted tiny">Drag requests or folders here from the sidebar to add them.</p>
+          {targets.map((t, i) => t.requestId ? (
+            <div key={i} className="targetRow">
+              <span className="pill">{ws.collections.find((c) => c.id === t.collectionId)?.name ?? '?'}</span>
+              <span className="grow">{ws.requests.find((r) => r.id === t.requestId)?.name ?? 'Deleted request'}</span>
+              {targets.length > 1 && <button type="button" className="icon" aria-label={`Remove target ${i + 1}`} onClick={() => setTargets((ts) => ts.filter((_, j) => j !== i))}>×</button>}
+            </div>
+          ) : (
             <div key={i} className="targetRow">
               <select aria-label={`Collection ${i + 1}`} value={t.collectionId} onChange={(e) => setTargets((ts) => ts.map((x, j) => (j === i ? { collectionId: e.target.value, folderId: null } : x)))}>
                 {ws.collections.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
