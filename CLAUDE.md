@@ -104,7 +104,8 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 
 ## Where we left off
 
-Updated 2026-11-05. Everything is on `main`; the latest tag is **v0.5.0**.
+Updated 2026-11-10. The latest tag is **v0.5.1** (still a draft; v0.5.0 is the published Latest). Two feature PRs
+are open (see "Open on GitHub").
 
 **The repo is public (MIT) since 2026-11-05.** GitHub billing blocked Actions on the private repo, so the owner
 made it public. To keep a personal e-mail out of the public history, the old repo was renamed
@@ -140,6 +141,8 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
   secrets (fixed in 0.5.1 with `reIdTaken`); guide 6.6b step 5 described the wrong behaviour (corrected, new step 6);
   import message skipped flows, long commands overflowed the confirm dialog, workspace names wrapped (all fixed in
   0.5.1). Flows deleted in 0.4.x stay in the data after upgrading (noted in the 0.5.1 release notes).
+- Round 4 (install 0.5.1 over 0.5.0; retest 6.6b step 6 and the round 3 fixes) was requested on #2 on 2026-11-05.
+  No report yet as of 2026-11-10. The installers are on the v0.5.1 draft release.
 - **Next step:** read the newest comment on #2 and any `[Windows] …` issues or `test/windows-*` branches the agent
   opened. Then fix in a PR, bump the version (package.json, tauri.conf.json, Cargo.toml + lock, `VERSION` in
   `src/cli/main.ts`, `clientVersion` in `src/core/mcp.ts`, the version in `docs/TESTING-WINDOWS.md`), tag, add
@@ -151,13 +154,21 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
   blocks named "End" can't be told apart in flow selects; importing a
   backup into the same workspace duplicates everything; error texts include Rust internals (`os error 10061`).
 - Issue #2: the Windows test.
+- PR #6: the desktop app's local MCP endpoint (Settings → AI assistants; `src-tauri/src/mcp_host.rs`,
+  `src/core/mcpHandler.ts`, `src/ui/mcpHost.ts`).
+- PR #7: drag and drop between views (Ctrl/Alt-drag copies in the sidebar; tabs onto collections; requests onto
+  flow canvases and the Runner; `src/ui/dnd.ts`).
+- #6 and #7 conflict in `src/ui/App.tsx` (adjacent imports and the SettingsView line): whichever merges second
+  needs `main` merged in first.
 
-**Site.** dispatch.onelifestack.com shows 0.5.0 with downloads from the public release (`site/release.json`). After
+**Site.** dispatch.onelifestack.com shows 0.5.0 with downloads from the public release (`site/release.json`).
+`site/release.json` on `main` already points at 0.5.1 (PR #5), so its links work only once the v0.5.1 release is
+published: the owner publishes the release, then runs `scripts/publish-site.sh`. After
 each published release, regenerate `site/release.json` and ask the owner to run `scripts/publish-site.sh` (auto mode
 blocks Claude from publishing).
 
 **Waiting on the owner.**
-- Publishing the draft releases.
+- Publishing the draft releases (v0.5.1 next), then publishing the site.
 - Code-signing certificates and the updater key (`docs/RELEASING.md`).
 - Sync design.
 - The site's DNS (see `site/README.md`).
