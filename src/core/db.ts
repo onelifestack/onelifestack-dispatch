@@ -135,12 +135,12 @@ export async function getSettings(): Promise<Settings> {
   const db = await open()
   const s = { ...defaultSettings, ...await wrap<Settings | undefined>(db.transaction('meta').objectStore('meta').get('settings')) }
   const f = await unsealer()
-  return { ...s, clientCerts: await Promise.all((s.clientCerts ?? []).map(async (c) => ({ ...c, key: await f(c.key) }))) }
+  return { ...s, mcpHostToken: s.mcpHostToken ? await f(s.mcpHostToken) : '', clientCerts: await Promise.all((s.clientCerts ?? []).map(async (c) => ({ ...c, key: await f(c.key) }))) }
 }
-/** Client-certificate private keys are sealed like other secrets. */
+/** Client-certificate private keys and the MCP endpoint token are sealed like other secrets. */
 export async function putSettings(s: Settings) {
   const f = await sealer()
-  await put('meta', { ...s, clientCerts: await Promise.all(s.clientCerts.map(async (c) => ({ ...c, key: await f(c.key) }))) }, 'settings')
+  await put('meta', { ...s, mcpHostToken: s.mcpHostToken ? await f(s.mcpHostToken) : '', clientCerts: await Promise.all(s.clientCerts.map(async (c) => ({ ...c, key: await f(c.key) }))) }, 'settings')
 }
 
 /** The cookie jar (desktop), sealed as a whole: cookies are often session secrets. */

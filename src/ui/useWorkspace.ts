@@ -680,7 +680,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
     tabs, activeId, active, draft, view, result: active.result, sending: active.sending, saved, dirty, isDirty,
     collection, environment, prepared, chain, runContext, pipeline: pipelineRef, variableNames,
     setDraft, setView, setSettings, setLogs, log, openRequest, startNew, closeTab, selectTab, saveDraft, renameRequest,
-    moveRequest, removeRequest, duplicateRequest, send, cancel, applyChanges, openHistory, clearHistory,
+    moveRequest, removeRequest, duplicateRequest, send, cancel, applyChanges, applyAuthUpdate, openHistory, clearHistory,
     addCollection, updateCollection, removeCollection, addFolder, updateFolder, removeFolder,
     addEnvironment, updateEnvironment, removeEnvironment, duplicateEnvironment, setGlobals, importWorkspace,
   }

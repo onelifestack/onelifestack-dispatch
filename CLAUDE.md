@@ -26,6 +26,9 @@ and an import format; never copy its name, branding, icons or UI.
   - `mcpAuth.ts`: MCP sign-in (discovery → registration → PKCE + `resource` → refresh), `MCP_SUGGESTIONS`; sign-ins
     sealed in IndexedDB meta `mcpSignIns`, keyed by environment + server. `examples/mcp-http-server.mjs --oauth` is
     a complete local sign-in server for tests and the Windows guide.
+  - `mcpHandler.ts`: the MCP tools (list_requests, send_request, run_collection, run_flow), one JSON-RPC message
+    in, one reply out; shared by `dispatch-run mcp` (stdio, first collection) and the desktop app's local MCP
+    endpoint (every collection in the active workspace, with hooks that save script/token changes like Send does).
   - `flows.ts`: flow graph (nodes, wires from output ports) and `runFlow`; straight chains run in a loop, recursion
     only for branches and For each (deep recursion overflowed the stack). Stored in IndexedDB v4 `flows`.
 - `src/ui/` — `useWorkspace.ts` holds all state and actions; one component per view (RequestPane, ResponsePane,
@@ -37,7 +40,9 @@ and an import format; never copy its name, branding, icons or UI.
 - `src/cli/main.ts` — `dispatch-run` (run, `load`, `mock`, `mcp`, `flow`); bundled by `scripts/build-cli.mjs`.
 - `src-tauri/src/lib.rs` — send/cancel (proxy, mTLS, CA certs), save files, open URL, OAuth loopback, mock server
   sockets, SSE streams, notifications, collection folders (pick/read/write);
-  `grpc.rs` — gRPC (tonic + prost-reflect + protox).
+  `grpc.rs` — gRPC (tonic + prost-reflect + protox); `mcp_host.rs` — local MCP endpoint (127.0.0.1 only,
+  bearer token, refuses Origin and foreign Host headers, POST only) that relays JSON-RPC to the frontend
+  (`src/ui/mcpHost.ts`, turned on in Settings → AI assistants).
 - `tests/` — vitest (jsdom; `cli.test.ts` builds and runs the real CLI in Node). `src-tauri/tests/grpc_live.rs` —
   live gRPC test (needs `examples/grpc`); `network_live.rs` — mTLS/proxy (needs `examples/tls`);
   `collection_files.rs` — folder write/prune/escape.
@@ -104,7 +109,8 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 
 ## Where we left off
 
-Updated 2026-11-05. Everything is on `main`; the latest tag is **v0.5.0**.
+Updated 2026-11-10. The latest tag is **v0.5.1** (still a draft; v0.5.0 is the published Latest). Two feature PRs
+are open (see "Open on GitHub").
 
 **The repo is public (MIT) since 2026-11-05.** GitHub billing blocked Actions on the private repo, so the owner
 made it public. To keep a personal e-mail out of the public history, the old repo was renamed
@@ -140,6 +146,8 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
   secrets (fixed in 0.5.1 with `reIdTaken`); guide 6.6b step 5 described the wrong behaviour (corrected, new step 6);
   import message skipped flows, long commands overflowed the confirm dialog, workspace names wrapped (all fixed in
   0.5.1). Flows deleted in 0.4.x stay in the data after upgrading (noted in the 0.5.1 release notes).
+- Round 4 (install 0.5.1 over 0.5.0; retest 6.6b step 6 and the round 3 fixes) was requested on #2 on 2026-11-05.
+  No report yet as of 2026-11-10. The installers are on the v0.5.1 draft release.
 - **Next step:** read the newest comment on #2 and any `[Windows] …` issues or `test/windows-*` branches the agent
   opened. Then fix in a PR, bump the version (package.json, tauri.conf.json, Cargo.toml + lock, `VERSION` in
   `src/cli/main.ts`, `clientVersion` in `src/core/mcp.ts`, the version in `docs/TESTING-WINDOWS.md`), tag, add
@@ -151,13 +159,21 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
   blocks named "End" can't be told apart in flow selects; importing a
   backup into the same workspace duplicates everything; error texts include Rust internals (`os error 10061`).
 - Issue #2: the Windows test.
+- PR #6: the desktop app's local MCP endpoint (Settings → AI assistants; `src-tauri/src/mcp_host.rs`,
+  `src/core/mcpHandler.ts`, `src/ui/mcpHost.ts`).
+- PR #7: drag and drop between views (Ctrl/Alt-drag copies in the sidebar; tabs onto collections; requests onto
+  flow canvases and the Runner; `src/ui/dnd.ts`).
+- #6 and #7 conflict in `src/ui/App.tsx` (adjacent imports and the SettingsView line): whichever merges second
+  needs `main` merged in first.
 
-**Site.** dispatch.onelifestack.com shows 0.5.0 with downloads from the public release (`site/release.json`). After
+**Site.** dispatch.onelifestack.com shows 0.5.0 with downloads from the public release (`site/release.json`).
+`site/release.json` on `main` already points at 0.5.1 (PR #5), so its links work only once the v0.5.1 release is
+published: the owner publishes the release, then runs `scripts/publish-site.sh`. After
 each published release, regenerate `site/release.json` and ask the owner to run `scripts/publish-site.sh` (auto mode
 blocks Claude from publishing).
 
 **Waiting on the owner.**
-- Publishing the draft releases.
+- Publishing the draft releases (v0.5.1 next), then publishing the site.
 - Code-signing certificates and the updater key (`docs/RELEASING.md`).
 - Sync design.
 - The site's DNS (see `site/README.md`).
