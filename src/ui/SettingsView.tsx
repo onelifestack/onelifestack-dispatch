@@ -4,6 +4,7 @@ import { uid } from '../core/types'
 import { CookieTransport } from '../core/transport'
 import type { StoredCookie } from '../core/cookies'
 import type { WorkspaceApi } from './useWorkspace'
+import { type McpHostStatus, mcpMethods, newMcpToken } from './mcpHost'
 
 const readText = (file: File) => new Promise<string>((resolve, reject) => {
   const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = () => reject(new Error('Couldn’t read that file.')); r.readAsText(file)
@@ -24,7 +25,7 @@ function PemPick({ label, onText, notify }: { label: string; onText: (t: string)
 }
 
 /** App settings: general, network (proxy, CA certificates, client certificates). */
-export function SettingsView({ ws, notify }: { ws: WorkspaceApi; notify: (m: string) => void }) {
+export function SettingsView({ ws, notify, mcpHost = { state: 'off' } }: { ws: WorkspaceApi; notify: (m: string) => void; mcpHost?: McpHostStatus }) {
   const st = ws.settings
   const desktop = ws.transport.unrestricted
   const setCert = (id: string, patch: Partial<ClientCert>) => ws.setSettings({ clientCerts: st.clientCerts.map((c) => (c.id === id ? { ...c, ...patch } : c)) })
@@ -90,9 +91,55 @@ export function SettingsView({ ws, notify }: { ws: WorkspaceApi; notify: (m: str
           </div>
         ))}
         <div className="actions"><button type="button" className="btn small" onClick={() => ws.setSettings({ clientCerts: [...st.clientCerts, { id: uid(), host: '', cert: '', key: '', enabled: true }] })}>+ Add certificate</button></div>
+        <McpHostSettings ws={ws} notify={notify} status={mcpHost} />
       </>}
     </section>
   )
+}
+
+/** Desktop: the local MCP endpoint for AI assistants. */
+function McpHostSettings({ ws, notify, status }: { ws: WorkspaceApi; notify: (m: string) => void; status: McpHostStatus }) {
+  const st = ws.settings
+  const [show, setShow] = useState(false)
+  // The endpoint restarts when the port changes, so apply it on blur or Enter, not on every keystroke.
+  const [portDraft, setPortDraft] = useState(String(st.mcpHostPort))
+  useEffect(() => setPortDraft(String(st.mcpHostPort)), [st.mcpHostPort])
+  const applyPort = () => {
+    const n = Math.min(65535, Math.max(1024, Math.round(Number(portDraft)) || 4320))
+    setPortDraft(String(n))
+    if (n !== st.mcpHostPort) ws.setSettings({ mcpHostPort: n })
+  }
+  const url = `http://127.0.0.1:${st.mcpHostPort}/mcp`
+  const command = `claude mcp add --transport http dispatch ${url} --header "Authorization: Bearer ${st.mcpHostToken}"`
+  const copy = (text: string, what: string) => { void navigator.clipboard?.writeText(text).then(() => notify(`${what} copied`), () => notify('Couldn’t copy')) }
+  const allowed = mcpMethods(st.mcpHostMethods)
+  return <>
+    <h2>AI assistants (MCP)</h2>
+    <p className="muted small">Lets an AI assistant on this computer (Claude Code, Claude Desktop, Cursor…) list, send and run the requests in the workspace you’re looking at, with the active environment, cookies and signed-in tokens. It can’t edit or delete them. Only programs that have the token below can connect, and only from this computer.</p>
+    <div className="auth">
+      <label className="toggle"><input type="checkbox" checked={st.mcpHostEnabled} onChange={(e) => ws.setSettings({ mcpHostEnabled: e.target.checked, ...(e.target.checked && !st.mcpHostToken ? { mcpHostToken: newMcpToken() } : {}) })} /> Let AI assistants use Dispatch</label>
+      <label className="field inline"><span>Port</span><input type="number" min={1024} max={65535} value={portDraft} aria-label="MCP port"
+        onChange={(e) => setPortDraft(e.target.value)} onBlur={applyPort} onKeyDown={(e) => { if (e.key === 'Enter') applyPort() }} /></label>
+      <label className="field"><span>Methods it may send</span>
+        <input className="mono" value={st.mcpHostMethods} placeholder="empty = all" aria-label="Methods AI assistants may send" onChange={(e) => ws.setSettings({ mcpHostMethods: e.target.value })} />
+      </label>
+      <p className="muted small">{allowed.length ? `Only ${allowed.join(', ')} requests. Add POST to allow logins and other writes.` : 'Every method, including POST, PUT, PATCH and DELETE.'}</p>
+      {status.state === 'on' && <p className="small"><span className="pill">Listening on {url}</span></p>}
+      {status.state === 'error' && <p className="warnLine small">{status.message}</p>}
+      {st.mcpHostToken && <>
+        <label className="field"><span>Token</span>
+          <input className="mono" readOnly type={show ? 'text' : 'password'} value={st.mcpHostToken} aria-label="MCP token" />
+        </label>
+        <div className="actions">
+          <button type="button" className="btn small ghost" onClick={() => setShow((x) => !x)}>{show ? 'Hide' : 'Show'}</button>
+          <button type="button" className="btn small" onClick={() => copy(st.mcpHostToken, 'Token')}>Copy token</button>
+          <button type="button" className="btn small" onClick={() => copy(command, 'Claude Code command')}>Copy Claude Code command</button>
+          <button type="button" className="btn small danger" onClick={() => { ws.setSettings({ mcpHostToken: newMcpToken() }); notify('New token: connected assistants need the new one') }}>New token</button>
+        </div>
+        <p className="muted small">Claude Code: <code>claude mcp add --transport http dispatch {url} --header "Authorization: Bearer …"</code>. Responses (including tokens and cookies in them) go to the assistant.</p>
+      </>}
+    </div>
+  </>
 }
 
 /** The desktop cookie jar: see, edit and delete cookies. */

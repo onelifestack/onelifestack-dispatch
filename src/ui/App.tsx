@@ -24,6 +24,7 @@ import { BrowserPane } from './BrowserPane'
 import type { BrowserLauncher } from '../core/browser'
 import { DocsView } from './DocsView'
 import { MockView } from './MockView'
+import { useMcpHost } from './mcpHost'
 import { Markdown } from './Markdown'
 import { ProtocolPicker, RealtimePane } from './RealtimePane'
 import { GrpcPane } from './GrpcPane'
@@ -100,6 +101,7 @@ export interface AppExtras {
 
 export function App({ transport, engine, browserLauncher, extras = {} }: { transport?: Transport; engine?: ScriptEngine; browserLauncher?: BrowserLauncher; extras?: AppExtras }) {
   const ws = useWorkspace({ transport, engine, browserLauncher, extend: extras.extend })
+  const mcpHost = useMcpHost(ws)
   const { ask, confirm, askSave, askPlace, node: dialog } = useDialogs()
   const [toast, setToast] = useState<{ text: string; action?: { label: string; run: () => void } } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -290,7 +292,7 @@ export function App({ transport, engine, browserLauncher, extras = {} }: { trans
           : viewed.kind === 'flow' ? <FlowView key={viewed.id} ws={ws} flowId={viewed.id} notify={notify} confirm={confirm} />
           : viewed.kind === 'spaces' ? <SpacesView ws={ws} ask={ask} confirm={confirm} notify={notify} />
           : viewed.kind === 'schedules' ? <SchedulesView ws={ws} sched={sched} notify={notify} />
-          : viewed.kind === 'settings' ? <SettingsView ws={ws} notify={notify} />
+          : viewed.kind === 'settings' ? <SettingsView ws={ws} notify={notify} mcpHost={mcpHost} />
           : viewed.kind === 'cookies' ? <CookiesView ws={ws} notify={notify} />
           : viewed.kind === 'backups' ? <BackupsView ws={ws} notify={notify} confirm={confirm} />
           : viewed.kind === 'docs' ? <DocsView key={viewed.collectionId} ws={ws} notify={notify} collectionId={viewed.collectionId} />

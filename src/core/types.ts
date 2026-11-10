@@ -246,6 +246,13 @@ export interface Settings {
   /** The workspace shown, and the environment last used in each workspace. */
   activeSpaceId: string
   spaceEnv: Record<string, string | null>
+  /** Desktop: a local MCP endpoint (http://127.0.0.1:<port>/mcp) so AI assistants can use the open app. */
+  mcpHostEnabled: boolean
+  mcpHostPort: number
+  /** Bearer token assistants must send; sealed at rest like other secrets. */
+  mcpHostToken: string
+  /** Methods assistants may send, comma separated ("" = all). */
+  mcpHostMethods: string
 }
 
 export interface ClientCert {
@@ -261,6 +268,7 @@ export interface ClientCert {
 export const defaultSettings: Settings = {
   activeEnvId: null, theme: 'system', timeoutMs: 30_000, followRedirects: true, insecureTls: false, cookieJar: true,
   proxyUrl: '', proxyBypass: 'localhost, 127.0.0.1', clientCerts: [], caCerts: [], activeSpaceId: 'default', spaceEnv: {},
+  mcpHostEnabled: false, mcpHostPort: 4320, mcpHostToken: '', mcpHostMethods: 'GET,HEAD',
 }
 
 let counter = 0

@@ -26,6 +26,9 @@ and an import format; never copy its name, branding, icons or UI.
   - `mcpAuth.ts`: MCP sign-in (discovery → registration → PKCE + `resource` → refresh), `MCP_SUGGESTIONS`; sign-ins
     sealed in IndexedDB meta `mcpSignIns`, keyed by environment + server. `examples/mcp-http-server.mjs --oauth` is
     a complete local sign-in server for tests and the Windows guide.
+  - `mcpHandler.ts`: the MCP tools (list_requests, send_request, run_collection, run_flow), one JSON-RPC message
+    in, one reply out; shared by `dispatch-run mcp` (stdio, first collection) and the desktop app's local MCP
+    endpoint (every collection in the active workspace, with hooks that save script/token changes like Send does).
   - `flows.ts`: flow graph (nodes, wires from output ports) and `runFlow`; straight chains run in a loop, recursion
     only for branches and For each (deep recursion overflowed the stack). Stored in IndexedDB v4 `flows`.
 - `src/ui/` — `useWorkspace.ts` holds all state and actions; one component per view (RequestPane, ResponsePane,
@@ -37,7 +40,9 @@ and an import format; never copy its name, branding, icons or UI.
 - `src/cli/main.ts` — `dispatch-run` (run, `load`, `mock`, `mcp`, `flow`); bundled by `scripts/build-cli.mjs`.
 - `src-tauri/src/lib.rs` — send/cancel (proxy, mTLS, CA certs), save files, open URL, OAuth loopback, mock server
   sockets, SSE streams, notifications, collection folders (pick/read/write);
-  `grpc.rs` — gRPC (tonic + prost-reflect + protox).
+  `grpc.rs` — gRPC (tonic + prost-reflect + protox); `mcp_host.rs` — local MCP endpoint (127.0.0.1 only,
+  bearer token, refuses Origin and foreign Host headers, POST only) that relays JSON-RPC to the frontend
+  (`src/ui/mcpHost.ts`, turned on in Settings → AI assistants).
 - `tests/` — vitest (jsdom; `cli.test.ts` builds and runs the real CLI in Node). `src-tauri/tests/grpc_live.rs` —
   live gRPC test (needs `examples/grpc`); `network_live.rs` — mTLS/proxy (needs `examples/tls`);
   `collection_files.rs` — folder write/prune/escape.
