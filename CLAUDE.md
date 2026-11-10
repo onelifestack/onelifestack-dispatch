@@ -111,8 +111,9 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 
 ## Where we left off
 
-Updated 2026-11-10. The latest tag is **v0.5.1** (still a draft; v0.5.0 is the published Latest). Two feature PRs
-are open (see "Open on GitHub").
+Updated 2026-11-10 (end of day). The latest tag is **v0.5.1** (still a draft; v0.5.0 is the published Latest).
+`main` is ahead of it: PRs #6 (local MCP endpoint), #7 (drag and drop) and #8 (docs) are merged but untagged and not
+yet tried in the real desktop app. PR #10 (branded installers) is open.
 
 **The repo is public (MIT) since 2026-11-05.** GitHub billing blocked Actions on the private repo, so the owner
 made it public. To keep a personal e-mail out of the public history, the old repo was renamed
@@ -150,6 +151,11 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
   0.5.1). Flows deleted in 0.4.x stay in the data after upgrading (noted in the 0.5.1 release notes).
 - Round 4 (install 0.5.1 over 0.5.0; retest 6.6b step 6 and the round 3 fixes) was requested on #2 on 2026-11-05.
   No report yet as of 2026-11-10. The installers are on the v0.5.1 draft release.
+- **Issue #9 (2026-11-10)** is the next Windows round and replaces the round 4 request on #2: part A repeats round 4
+  on the installed 0.5.1; part B tests a build from `main` (CI run 42783403452, commit e8f9dc2, artifact
+  `dispatch-windows`, still says 0.5.1) for the MCP endpoint (curl checks for 401/403/405, port field, token,
+  port in use) and drag and drop; part C covers 150%/200% scaling, multiple monitors and SmartScreen text. The
+  report goes on #9, not #2. Artifacts expire 2027-02-08.
 - **Next step:** read the newest comment on #2 and any `[Windows] …` issues or `test/windows-*` branches the agent
   opened. Then fix in a PR, bump the version (package.json, tauri.conf.json, Cargo.toml + lock, `VERSION` in
   `src/cli/main.ts`, `clientVersion` in `src/core/mcp.ts`, the version in `docs/TESTING-WINDOWS.md`), tag, add
@@ -160,13 +166,16 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
   Sign in banner and the Auth tab can't be reached for MCP; MCP results from the previous tab stay visible; two
   blocks named "End" can't be told apart in flow selects; importing a
   backup into the same workspace duplicates everything; error texts include Rust internals (`os error 10061`).
-- Issue #2: the Windows test.
-- PR #6: the desktop app's local MCP endpoint (Settings → AI assistants; `src-tauri/src/mcp_host.rs`,
-  `src/core/mcpHandler.ts`, `src/ui/mcpHost.ts`).
-- PR #7: drag and drop between views (Ctrl/Alt-drag copies in the sidebar; tabs onto collections; requests onto
-  flow canvases and the Runner; `src/ui/dnd.ts`).
-- #6 and #7 conflict in `src/ui/App.tsx` (adjacent imports and the SettingsView line): whichever merges second
-  needs `main` merged in first.
+- Issue #2: the Windows test (rounds 1–3 done; round 4 moved into #9). Issue #9: the next Windows round.
+- PR #10: branded installers (NSIS sidebar/header, MSI banner/dialog, styled .dmg; `src-tauri/installer/`,
+  `scripts/make-installer-art.mjs`). All CI checks pass; the look has only been seen as images on Linux. Needs a
+  look at the Windows setup pages and the .dmg window, then the owner's merge (not yet merged).
+- Merged 2026-11-10, in `main` but not in any tag: the desktop app's local MCP endpoint (#6; Settings → AI
+  assistants; `src-tauri/src/mcp_host.rs`, `src/core/mcpHandler.ts`, `src/ui/mcpHost.ts`; the port applies on
+  blur/Enter and start/stop are serialised) and drag and drop between views (#7; Ctrl/Alt-drag copies in the
+  sidebar, tabs onto collections, requests onto flow canvases and the Runner; `src/ui/dnd.ts`).
+- Flaky CI: `tests/browser.test.ts` ("The browser didn't start in time") and the Linux `linuxdeploy` step each
+  failed once and passed on `gh run rerun --failed`.
 
 **Site.** dispatch.onelifestack.com shows 0.5.0 with downloads from the public release (`site/release.json`).
 `site/release.json` on `main` already points at 0.5.1 (PR #5), so its links work only once the v0.5.1 release is
@@ -176,7 +185,10 @@ blocks Claude from publishing).
 
 **Waiting on the owner.**
 - Publishing the draft releases (v0.5.1 next), then publishing the site.
-- Code-signing certificates and the updater key (`docs/RELEASING.md`).
+- Code-signing certificates and the updater key (`docs/RELEASING.md`). The updater key unblocks in-app updates:
+  once the public key exists, add `tauri-plugin-updater`, the config and a "Check for updates" item. Without it, a
+  key-less "Check for updates" button that opens the release page is possible (it contacts GitHub, so keep it opt-in).
+- Merging PR #10 after a look at the installers.
 - Sync design.
 - The site's DNS (see `site/README.md`).
 
