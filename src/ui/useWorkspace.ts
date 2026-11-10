@@ -506,16 +506,23 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
    * (a sibling request or folder) or at the end. Siblings are renumbered so the order is exact. Folders carry their
    * contents along, also to another collection. A folder can't move into itself or its own subfolders.
    */
-  const placeItems = useCallback(async (items: { kind: 'request' | 'folder'; id: string }[], parent: { collectionId: string; folderId: string | null }, beforeId: string | null = null) => {
+  /**
+   * Moves requests and folders under `parent` (before `beforeId`, else at the end) and renumbers the siblings.
+   * `extra` holds items that aren't saved yet (copies, a tab being saved): they're added first, then placed.
+   */
+  const placeItems = useCallback(async (items: { kind: 'request' | 'folder'; id: string }[], parent: { collectionId: string; folderId: string | null }, beforeId: string | null = null, extra: { folders?: Folder[]; requests?: RequestDef[] } = {}) => {
+    const merge = <T extends { id: string }>(base: T[], add: T[] = []) => [...base.filter((x) => !add.some((a) => a.id === x.id)), ...add]
+    const baseFolders = merge(folders, extra.folders)
+    const baseRequests = merge(requests, extra.requests)
     const descendants = (fid: string) => {
       const ids = new Set([fid])
-      for (let grew = true; grew;) { grew = false; for (const f of folders) if (f.parentId && ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); grew = true } }
+      for (let grew = true; grew;) { grew = false; for (const f of baseFolders) if (f.parentId && ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); grew = true } }
       return ids
     }
     if (parent.folderId && items.some((i) => i.kind === 'folder' && descendants(i.id).has(parent.folderId!))) return false
     const moving = new Set(items.map((i) => i.id))
-    let nextFolders = folders.map((f) => ({ ...f }))
-    let nextRequests = requests.map((r) => ({ ...r }))
+    let nextFolders = baseFolders.map((f) => ({ ...f }))
+    let nextRequests = baseRequests.map((r) => ({ ...r }))
     // Re-parent.
     for (const it of items) {
       if (it.kind === 'request') nextRequests = nextRequests.map((r) => (r.id === it.id ? { ...r, collectionId: parent.collectionId, folderId: parent.folderId } : r))
@@ -538,13 +545,57 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
       if (x.kind === 'folder') nextFolders = nextFolders.map((f) => (f.id === x.id ? { ...f, sort: i + 1 } : f))
       else nextRequests = nextRequests.map((r) => (r.id === x.id ? { ...r, sort: i + 1 } : r))
     })
-    const changedF = nextFolders.filter((f, i) => JSON.stringify(f) !== JSON.stringify(folders[i]))
-    const changedR = nextRequests.filter((r, i) => JSON.stringify(r) !== JSON.stringify(requests[i]))
+    const savedF = new Map(folders.map((f) => [f.id, JSON.stringify(f)]))
+    const savedR = new Map(requests.map((r) => [r.id, JSON.stringify(r)]))
+    const changedF = nextFolders.filter((f) => JSON.stringify(f) !== savedF.get(f.id))
+    const changedR = nextRequests.filter((r) => JSON.stringify(r) !== savedR.get(r.id))
     setFolders(nextFolders); setRequests(nextRequests)
     setTabs((ts) => ts.map((t) => { const r = changedR.find((x) => x.id === t.draft.id); return r ? { ...t, draft: { ...t.draft, collectionId: r.collectionId, folderId: r.folderId, sort: r.sort } } : t }))
     await db.putMany({ folders: changedF, requests: changedR })
     return true
   }, [folders, requests])
+
+  /** Copies requests and folders (with everything in them) under `parent`. Copies next to their original get “ copy”. */
+  const copyItems = useCallback(async (items: { kind: 'request' | 'folder'; id: string }[], parent: { collectionId: string; folderId: string | null }, beforeId: string | null = null) => {
+    const now = Date.now()
+    const outFolders: Folder[] = []
+    const outRequests: RequestDef[] = []
+    const top: { kind: 'request' | 'folder'; id: string }[] = []
+    const copyRequest = (r: RequestDef, collectionId: string, folderId: string | null, rename: boolean) => {
+      const c: RequestDef = { ...structuredClone(r), id: uid(), collectionId, folderId, name: rename ? `${r.name} copy` : r.name, updatedAt: now }
+      outRequests.push(c); return c
+    }
+    const copyFolder = (fo: Folder, parentId: string | null, rename: boolean): Folder => {
+      const c: Folder = { ...structuredClone(fo), id: uid(), collectionId: parent.collectionId, parentId, name: rename ? `${fo.name} copy` : fo.name }
+      outFolders.push(c)
+      for (const r of requests.filter((x) => x.folderId === fo.id)) copyRequest(r, parent.collectionId, c.id, false)
+      for (const sub of folders.filter((x) => x.parentId === fo.id)) copyFolder(sub, c.id, false)
+      return c
+    }
+    for (const it of items) {
+      if (it.kind === 'request') {
+        const r = requests.find((x) => x.id === it.id); if (!r) continue
+        const same = r.collectionId === parent.collectionId && (r.folderId ?? null) === parent.folderId
+        top.push({ kind: 'request', id: copyRequest(r, parent.collectionId, parent.folderId, same).id })
+      } else {
+        const fo = folders.find((x) => x.id === it.id); if (!fo) continue
+        const same = fo.collectionId === parent.collectionId && (fo.parentId ?? null) === parent.folderId
+        top.push({ kind: 'folder', id: copyFolder(fo, parent.folderId, same).id })
+      }
+    }
+    if (!top.length) return false
+    return placeItems(top, parent, beforeId, { folders: outFolders, requests: outRequests })
+  }, [folders, requests, placeItems])
+
+  /** Saves an open tab into a collection or folder (a new request, or a saved one with its edits, moved there). */
+  const saveTabTo = useCallback(async (tabId: string, parent: { collectionId: string; folderId: string | null }, beforeId: string | null = null) => {
+    const t = tabs.find((x) => x.id === tabId)
+    if (!t) return false
+    const r: RequestDef = { ...t.draft, collectionId: parent.collectionId, folderId: parent.folderId, updatedAt: Date.now() }
+    const ok = await placeItems([{ kind: 'request', id: r.id }], parent, beforeId, { requests: [r] })
+    if (ok) setTabs((ts) => ts.map((x) => (x.id === tabId ? { ...x, draft: { ...r, sort: x.draft.sort } } : x)))
+    return ok
+  }, [tabs, placeItems])
 
   /** Replaces a collection's contents (e.g. reloaded from its folder); adds it if it's new. */
   /**
@@ -619,7 +670,7 @@ export function useWorkspace(opts: WorkspaceOptions = {}) {
   }, [snapshot])
 
   return {
-    trash, undoDelete, backups, backupNow, restoreBackup, placeItems, removeRequests, replaceCollection,
+    trash, undoDelete, backups, backupNow, restoreBackup, placeItems, copyItems, saveTabTo, removeRequests, replaceCollection,
     flows: visibleFlows, allFlows: flows, addFlow, updateFlow, duplicateFlow, removeFlow, runFlowNow,
     spaces, activeSpaceId, switchSpace, addSpace, addSpaceFrom, setSpaceFolder, setSpaceFolderId, renameSpace, removeSpace, moveToSpace,
     replaceSpaceContents, folderStatus, setFolderStatus,

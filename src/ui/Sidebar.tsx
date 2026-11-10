@@ -3,6 +3,7 @@ import type { Collection, Folder, RequestDef } from '../core/types'
 import { bySort } from '../core/types'
 import { statusTone, timeAgo } from '../core/format'
 import type { WorkspaceApi } from './useWorkspace'
+import { DND_TAB, type DragItem, carries, putItems, wantsCopy } from './dnd'
 
 type Tab = 'collections' | 'flows' | 'history' | 'environments'
 
@@ -52,25 +53,45 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
   }, [])
   const toggleSelect = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   /** What's being dragged: the selection when the dragged request is part of it. */
-  const dragged = (): { kind: 'request' | 'folder'; id: string }[] => !drag ? [] : drag.kind === 'request' && selected.has(drag.id) ? [...selected].map((id) => ({ kind: 'request' as const, id })) : [drag]
-  const drop = async (parent: { collectionId: string; folderId: string | null }, beforeId: string | null) => {
+  const draggedFrom = (d: DragItem | null): DragItem[] => !d ? [] : d.kind === 'request' && selected.has(d.id) ? [...selected].map((id) => ({ kind: 'request' as const, id })) : [d]
+  const dragged = () => draggedFrom(drag)
+  const startDrag = (e: React.DragEvent, d: DragItem, label: string) => {
+    e.dataTransfer.effectAllowed = 'copyMove'
+    e.dataTransfer.setData('text/plain', label)
+    putItems(e.dataTransfer, draggedFrom(d)) // for the flow canvas and the runner
+    setDrag(d)
+  }
+  const [copying, setCopying] = useState(false)
+  const drop = async (e: React.DragEvent, parent: { collectionId: string; folderId: string | null }, beforeId: string | null) => {
+    const tabId = carries(e.dataTransfer, DND_TAB) ? e.dataTransfer.getData(DND_TAB) : ''
     const items = dragged()
-    setDrag(null); setDropAt(null)
-    if (!items.length || (beforeId && items.some((i) => i.id === beforeId))) return
+    const copy = wantsCopy(e)
+    setDrag(null); setDropAt(null); setCopying(false)
+    if (tabId) { await ws.saveTabTo(tabId, parent, beforeId); return }
+    if (!items.length) return
+    if (copy) { if (await ws.copyItems(items, parent, beforeId)) setSelected(new Set()); return }
+    if (beforeId && items.some((i) => i.id === beforeId)) return
     if (!(await ws.placeItems(items, parent, beforeId))) return
     setSelected(new Set())
   }
   const dropProps = (key: string, parent: { collectionId: string; folderId: string | null }, beforeId: string | null) => ({
-    onDragOver: (e: React.DragEvent) => { if (!drag) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; setDropAt(key) },
+    onDragOver: (e: React.DragEvent) => {
+      const tab = carries(e.dataTransfer, DND_TAB)
+      if (!drag && !tab) return
+      e.preventDefault(); e.stopPropagation()
+      const copy = !tab && wantsCopy(e)
+      e.dataTransfer.dropEffect = copy ? 'copy' : 'move'
+      setDropAt(key); setCopying(copy)
+    },
     onDragLeave: () => setDropAt((d) => (d === key ? null : d)),
-    onDrop: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); void drop(parent, beforeId) },
+    onDrop: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); void drop(e, parent, beforeId) },
   })
   const toggle = (id: string) => setClosed((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const openTabIds = new Set(ws.tabs.map((t) => t.draft.id))
 
   const reqRow = (r: RequestDef) => (
     <li key={r.id} className={`row ${ws.draft.id === r.id && ws.view.kind === 'request' ? 'on' : ''} ${selected.has(r.id) ? 'selected' : ''} ${dropAt === `before:${r.id}` ? 'dropBefore' : ''}`}
-      draggable={!!r.collectionId} onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', r.name); setDrag({ kind: 'request', id: r.id }) }} onDragEnd={() => { setDrag(null); setDropAt(null) }}
+      draggable={!!r.collectionId} onDragStart={(e) => startDrag(e, { kind: 'request', id: r.id }, r.name)} onDragEnd={() => { setDrag(null); setDropAt(null); setCopying(false) }}
       {...(r.collectionId ? dropProps(`before:${r.id}`, { collectionId: r.collectionId, folderId: r.folderId }, r.id) : {})}>
       <button type="button" className="rowMain" title={r.url} aria-pressed={selected.has(r.id) || undefined}
         onClick={(e) => { if (e.ctrlKey || e.metaKey) toggleSelect(r.id); else { setSelected(new Set()); ws.openRequest(r) } }}>
@@ -104,7 +125,7 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
     return (
       <li key={fo.id} className={`folder ${dropAt === `before:${fo.id}` ? 'dropBefore' : ''}`} {...dropProps(`before:${fo.id}`, { collectionId: c.id, folderId: fo.parentId }, fo.id)}>
         <div className={`row ${ws.view.kind === 'folder' && ws.view.id === fo.id ? 'on' : ''} ${dropAt === `into:${fo.id}` ? 'dropInto' : ''}`}
-          draggable onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', fo.name); setDrag({ kind: 'folder', id: fo.id }) }} onDragEnd={() => { setDrag(null); setDropAt(null) }}
+          draggable onDragStart={(e) => { e.stopPropagation(); startDrag(e, { kind: 'folder', id: fo.id }, fo.name) }} onDragEnd={() => { setDrag(null); setDropAt(null); setCopying(false) }}
           {...dropProps(`into:${fo.id}`, { collectionId: c.id, folderId: fo.id }, null)}>
           <button type="button" className="caret" aria-expanded={open} aria-label={`${open ? 'Collapse' : 'Expand'} ${fo.name}`} onClick={() => toggle(fo.id)}>{open ? '▾' : '▸'}</button>
           <button type="button" className="rowMain folderName" onClick={() => ws.setView({ kind: 'folder', id: fo.id })}><span className="folderIcon" aria-hidden>▤</span><span className="rowName">{fo.name}</span></button>
@@ -151,7 +172,8 @@ export function Sidebar({ ws, dialogs, onExportCollection, onExportPostman }: Pr
             <button type="button" className="icon" aria-label="Clear selection" onClick={() => setSelected(new Set())}>×</button>
           </div>
         )}
-        <ul className="tree">
+        {drag && <p className="muted small pad" role="status">{copying ? 'Drop to copy here.' : 'Drop to move. Hold Ctrl (Alt on Mac) to copy.'}</p>}
+        <ul className={`tree ${copying ? 'copying' : ''}`}>
           {ws.collections.map((c) => {
             const kids = children(c, null)
             if (f && !kids.length && !c.name.toLowerCase().includes(f)) return null
