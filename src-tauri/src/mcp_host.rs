@@ -19,7 +19,9 @@ const ANSWER_TIMEOUT: Duration = Duration::from_secs(600);
 
 #[derive(Default)]
 pub struct McpHost {
-    stop: Mutex<Option<oneshot::Sender<()>>>,
+    /// The running listener: its stop signal and its task. An async lock, held while starting or stopping, so a
+    /// restart waits for the old listener to let go of the port before binding again.
+    running: tokio::sync::Mutex<Option<(oneshot::Sender<()>, tauri::async_runtime::JoinHandle<()>)>>,
     waiting: Mutex<HashMap<u64, oneshot::Sender<Option<String>>>>,
     next: AtomicU64,
 }
@@ -121,12 +123,14 @@ async fn serve_one(mut sock: tokio::net::TcpStream, app: tauri::AppHandle, host:
 pub async fn mcp_host_start(app: tauri::AppHandle, state: tauri::State<'_, Arc<McpHost>>, port: u16, token: String) -> Result<(), String> {
     if token.len() < 32 { return Err("The token is too short; generate a new one.".into()); }
     let host = state.inner().clone();
-    if let Some(stop) = host.stop.lock().unwrap().take() { let _ = stop.send(()); }
+    let mut running = host.running.lock().await;
+    stop_listener(&mut running).await;
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| format!("Couldn’t start the MCP endpoint on port {port}: {e}"))?;
     let (tx, mut rx) = oneshot::channel::<()>();
-    *host.stop.lock().unwrap() = Some(tx);
     let token = Arc::new(token);
-    tauri::async_runtime::spawn(async move {
+    let task_host = host.clone();
+    let task = tauri::async_runtime::spawn(async move {
+        let host = task_host;
         loop {
             tokio::select! {
                 _ = &mut rx => break,
@@ -136,13 +140,23 @@ pub async fn mcp_host_start(app: tauri::AppHandle, state: tauri::State<'_, Arc<M
             }
         }
     });
+    *running = Some((tx, task));
     Ok(())
 }
 
+/// Stops the listener (if any) and waits until its socket is closed.
+async fn stop_listener(running: &mut Option<(oneshot::Sender<()>, tauri::async_runtime::JoinHandle<()>)>) {
+    if let Some((stop, task)) = running.take() {
+        let _ = stop.send(());
+        let _ = task.await;
+    }
+}
+
 #[tauri::command]
-pub fn mcp_host_stop(state: tauri::State<'_, Arc<McpHost>>) {
-    if let Some(stop) = state.stop.lock().unwrap().take() { let _ = stop.send(()); }
+pub async fn mcp_host_stop(state: tauri::State<'_, Arc<McpHost>>) -> Result<(), ()> {
+    stop_listener(&mut *state.running.lock().await).await;
     for (_, tx) in state.waiting.lock().unwrap().drain() { let _ = tx.send(None); }
+    Ok(())
 }
 
 /// The frontend's answer to one message; `None` for a notification (HTTP 202, no body).

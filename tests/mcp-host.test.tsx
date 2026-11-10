@@ -61,3 +61,24 @@ describe('MCP handler for the desktop app', () => {
     expect(r.result.content[0].text).toBe('POST   Login  https://api.test/login')
   })
 })
+
+/** The endpoint restarts when the port changes, so the port applies on blur or Enter, never per keystroke. */
+describe('MCP endpoint port setting', () => {
+  it('applies the port once, on blur, clamped', async () => {
+    const { render, fireEvent, screen } = await import('@testing-library/react')
+    const { SettingsView } = await import('../src/ui/SettingsView')
+    const setSettings = vi.fn()
+    const ws = { settings: { ...defaultSettings, mcpHostEnabled: true }, transport: { unrestricted: true }, setSettings } as any
+    render(<SettingsView ws={ws} notify={() => {}} />)
+    const port = screen.getByLabelText('MCP port') as HTMLInputElement
+    for (const v of ['4', '43', '432', '4321']) fireEvent.change(port, { target: { value: v } })
+    expect(setSettings).not.toHaveBeenCalled()
+    fireEvent.blur(port)
+    expect(setSettings).toHaveBeenCalledOnce()
+    expect(setSettings).toHaveBeenCalledWith({ mcpHostPort: 4321 })
+    fireEvent.change(port, { target: { value: '80' } })
+    fireEvent.keyDown(port, { key: 'Enter' })
+    expect(setSettings).toHaveBeenLastCalledWith({ mcpHostPort: 1024 })
+    expect(port.value).toBe('1024')
+  })
+})

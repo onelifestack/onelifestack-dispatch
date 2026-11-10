@@ -101,6 +101,14 @@ export function SettingsView({ ws, notify, mcpHost = { state: 'off' } }: { ws: W
 function McpHostSettings({ ws, notify, status }: { ws: WorkspaceApi; notify: (m: string) => void; status: McpHostStatus }) {
   const st = ws.settings
   const [show, setShow] = useState(false)
+  // The endpoint restarts when the port changes, so apply it on blur or Enter, not on every keystroke.
+  const [portDraft, setPortDraft] = useState(String(st.mcpHostPort))
+  useEffect(() => setPortDraft(String(st.mcpHostPort)), [st.mcpHostPort])
+  const applyPort = () => {
+    const n = Math.min(65535, Math.max(1024, Math.round(Number(portDraft)) || 4320))
+    setPortDraft(String(n))
+    if (n !== st.mcpHostPort) ws.setSettings({ mcpHostPort: n })
+  }
   const url = `http://127.0.0.1:${st.mcpHostPort}/mcp`
   const command = `claude mcp add --transport http dispatch ${url} --header "Authorization: Bearer ${st.mcpHostToken}"`
   const copy = (text: string, what: string) => { void navigator.clipboard?.writeText(text).then(() => notify(`${what} copied`), () => notify('Couldn’t copy')) }
@@ -110,7 +118,8 @@ function McpHostSettings({ ws, notify, status }: { ws: WorkspaceApi; notify: (m:
     <p className="muted small">Lets an AI assistant on this computer (Claude Code, Claude Desktop, Cursor…) list, send and run the requests in the workspace you’re looking at, with the active environment, cookies and signed-in tokens. It can’t edit or delete them. Only programs that have the token below can connect, and only from this computer.</p>
     <div className="auth">
       <label className="toggle"><input type="checkbox" checked={st.mcpHostEnabled} onChange={(e) => ws.setSettings({ mcpHostEnabled: e.target.checked, ...(e.target.checked && !st.mcpHostToken ? { mcpHostToken: newMcpToken() } : {}) })} /> Let AI assistants use Dispatch</label>
-      <label className="field inline"><span>Port</span><input type="number" min={1024} max={65535} value={st.mcpHostPort} onChange={(e) => ws.setSettings({ mcpHostPort: Math.min(65535, Math.max(1024, Number(e.target.value) || 4320)) })} /></label>
+      <label className="field inline"><span>Port</span><input type="number" min={1024} max={65535} value={portDraft} aria-label="MCP port"
+        onChange={(e) => setPortDraft(e.target.value)} onBlur={applyPort} onKeyDown={(e) => { if (e.key === 'Enter') applyPort() }} /></label>
       <label className="field"><span>Methods it may send</span>
         <input className="mono" value={st.mcpHostMethods} placeholder="empty = all" aria-label="Methods AI assistants may send" onChange={(e) => ws.setSettings({ mcpHostMethods: e.target.value })} />
       </label>

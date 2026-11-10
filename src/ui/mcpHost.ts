@@ -12,6 +12,17 @@ export function newMcpToken(): string {
 
 export const mcpMethods = (s: string) => s.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean)
 
+/**
+ * Start and stop calls run one after another, in the order made: a settings change stops the old endpoint (effect
+ * cleanup) and then starts the new one, and a late stop must never land after the new start.
+ */
+let queue: Promise<unknown> = Promise.resolve()
+function inOrder<T>(f: () => Promise<T>): Promise<T> {
+  const next = queue.then(f, f)
+  queue = next.catch(() => {})
+  return next
+}
+
 export type McpHostStatus = { state: 'off' } | { state: 'on'; port: number } | { state: 'error'; message: string }
 
 /**
@@ -43,7 +54,7 @@ export function useMcpHost(ws: WorkspaceApi): McpHostStatus {
       })
       if (stopped) { unlisten(); return }
       try {
-        await invoke('mcp_host_start', { port, token })
+        await inOrder(() => (stopped ? Promise.resolve() : invoke('mcp_host_start', { port, token })))
         if (!stopped) setStatus({ state: 'on', port })
       } catch (e) {
         unlisten(); unlisten = null
@@ -53,7 +64,7 @@ export function useMcpHost(ws: WorkspaceApi): McpHostStatus {
     return () => {
       stopped = true
       unlisten?.()
-      void import('@tauri-apps/api/core').then(({ invoke }) => invoke('mcp_host_stop'))
+      void inOrder(async () => { const { invoke } = await import('@tauri-apps/api/core'); await invoke('mcp_host_stop') })
     }
   }, [ws.ready, enabled, port, token])
 
