@@ -111,9 +111,10 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 
 ## Where we left off
 
-Updated 2026-11-13. The latest tag is **v0.5.1** (still a draft; v0.5.0 is the published Latest).
+Updated 2026-11-13 (status check). The latest tag is **v0.5.1** (still a draft; v0.5.0 is the published Latest).
 `main` is ahead of it: PRs #6 (local MCP endpoint), #7 (drag and drop), #8 (docs) and #10 (branded installers) are
-merged but untagged and not yet tried in the real desktop app or installers. No PRs are open.
+merged but untagged and not yet tried in the real desktop app or installers. Nothing has changed on GitHub since
+2026-11-10: no tester report on #9 or #2, v0.5.1 not published. PR #11 is this docs update, left for the owner.
 
 **The repo is public (MIT) since 2026-11-05.** GitHub billing blocked Actions on the private repo, so the owner
 made it public. To keep a personal e-mail out of the public history, the old repo was renamed
@@ -155,7 +156,8 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
   on the installed 0.5.1; part B tests a build from `main` (CI run 42783403452, commit e8f9dc2, artifact
   `dispatch-windows`, still says 0.5.1) for the MCP endpoint (curl checks for 401/403/405, port field, token,
   port in use) and drag and drop; part C covers 150%/200% scaling, multiple monitors and SmartScreen text. The
-  report goes on #9, not #2. Artifacts expire 2027-02-08.
+  report goes on #9, not #2. Artifacts expire 2027-02-08. As of 2026-11-13 #9 has no comments. Build from `main`
+  now also has the branded installers (#10), so the tester can note how the setup pages look.
 - **Next step:** read the newest comment on #2 and any `[Windows] …` issues or `test/windows-*` branches the agent
   opened. Then fix in a PR, bump the version (package.json, tauri.conf.json, Cargo.toml + lock, `VERSION` in
   `src/cli/main.ts`, `clientVersion` in `src/core/mcp.ts`, the version in `docs/TESTING-WINDOWS.md`), tag, add
