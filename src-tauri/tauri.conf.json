@@ -46,8 +46,7 @@
         "installMode": "currentUser",
         "headerImage": "installer/nsis-header.bmp",
         "sidebarImage": "installer/nsis-sidebar.bmp",
-        "installerIcon": "icons/icon.ico",
-        "startMenuFolder": "OneLifeStack"
+        "installerIcon": "icons/icon.ico"
       },
       "wix": {
         "bannerPath": "installer/wix-banner.bmp",
