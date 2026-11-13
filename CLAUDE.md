@@ -111,9 +111,10 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 
 ## Where we left off
 
-Updated 2026-11-10 (end of day). The latest tag is **v0.5.1** (still a draft; v0.5.0 is the published Latest).
-`main` is ahead of it: PRs #6 (local MCP endpoint), #7 (drag and drop) and #8 (docs) are merged but untagged and not
-yet tried in the real desktop app. PR #10 (branded installers) is open.
+Updated 2026-11-13 (status check). The latest tag is **v0.5.1** (still a draft; v0.5.0 is the published Latest).
+`main` is ahead of it: PRs #6 (local MCP endpoint), #7 (drag and drop), #8 (docs) and #10 (branded installers) are
+merged but untagged and not yet tried in the real desktop app or installers. Nothing has changed on GitHub since
+2026-11-10: no tester report on #9 or #2, v0.5.1 not published. PR #11 is this docs update, left for the owner.
 
 **The repo is public (MIT) since 2026-11-05.** GitHub billing blocked Actions on the private repo, so the owner
 made it public. To keep a personal e-mail out of the public history, the old repo was renamed
@@ -155,7 +156,8 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
   on the installed 0.5.1; part B tests a build from `main` (CI run 42783403452, commit e8f9dc2, artifact
   `dispatch-windows`, still says 0.5.1) for the MCP endpoint (curl checks for 401/403/405, port field, token,
   port in use) and drag and drop; part C covers 150%/200% scaling, multiple monitors and SmartScreen text. The
-  report goes on #9, not #2. Artifacts expire 2027-02-08.
+  report goes on #9, not #2. Artifacts expire 2027-02-08. As of 2026-11-13 #9 has no comments. Build from `main`
+  now also has the branded installers (#10), so the tester can note how the setup pages look.
 - **Next step:** read the newest comment on #2 and any `[Windows] …` issues or `test/windows-*` branches the agent
   opened. Then fix in a PR, bump the version (package.json, tauri.conf.json, Cargo.toml + lock, `VERSION` in
   `src/cli/main.ts`, `clientVersion` in `src/core/mcp.ts`, the version in `docs/TESTING-WINDOWS.md`), tag, add
@@ -167,9 +169,10 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
   blocks named "End" can't be told apart in flow selects; importing a
   backup into the same workspace duplicates everything; error texts include Rust internals (`os error 10061`).
 - Issue #2: the Windows test (rounds 1–3 done; round 4 moved into #9). Issue #9: the next Windows round.
-- PR #10: branded installers (NSIS sidebar/header, MSI banner/dialog, styled .dmg; `src-tauri/installer/`,
-  `scripts/make-installer-art.mjs`). All CI checks pass; the look has only been seen as images on Linux. Needs a
-  look at the Windows setup pages and the .dmg window, then the owner's merge (not yet merged).
+- Merged 2026-11-13: PR #10, branded installers (NSIS sidebar/header, MSI banner/dialog, styled Retina .dmg;
+  `src-tauri/installer/`, `scripts/make-installer-art.mjs`). CI passed; the look has only been seen as images on
+  Linux, so look at the Windows setup pages and the .dmg window when 0.5.2/0.6.0 builds. The Start menu folder
+  (`nsis.startMenuFolder`) was left out: test it on an upgrade from 0.5.x before adding it.
 - Merged 2026-11-10, in `main` but not in any tag: the desktop app's local MCP endpoint (#6; Settings → AI
   assistants; `src-tauri/src/mcp_host.rs`, `src/core/mcpHandler.ts`, `src/ui/mcpHost.ts`; the port applies on
   blur/Enter and start/stop are serialised) and drag and drop between views (#7; Ctrl/Alt-drag copies in the
@@ -188,7 +191,6 @@ blocks Claude from publishing).
 - Code-signing certificates and the updater key (`docs/RELEASING.md`). The updater key unblocks in-app updates:
   once the public key exists, add `tauri-plugin-updater`, the config and a "Check for updates" item. Without it, a
   key-less "Check for updates" button that opens the release page is possible (it contacts GitHub, so keep it opt-in).
-- Merging PR #10 after a look at the installers.
 - Sync design.
 - The site's DNS (see `site/README.md`).
 

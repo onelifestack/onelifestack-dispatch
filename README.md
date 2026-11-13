@@ -8,6 +8,14 @@ network traffic is the requests you send.
 
 ## Features (v0.4)
 
+**Newer on `main` (after 0.5.1, not in a release yet)**
+- AI assistants (desktop): Settings → AI assistants (MCP) serves the open workspace at `http://127.0.0.1:<port>/mcp`
+  with a token you copy; same tools as `dispatch-run mcp`, against the live app. Off by default; GET and HEAD only
+  until you allow more.
+- Drag and drop between views: Ctrl (Alt on Mac) copies in the sidebar; drop a request tab on a collection to save
+  it; drop requests onto a flow canvas or the Runner.
+- Branded Windows setup, MSI and macOS disk image.
+
 **New in v0.3**
 - Code editor (CodeMirror): syntax colours, `{{variable}}` and `pm.` autocomplete, GraphQL completion from the
   schema, foldable JSON responses.
