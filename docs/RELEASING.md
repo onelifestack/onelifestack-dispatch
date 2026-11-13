@@ -10,6 +10,19 @@
 
 The installers aren't signed yet, so Windows SmartScreen and macOS Gatekeeper warn on first launch.
 
+## Installer look
+
+The Windows setup (NSIS `.exe` and `.msi`) and the macOS `.dmg` use branded artwork from `src-tauri/installer/`
+(wired up in `tauri.conf.json` under `bundle.windows.nsis`, `bundle.windows.wix` and `bundle.macOS.dmg`). The images
+are generated: change the look in `scripts/make-installer-art.mjs` and run it (it documents what it needs), then
+commit the new images. The `.bmp` sizes are fixed by the installers: 164x314 sidebar, 150x57 header (NSIS), 493x312
+dialog and 493x58 banner (WiX).
+
+The `.dmg` background is drawn at 1320x800 and marked 144 dpi so Finder shows it at 660x400 points, sharp on Retina.
+The Windows setup has no custom Start menu folder: `nsis.startMenuFolder` was left out because it hasn't been tested
+on an upgrade from an older install (the old root-level shortcut could be left behind). Try it on a machine with
+0.5.x installed before adding it.
+
 ## Code signing (needs the owner)
 
 - **Windows:** an OV or EV code-signing certificate (or Azure Trusted Signing). Add the certificate as GitHub
