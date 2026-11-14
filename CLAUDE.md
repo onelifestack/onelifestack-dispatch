@@ -111,13 +111,16 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 
 ## Where we left off
 
-Updated 2026-11-14. The latest tag is **v0.5.1** (still a draft; v0.5.0 is the published Latest).
-`main` is ahead of it: PRs #6 (local MCP endpoint), #7 (drag and drop) and #8 (docs) are merged but untagged and not
-yet tried in the real desktop app. PR #10 (branded installers) is open.
+Updated 2026-11-14. The latest tag is **v0.5.1**, published (Latest) on 2026-11-14.
+`main` is ahead of it: PRs #6 (local MCP endpoint), #7 (drag and drop), #8 (docs), #10 (branded installers) and the
+OGCrafts move (#12, #13, #14) are merged but untagged and not yet tried in the real desktop app. **The 0.5.1
+installers were built before the move: they still use bundle ID `com.onelifestack.dispatch` and publisher
+OneLifeStack.** The next release (0.5.2 or 0.6.0) is the first with `cloud.ogcrafts.dispatch`; it installs as a
+separate app, so 0.5.1 users reinstall once.
 
 **Moved to OGCrafts (2026-11-14).** Dispatch is no longer an OneLifeStack app. Home: GitHub org
 `og-crafts` (a free org; admin login `og-crafterr`). Repo `og-crafts/dispatch` (transferred, so issues, PRs and the
-v0.5.1 draft came with it); site repo `og-crafts/dispatch-site` (Pages, custom domain `dispatch.ogcrafts.cloud`,
+v0.5.1 release came with it); site repo `og-crafts/dispatch-site` (Pages, custom domain `dispatch.ogcrafts.cloud`,
 HTTPS enforced); Cloudflare CNAME `dispatch -> og-crafts.github.io` (DNS only). Bundle ID is now
 `cloud.ogcrafts.dispatch`; backups are written as `ogcrafts-dispatch` and the old `onelifestack-dispatch` name still
 imports (`LEGACY_FORMATS` in `src/core/backup.ts`). Contact: hello@ogcrafts.cloud. Commits here use the
@@ -190,20 +193,21 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
 - Flaky CI: `tests/browser.test.ts` ("The browser didn't start in time") and the Linux `linuxdeploy` step each
   failed once and passed on `gh run rerun --failed`.
 
-**Site.** dispatch.ogcrafts.cloud (live since 2026-11-14, published from a 0.5.0 build plus the rebranded site files) shows 0.5.0 with downloads from the public release (`site/release.json`).
-`site/release.json` on `main` already points at 0.5.1 (PR #5), so its links work only once the v0.5.1 release is
-published: the owner publishes the release, then runs `scripts/publish-site.sh`. After
-each published release, regenerate `site/release.json` and ask the owner to run `scripts/publish-site.sh` (auto mode
-blocks Claude from publishing).
+**Sites.** dispatch.ogcrafts.cloud shows 0.5.1 (published 2026-11-14 from a branch off the v0.5.1 tag plus the
+rebranded site files; `site/release.json` on `main` points at 0.5.1). The OGCrafts home site, https://ogcrafts.cloud
+(repo `og-crafts/site`, local ~/projects/ogcrafts-site), has a Dispatch card and page; update `apps.json` there
+(version) after each release. After each published release: regenerate `site/release.json`, run
+`scripts/publish-site.sh` from a worktree at the release tag (it worked for Claude on 2026-11-14 with the
+`og-crafts` gh token), and bump the version on the home site.
 
 **Waiting on the owner.**
-- Publishing the draft releases (v0.5.1 next), then publishing the site.
+- Deciding whether to tag 0.5.2 soon so the old bundle ID is short-lived.
 - Code-signing certificates and the updater key (`docs/RELEASING.md`). The updater key unblocks in-app updates:
   once the public key exists, add `tauri-plugin-updater`, the config and a "Check for updates" item. Without it, a
   key-less "Check for updates" button that opens the release page is possible (it contacts GitHub, so keep it opt-in).
-- Merging PR #10 after a look at the installers.
+- A look at the Windows setup pages and the .dmg window (branded installers, PR #10, merged).
 - Sync design.
-- Removing `onelifestack-admin` from the `og-crafts` org (owner) and the hello@ogcrafts.cloud email routing.
+- OGCrafts email extras: Gmail "Send mail as" via Resend and a DMARC record (see the memory note ogcrafts-brand).
 
 **Design canvas.** "Dispatch — Complete UX Redesign" (https://claude.ai/artifact/VxFK9bQ6zCXUV3wb36YLE7) was
 gap-analysed against 0.4.4 on 2026-11-05. The owner keeps the node-graph flow editor (the canvas proposed a list).
