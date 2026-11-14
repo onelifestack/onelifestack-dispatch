@@ -17,7 +17,7 @@ cp -a site/dist/. "$work"/
 cd "$work"
 git add -A
 if git diff --cached --quiet; then echo "site already up to date"; exit 0; fi
-git -c user.name="Omprakash Gautam" -c user.email="288942205+onelifestack-admin@users.noreply.github.com" \
+git -c user.name="Omprakash Gautam" -c user.email="356532942+og-crafterr@users.noreply.github.com" \
   commit -q -m "Publish site from dispatch $(git -C ../.. rev-parse --short HEAD)"
 git push -q origin HEAD:main
 echo "published"
