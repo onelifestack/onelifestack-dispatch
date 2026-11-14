@@ -1,4 +1,4 @@
-# Dispatch by OneLifeStack
+# Dispatch by OGCrafts
 
 A local-first API client for building, sending, testing and documenting APIs. It runs as a desktop app (Tauri, for
 Linux, Windows and macOS), as a web app built from the same code, and as a command-line runner for CI.
@@ -94,7 +94,7 @@ For gRPC see `examples/grpc/README.md`.
 ## Not yet
 
 Code signing and auto-updates (need the owner's certificates and key; see docs/RELEASING.md), optional
-OneLifeStack sync (needs a design), gRPC in the browser, AI assistance (needs a separate decision).
+Sync (needs a design), gRPC in the browser, AI assistance (needs a separate decision).
 
 ## Build
 

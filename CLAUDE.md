@@ -1,9 +1,9 @@
-# CLAUDE.md — onelifestack-dispatch
+# CLAUDE.md — dispatch
 
-Dispatch is OneLifeStack's local-first API client: a React + TypeScript web app (`src/`) wrapped in a Tauri 2
+Dispatch is OGCrafts' local-first API client: a React + TypeScript web app (`src/`) wrapped in a Tauri 2
 desktop shell (`src-tauri/`). Same UI everywhere; only the transport differs (`src/core/transport.ts`).
 
-It's our own app with its own name and look (OneLifeStack palette). Postman is only a reference for the feature set
+It's our own app with its own name and look (own palette, inherited from the OneLifeStack apps). Postman is only a reference for the feature set
 and an import format; never copy its name, branding, icons or UI.
 
 ## Layout
@@ -177,7 +177,7 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
 - Flaky CI: `tests/browser.test.ts` ("The browser didn't start in time") and the Linux `linuxdeploy` step each
   failed once and passed on `gh run rerun --failed`.
 
-**Site.** dispatch.onelifestack.com shows 0.5.0 with downloads from the public release (`site/release.json`).
+**Site.** dispatch.ogcrafts.cloud shows 0.5.0 with downloads from the public release (`site/release.json`).
 `site/release.json` on `main` already points at 0.5.1 (PR #5), so its links work only once the v0.5.1 release is
 published: the owner publishes the release, then runs `scripts/publish-site.sh`. After
 each published release, regenerate `site/release.json` and ask the owner to run `scripts/publish-site.sh` (auto mode

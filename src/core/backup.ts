@@ -7,7 +7,9 @@ import { importInsomnia, isInsomnia } from './interop'
 
 export interface Workspace { collections: Collection[]; folders: Folder[]; requests: RequestDef[]; environments: Environment[]; globals?: KV[]; flows?: Flow[] }
 
-export const FORMAT = 'onelifestack-dispatch'
+export const FORMAT = 'ogcrafts-dispatch'
+/** Backups written before the move to OGCrafts still import. */
+const LEGACY_FORMATS = ['onelifestack-dispatch']
 
 /** Secret variable values never leave the device in a backup; the rows stay so you can refill them. */
 const blankSecrets = (vars: KV[]) => vars.map((v) => (v.secret ? { ...v, value: '' } : v))
@@ -64,7 +66,7 @@ export async function importFileAsync(text: string): Promise<ImportResult> {
 
 /** Imports an already-parsed file. */
 export function importData(data: any): ImportResult {
-  if (data?.format === FORMAT) return importDispatch(data)
+  if (data?.format === FORMAT || LEGACY_FORMATS.includes(data?.format)) return importDispatch(data)
   if (isOpenApi(data)) return importOpenApi(data)
   if (isHar(data)) return importHar(data)
   if (isInsomnia(data)) return importInsomnia(data)

@@ -12,8 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
 SRC, DIST = ROOT / "src", ROOT / "dist"
-BASE = "https://dispatch.onelifestack.com"
-EMAIL = "hello@onelifestack.com"
+BASE = "https://dispatch.ogcrafts.cloud"
+EMAIL = "hello@ogcrafts.cloud"
 DAY = datetime.date.today().isoformat()
 VERSION = json.loads((REPO / "package.json").read_text())["version"]
 STRICT = "--strict" in sys.argv
@@ -89,9 +89,9 @@ def shell(path, title, desc, body, current="", noindex=False):
 <footer class="site"><div class="wrap">
 <div><a class="brand" href="/"><img src="/assets/icon-32.png" width="32" height="32" alt="">Dispatch</a>
 <p>A local-first API client. No account, no cloud, no telemetry.</p></div>
-<div><h2>Dispatch</h2><ul><li><a href="/#features">Features</a></li><li><a href="/download/">Download</a></li><li><a href="/cli/">Command line</a></li><li>{app or '<a href="/download/">Web app</a>'}</li><li><a href="/changelog/">Changelog</a></li><li><a href="https://github.com/onelifestack/onelifestack-dispatch">Source code</a></li></ul></div>
+<div><h2>Dispatch</h2><ul><li><a href="/#features">Features</a></li><li><a href="/download/">Download</a></li><li><a href="/cli/">Command line</a></li><li>{app or '<a href="/download/">Web app</a>'}</li><li><a href="/changelog/">Changelog</a></li><li><a href="https://github.com/ogcrafts/dispatch">Source code</a></li></ul></div>
 <div><h2>Fine print</h2><ul><li><a href="/privacy/">Privacy policy</a></li><li><a href="/terms/">Terms of use</a></li><li><a href="/support/">Support</a></li><li><a href="mailto:{EMAIL}">{EMAIL}</a></li></ul></div>
-<small>&copy; {DAY[:4]} OneLifeStack. Dispatch is part of <a href="https://onelifestack.com">OneLifeStack</a>. Other product and format names that appear on this site are used only to say what Dispatch can import or export; they belong to their owners, and Dispatch is independent of and not affiliated with them.</small>
+<small>&copy; {DAY[:4]} OGCrafts. Dispatch is made by <a href="https://ogcrafts.cloud">OGCrafts</a>. Other product and format names that appear on this site are used only to say what Dispatch can import or export; they belong to their owners, and Dispatch is independent of and not affiliated with them.</small>
 </div></footer></body></html>"""
 
 def article(path, title, desc, inner, crumb):
@@ -136,7 +136,7 @@ COMPARE = [
 ]
 FAQ = [
  ("Is Dispatch free?", "Yes. There are no accounts, ads or paid tiers."),
- ("Is Dispatch open source?", "Yes, under the MIT licence. The source code is on <a href=\"https://github.com/onelifestack/onelifestack-dispatch\">GitHub</a>, so you can read it, build it yourself and report issues there."),
+ ("Is Dispatch open source?", "Yes, under the MIT licence. The source code is on <a href=\"https://github.com/ogcrafts/dispatch\">GitHub</a>, so you can read it, build it yourself and report issues there."),
  ("Where is my data stored?", "On your device. The desktop app and the web app both keep collections, environments and history in local storage (IndexedDB). If you link a workspace or collection to a folder on desktop, that folder holds them too. We run no server that receives your data."),
  ("Does it send anything besides my requests?", "No. Dispatch has no analytics, no crash reporting, no update check and no fonts or scripts from other sites. The only network traffic is the requests you send."),
  ("What happens to my secrets?", "Secret variables, passwords, tokens, keys and Authorization or Cookie headers are encrypted before they are stored, using a key that stays on the device and cannot be exported. A copy of the database moved to another device cannot read them. Exports and backups leave secrets out."),
@@ -171,7 +171,7 @@ def home():
     never = "".join(f"<li>{inline(k)}</li>" for k in PRIVACY_NEVER)
     return f"""
 <section class="hero"><div class="wrap"><div>
-<p class="eyebrow">Dispatch by OneLifeStack</p>
+<p class="eyebrow">Dispatch by OGCrafts</p>
 <h1>A local-first API client.</h1>
 <p class="lead">Build, send, test and document APIs. No account, no cloud, no telemetry. Your collections stay on your device.</p>
 <div class="cta-row">{app_buttons()}</div>
@@ -211,7 +211,7 @@ def download():
         for a in RELEASE["assets"]: by.setdefault(a["os"].lower(), []).append(a)
         names = {"windows": "Windows", "macos": "macOS", "linux": "Linux"}
         cards = "".join(dl_card(k, names[k], by[k]) for k in ("windows", "macos", "linux") if k in by)
-        main = f'<p>Version <strong>{e(RELEASE["version"])}</strong>, released {e(RELEASE["date"])}.</p>{cards}<p>The same files are on the <a href="https://github.com/onelifestack/onelifestack-dispatch/releases">GitHub releases page</a>, with the release notes.</p><p class="note">Check a download against its SHA-256 checksum: <code>sha256sum file</code> on Linux, <code>shasum -a 256 file</code> on macOS, <code>Get-FileHash file</code> in PowerShell.</p>'
+        main = f'<p>Version <strong>{e(RELEASE["version"])}</strong>, released {e(RELEASE["date"])}.</p>{cards}<p>The same files are on the <a href="https://github.com/ogcrafts/dispatch/releases">GitHub releases page</a>, with the release notes.</p><p class="note">Check a download against its SHA-256 checksum: <code>sha256sum file</code> on Linux, <code>shasum -a 256 file</code> on macOS, <code>Get-FileHash file</code> in PowerShell.</p>'
     else:
         main = '<div class="panel"><h2>Desktop downloads coming soon</h2><p>The installers are not public yet. Until they are, use the web app in your browser, or the command-line runner.</p></div>'
     web = f'<p><a class="btn primary" href="/app/">Open the web app</a></p>' if WEB else ""
@@ -347,7 +347,7 @@ def privacy():
 <h2>What Dispatch does not do</h2>
 <ul><li>No account, sign-in or sync.</li><li>No analytics, telemetry or crash reporting.</li><li>No update check. Dispatch does not contact us or anyone else on its own.</li><li>No advertising and no trackers.</li><li>No fonts, scripts or images loaded from other sites, in the app or on this website.</li></ul>
 <h2>The web app and this website</h2>
-<p>This website and the web app at <a href="/app/">dispatch.onelifestack.com/app/</a> are static files hosted on GitHub Pages. When you open them, GitHub&rsquo;s servers receive the request for the files and, like any web host, may log your IP address and browser details under <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub&rsquo;s privacy statement</a>. We do not receive those logs for individual visitors and we do not add cookies or tracking. After the files load, the web app does its work in your browser.</p>
+<p>This website and the web app at <a href="/app/">dispatch.ogcrafts.cloud/app/</a> are static files hosted on GitHub Pages. When you open them, GitHub&rsquo;s servers receive the request for the files and, like any web host, may log your IP address and browser details under <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub&rsquo;s privacy statement</a>. We do not receive those logs for individual visitors and we do not add cookies or tracking. After the files load, the web app does its work in your browser.</p>
 <h2>Your control</h2>
 <p>To remove everything, delete the data in the app, clear this site&rsquo;s data in your browser, or uninstall the desktop app and delete any collection folder you created. Nothing is kept anywhere else.</p>
 <h2>Children</h2><p>Dispatch is a developer tool and is not directed at children.</p>
@@ -358,13 +358,13 @@ def terms():
     return f"""<h1>Terms of use</h1><p class="updated">Last updated {DAY}.</p>
 <p>These terms cover your use of Dispatch, its website and its web app. By using them you agree to these terms.</p>
 <h2>What you get</h2>
-<p>Dispatch is free software provided by OneLifeStack. You may use it for personal and commercial work, and you may use the command-line runner in your own build pipelines.</p>
+<p>Dispatch is free software provided by OGCrafts. You may use it for personal and commercial work, and you may use the command-line runner in your own build pipelines.</p>
 <h2>Your data and your requests</h2>
 <p>You are responsible for the requests you send and for the servers you send them to. Send requests, and especially load tests, only to systems you own or have permission to test. Keep the credentials you put in Dispatch safe, and keep backups: the web app&rsquo;s data lives in one browser and can be lost when site data is cleared.</p>
 <h2>Third-party names</h2>
 <p>Dispatch can import and export file formats from other tools. Their names are used only to describe those formats. Dispatch is independent and is not affiliated with or endorsed by them.</p>
 <h2>No warranty</h2>
-<p>Dispatch is provided &ldquo;as is&rdquo;, without warranties of any kind. It is a developer tool, and it can send requests that change or delete data on the servers you point it at. To the extent the law allows, OneLifeStack is not liable for loss or damage from using Dispatch, including lost data or requests sent in error.</p>
+<p>Dispatch is provided &ldquo;as is&rdquo;, without warranties of any kind. It is a developer tool, and it can send requests that change or delete data on the servers you point it at. To the extent the law allows, OGCrafts is not liable for loss or damage from using Dispatch, including lost data or requests sent in error.</p>
 <h2>Installers</h2>
 <p>Desktop installers are not code-signed yet, so your system may warn when you open them. Check the SHA-256 checksum published with each download, and download only from this website or the project&rsquo;s GitHub releases page.</p>
 <h2>Changes and contact</h2>
@@ -422,7 +422,7 @@ def main():
     (DIST / "404.html").write_text(shell("/404.html", "Page not found | Dispatch", "That page is not here.", '<div class="article"><div class="wrap"><h1>Page not found</h1><p>That page is not here. Try the <a href="/">home page</a> or <a href="/support/">support</a>.</p></div></div>', noindex=True))
     urls = list(pages) + (["/app/"] if WEB else [])
     (DIST / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "".join(f"<url><loc>{BASE}{p}</loc><lastmod>{DAY}</lastmod></url>\n" for p in urls) + "</urlset>\n")
-    (DIST / "CNAME").write_text("dispatch.onelifestack.com\n"); (DIST / ".nojekyll").write_text("")
+    (DIST / "CNAME").write_text("dispatch.ogcrafts.cloud\n"); (DIST / ".nojekyll").write_text("")
     (DIST / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {BASE}/sitemap.xml\n")
     (DIST / "site.webmanifest").write_text(json.dumps({"name": "Dispatch", "short_name": "Dispatch", "description": "A local-first API client", "start_url": "/app/", "scope": "/app/", "display": "standalone",
         "icons": [{"src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png"}, {"src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png"}],

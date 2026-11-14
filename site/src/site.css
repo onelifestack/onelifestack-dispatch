@@ -1,4 +1,4 @@
-/* dispatch.onelifestack.com. Tokens are the app's own (src/ui/app.css). build.py reads the two token blocks below
+/* dispatch.ogcrafts.cloud. Tokens are the app's own (src/ui/app.css). build.py reads the two token blocks below
    (light, then dark) and checks every text/background pair in both against WCAG AA 4.5:1. Keep each block one level deep. */
 @font-face { font-family: Nunito; font-weight: 400; font-display: swap; src: url(/assets/fonts/nunito-400.woff2) format("woff2"); }
 @font-face { font-family: Nunito; font-weight: 700; font-display: swap; src: url(/assets/fonts/nunito-700.woff2) format("woff2"); }
