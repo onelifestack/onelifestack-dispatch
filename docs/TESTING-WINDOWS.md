@@ -3,7 +3,7 @@
 Instructions for a tester (a person or an AI agent) on a Windows 10/11 machine. Work through each section, record
 **PASS / FAIL / BLOCKED** for every numbered check, and write the results into a report (template at the end).
 
-Dispatch is OneLifeStack's local-first API client: a desktop app (Tauri 2, WebView2), a web build and a command-line
+Dispatch is OGCrafts' local-first API client: a desktop app (Tauri 2, WebView2), a web build and a command-line
 tool, `dispatch-run`. This is the **first time the desktop app has ever been opened on a real machine**. Everything
 below has passed automated tests on Linux and in a headless browser, but nobody has clicked through the desktop app
 yet. Expect to find real bugs; that's the point.
@@ -28,7 +28,7 @@ yet. Expect to find real bugs; that's the point.
 ## 0. Setup
 
 You need: Windows 10 or 11 (x64), PowerShell, Git, the GitHub CLI (`gh`) logged in with write access to
-`onelifestack/onelifestack-dispatch` (the repo is public, but the draft release isn't), Node.js 20 or newer, and Microsoft Edge (built into Windows; Chrome works too).
+`og-crafts/dispatch` (the repo is public, but the draft release isn't), Node.js 20 or newer, and Microsoft Edge (built into Windows; Chrome works too).
 
 ```powershell
 winget install --id Git.Git -e
@@ -43,23 +43,23 @@ Get the source (for the demo servers, example files and the CLI) and the install
 
 ```powershell
 mkdir $HOME\dispatch-test; cd $HOME\dispatch-test
-gh repo clone onelifestack/onelifestack-dispatch
-cd onelifestack-dispatch           # stay on main: it has the demo login page and example files used below
+gh repo clone og-crafts/dispatch
+cd dispatch           # stay on main: it has the demo login page and example files used below
 npm ci
 npm run build:cli          # builds dist-cli\dispatch-run.mjs
 mkdir ..\installers
-gh release download v0.5.1 --repo onelifestack/onelifestack-dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
+gh release download v0.5.1 --repo og-crafts/dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
 ```
 
 The release is a **draft**, so it's only visible to accounts with write access to the repo. If `gh release download`
-says "release not found", run `gh release list --repo onelifestack/onelifestack-dispatch`: the draft must be listed
+says "release not found", run `gh release list --repo og-crafts/dispatch`: the draft must be listed
 with its installers (the build can take 20+ minutes after the tag). Also check `gh auth status`. If only an older
 draft is there, stop and report that rather than testing a build you made yourself.
 
 Start the demo API in its **own terminal** and leave it running for the whole session:
 
 ```powershell
-cd $HOME\dispatch-test\onelifestack-dispatch
+cd $HOME\dispatch-test\dispatch
 node examples\demo-server.mjs        # http://localhost:4318
 ```
 
@@ -266,7 +266,7 @@ Run these from the repo folder in PowerShell.
 6.4. **MCP (stdio), Dispatch talking to itself:**
    1. New request → protocol **MCP** → transport "Local command (stdio)".
    2. Command (forward slashes; 6.4b tries backslashes):
-      `node C:/Users/<you>/dispatch-test/onelifestack-dispatch/dist-cli/dispatch-run.mjs mcp C:/Users/<you>/dispatch-test/onelifestack-dispatch/examples/browser-login.dispatch.json -e "Demo local"`.
+      `node C:/Users/<you>/dispatch-test/dispatch/dist-cli/dispatch-run.mjs mcp C:/Users/<you>/dispatch-test/dispatch/examples/browser-login.dispatch.json -e "Demo local"`.
    3. Connect and approve the "Run this command?" prompt. No console window should pop up. Tools `list_requests`, `send_request`, `run_collection` and `run_flow` appear.
    4. Call `run_flow` with name "Login then orders". The result starts with `Passed`.
    5. Disconnect. Check Task Manager: no `node.exe` left over from this.
@@ -383,7 +383,7 @@ Run these from the repo folder in PowerShell.
 ## Report template
 
 Post the report as a comment on the GitHub issue that pointed you here, with screenshots attached to the
-comment (drag them into the comment box, or `gh issue comment <number> --repo onelifestack/onelifestack-dispatch
+comment (drag them into the comment box, or `gh issue comment <number> --repo og-crafts/dispatch
 --body-file windows-test-report.md` and add the images in the web UI). Open a separate issue for each serious
 failure, titled `[Windows] <problem>`, and link it from the report.
 

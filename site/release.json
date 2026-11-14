@@ -6,7 +6,7 @@
    "os": "windows",
    "arch": "x64",
    "kind": "Installer (.exe)",
-   "url": "https://github.com/onelifestack/onelifestack-dispatch/releases/download/v0.5.1/Dispatch_0.5.1_x64-setup.exe",
+   "url": "https://github.com/og-crafts/dispatch/releases/download/v0.5.1/Dispatch_0.5.1_x64-setup.exe",
    "size_mb": 4.1,
    "sha256": "a7d749c93745ee190702ae0fa56441932472654182e7424fc02c217e3eb3210d"
   },
@@ -14,7 +14,7 @@
    "os": "windows",
    "arch": "x64",
    "kind": "Installer for all users (.msi, needs admin)",
-   "url": "https://github.com/onelifestack/onelifestack-dispatch/releases/download/v0.5.1/Dispatch_0.5.1_x64_en-US.msi",
+   "url": "https://github.com/og-crafts/dispatch/releases/download/v0.5.1/Dispatch_0.5.1_x64_en-US.msi",
    "size_mb": 5.4,
    "sha256": "28ccd10c064bd769f40ff70ea84ef4af739f709bd147cebe137019c3b190b64f"
   },
@@ -22,7 +22,7 @@
    "os": "macos",
    "arch": "Intel and Apple silicon",
    "kind": "Disk image (.dmg)",
-   "url": "https://github.com/onelifestack/onelifestack-dispatch/releases/download/v0.5.1/Dispatch_0.5.1_universal.dmg",
+   "url": "https://github.com/og-crafts/dispatch/releases/download/v0.5.1/Dispatch_0.5.1_universal.dmg",
    "size_mb": 9.5,
    "sha256": "1b276437d966159ac0976b5b1fc452b73424a9991fa27e60663d30858d2a755b"
   },
@@ -30,7 +30,7 @@
    "os": "linux",
    "arch": "x64",
    "kind": "AppImage",
-   "url": "https://github.com/onelifestack/onelifestack-dispatch/releases/download/v0.5.1/Dispatch_0.5.1_amd64.AppImage",
+   "url": "https://github.com/og-crafts/dispatch/releases/download/v0.5.1/Dispatch_0.5.1_amd64.AppImage",
    "size_mb": 83.7,
    "sha256": "ec926b89ed1dc2646e6c8cbbec938b97f49b85f9e82a88c09c51bf040c7c8a16"
   },
@@ -38,7 +38,7 @@
    "os": "linux",
    "arch": "x64",
    "kind": "Debian/Ubuntu (.deb)",
-   "url": "https://github.com/onelifestack/onelifestack-dispatch/releases/download/v0.5.1/Dispatch_0.5.1_amd64.deb",
+   "url": "https://github.com/og-crafts/dispatch/releases/download/v0.5.1/Dispatch_0.5.1_amd64.deb",
    "size_mb": 5.4,
    "sha256": "f6de6004a647d2dd8d92e1e06470b2e7b9d06d5ae9fd74af1b19c9745c9403c9"
   },
@@ -46,7 +46,7 @@
    "os": "linux",
    "arch": "x64",
    "kind": "Fedora/RHEL (.rpm)",
-   "url": "https://github.com/onelifestack/onelifestack-dispatch/releases/download/v0.5.1/Dispatch-0.5.1-1.x86_64.rpm",
+   "url": "https://github.com/og-crafts/dispatch/releases/download/v0.5.1/Dispatch-0.5.1-1.x86_64.rpm",
    "size_mb": 5.4,
    "sha256": "0f27de929e5ba7289283a8ba1fae9ec263fcc6296597f0dc71650fe1bb479ca8"
   },
@@ -54,7 +54,7 @@
    "os": "linux",
    "arch": "ARM64",
    "kind": "AppImage",
-   "url": "https://github.com/onelifestack/onelifestack-dispatch/releases/download/v0.5.1/Dispatch_0.5.1_aarch64.AppImage",
+   "url": "https://github.com/og-crafts/dispatch/releases/download/v0.5.1/Dispatch_0.5.1_aarch64.AppImage",
    "size_mb": 81.7,
    "sha256": "d8acc47492d65486cc8e981e62136a390bd925225d487ac5743adf9f662cce70"
   },
@@ -62,7 +62,7 @@
    "os": "linux",
    "arch": "ARM64",
    "kind": "Debian/Ubuntu (.deb)",
-   "url": "https://github.com/onelifestack/onelifestack-dispatch/releases/download/v0.5.1/Dispatch_0.5.1_arm64.deb",
+   "url": "https://github.com/og-crafts/dispatch/releases/download/v0.5.1/Dispatch_0.5.1_arm64.deb",
    "size_mb": 5.2,
    "sha256": "0cd5247a5dad572ec3f65fde8d8bb53ae776765df0b175dfe6865063bae86bbe"
   },
@@ -70,7 +70,7 @@
    "os": "linux",
    "arch": "ARM64",
    "kind": "Fedora/RHEL (.rpm)",
-   "url": "https://github.com/onelifestack/onelifestack-dispatch/releases/download/v0.5.1/Dispatch-0.5.1-1.aarch64.rpm",
+   "url": "https://github.com/og-crafts/dispatch/releases/download/v0.5.1/Dispatch-0.5.1-1.aarch64.rpm",
    "size_mb": 5.2,
    "sha256": "c32c6a398b28bdb3547fb35670a34864f884b47f6469cead535e2a1ce353c553"
   }

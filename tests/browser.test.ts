@@ -113,7 +113,7 @@ describe.skipIf(!browser)('browser login (real Chromium)', () => {
     await build({ entryPoints: ['src/cli/main.ts'], bundle: true, platform: 'node', format: 'esm', target: 'node20', outfile: cli, logLevel: 'silent',
       banner: { js: "import { createRequire as __createRequire } from 'node:module';\nconst require = __createRequire(import.meta.url);" } })
     const col = newCollection('Web')
-    writeFileSync(join(dir, 'web.json'), JSON.stringify({ format: 'onelifestack-dispatch', version: 2, collections: [col], folders: [], requests: [loginRequest(col.id), meRequest(col.id)], environments: [] }))
+    writeFileSync(join(dir, 'web.json'), JSON.stringify({ format: 'ogcrafts-dispatch', version: 2, collections: [col], folders: [], requests: [loginRequest(col.id), meRequest(col.id)], environments: [] }))
     const r = await promisify(execFile)(process.execPath, [cli, join(dir, 'web.json'), '--env-var', `base=${base}`, '--env-var', 'user=ann', '--env-var', 'pass=s3cret'],
       { env: { ...process.env, NO_COLOR: '1' } }).catch((e) => e)
     expect(r.stdout).toMatch(/✓ WEB\s+Log in.*200/)

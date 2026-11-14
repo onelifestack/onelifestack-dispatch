@@ -42,7 +42,7 @@ Tauri's updater only installs updates signed with your key, so the key must be c
 3. Then the code changes (Claude can make these once the public key exists):
    - `src-tauri/Cargo.toml`: `tauri-plugin-updater = "2"`; register it in `lib.rs`.
    - `tauri.conf.json`: `bundle.createUpdaterArtifacts: true` and
-     `plugins.updater: { pubkey: "<public key>", endpoints: ["https://github.com/onelifestack/onelifestack-dispatch/releases/latest/download/latest.json"] }`.
+     `plugins.updater: { pubkey: "<public key>", endpoints: ["https://github.com/og-crafts/dispatch/releases/latest/download/latest.json"] }`.
    - The workflow passes the two secrets as env to `tauri build` and uploads `latest.json` with the release.
    - A "Check for updates" item in the menu and a quiet check on start.
 

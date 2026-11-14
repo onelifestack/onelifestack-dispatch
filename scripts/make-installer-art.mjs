@@ -37,7 +37,7 @@ body{font-family:N,sans-serif;overflow:hidden}
 .dots i{width:6px;height:6px;border-radius:50%;background:#FFC145}.dots i:nth-child(2){opacity:.6}.dots i:nth-child(3){opacity:.3}
 `
 const html = (w, h, body, bg) => `<!doctype html><meta charset=utf-8><style>${css}body{width:${w}px;height:${h}px;background:${bg}}</style><body>${body}`
-const panel = `<div class=panel><img src="${icon}"><h1>Dispatch</h1><p>A local-first API client. Your requests stay on your computer.</p><div class=dots><i></i><i></i><i></i></div><small>OneLifeStack</small></div>`
+const panel = `<div class=panel><img src="${icon}"><h1>Dispatch</h1><p>A local-first API client. Your requests stay on your computer.</p><div class=dots><i></i><i></i><i></i></div><small>OGCrafts</small></div>`
 
 const jobs = [
   { name: 'nsis-sidebar', w: 164, h: 314, bmp: true, html: html(164, 314, panel, '#fff') },
@@ -52,7 +52,7 @@ const jobs = [
       <div style="position:absolute;top:34px;left:0;right:0;text-align:center;font-weight:800;font-size:24px;color:#26173D;letter-spacing:-.4px">Drag Dispatch into Applications</div>
       <div style="position:absolute;top:70px;left:0;right:0;text-align:center;font-weight:700;font-size:13px;color:#5E4D72">Then open it from Launchpad. Your data stays on this Mac.</div>
       <svg style="position:absolute;left:268px;top:158px" width="124" height="64" viewBox="0 0 124 64" fill="none" stroke="#5A2DDD" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 32h104M84 8l28 24-28 24" stroke-dasharray="0 0"/></svg>
-      <div style="position:absolute;bottom:26px;left:0;right:0;text-align:center;font-weight:700;font-size:11px;letter-spacing:.7px;color:#9a88b0;text-transform:uppercase">OneLifeStack</div>`, '#FFF9F2') },
+      <div style="position:absolute;bottom:26px;left:0;right:0;text-align:center;font-weight:700;font-size:11px;letter-spacing:.7px;color:#9a88b0;text-transform:uppercase">OGCrafts</div>`, '#FFF9F2') },
 ]
 
 /** Marks a PNG as 144 dpi (a pHYs chunk after IHDR) so Finder shows a 2x image at half size: sharp on Retina. */
