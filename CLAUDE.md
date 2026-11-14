@@ -111,9 +111,22 @@ unpack it from `apt-get download libasound2t64` with `dpkg-deb -x` and set `LD_L
 
 ## Where we left off
 
-Updated 2026-11-10 (end of day). The latest tag is **v0.5.1** (still a draft; v0.5.0 is the published Latest).
+Updated 2026-11-14. The latest tag is **v0.5.1** (still a draft; v0.5.0 is the published Latest).
 `main` is ahead of it: PRs #6 (local MCP endpoint), #7 (drag and drop) and #8 (docs) are merged but untagged and not
 yet tried in the real desktop app. PR #10 (branded installers) is open.
+
+**Moved to OGCrafts (2026-11-14).** Dispatch is no longer an OneLifeStack app. Home: GitHub org
+`og-crafts` (a free org; admin login `og-crafterr`). Repo `og-crafts/dispatch` (transferred, so issues, PRs and the
+v0.5.1 draft came with it); site repo `og-crafts/dispatch-site` (Pages, custom domain `dispatch.ogcrafts.cloud`,
+HTTPS enforced); Cloudflare CNAME `dispatch -> og-crafts.github.io` (DNS only). Bundle ID is now
+`cloud.ogcrafts.dispatch`; backups are written as `ogcrafts-dispatch` and the old `onelifestack-dispatch` name still
+imports (`LEGACY_FORMATS` in `src/core/backup.ts`). Contact: hello@ogcrafts.cloud. Commits here use the
+`og-crafterr` noreply address (`356532942+og-crafterr@users.noreply.github.com`), not the OneLifeStack one.
+`gh` has three logins: use `gh auth switch` or `GH_TOKEN=$(gh auth token --user NAME)` for the right one.
+The old `onelifestack/dispatch-site` is left unpublished (custom domain removed); the archive repo stays under
+`onelifestack`. Dispatch was removed from developer.onelifestack.com. The next release (0.5.2 or 0.6.0) is the first
+under the new bundle ID. The installer art was changed in text only and still needs rebuilding with
+`scripts/make-installer-art.mjs`.
 
 **The repo is public (MIT) since 2026-11-05.** GitHub billing blocked Actions on the private repo, so the owner
 made it public. To keep a personal e-mail out of the public history, the old repo was renamed
@@ -177,7 +190,7 @@ by Runner"). To fill in the `.dmg` later, run `gh run rerun <run> --failed` for 
 - Flaky CI: `tests/browser.test.ts` ("The browser didn't start in time") and the Linux `linuxdeploy` step each
   failed once and passed on `gh run rerun --failed`.
 
-**Site.** dispatch.ogcrafts.cloud shows 0.5.0 with downloads from the public release (`site/release.json`).
+**Site.** dispatch.ogcrafts.cloud (live since 2026-11-14, published from a 0.5.0 build plus the rebranded site files) shows 0.5.0 with downloads from the public release (`site/release.json`).
 `site/release.json` on `main` already points at 0.5.1 (PR #5), so its links work only once the v0.5.1 release is
 published: the owner publishes the release, then runs `scripts/publish-site.sh`. After
 each published release, regenerate `site/release.json` and ask the owner to run `scripts/publish-site.sh` (auto mode
@@ -190,7 +203,7 @@ blocks Claude from publishing).
   key-less "Check for updates" button that opens the release page is possible (it contacts GitHub, so keep it opt-in).
 - Merging PR #10 after a look at the installers.
 - Sync design.
-- The site's DNS (see `site/README.md`).
+- Removing `onelifestack-admin` from the `og-crafts` org (owner) and the hello@ogcrafts.cloud email routing.
 
 **Design canvas.** "Dispatch — Complete UX Redesign" (https://claude.ai/artifact/VxFK9bQ6zCXUV3wb36YLE7) was
 gap-analysed against 0.4.4 on 2026-11-05. The owner keeps the node-graph flow editor (the canvas proposed a list).
