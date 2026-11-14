@@ -28,7 +28,7 @@ yet. Expect to find real bugs; that's the point.
 ## 0. Setup
 
 You need: Windows 10 or 11 (x64), PowerShell, Git, the GitHub CLI (`gh`) logged in with write access to
-`ogcrafts/dispatch` (the repo is public, but the draft release isn't), Node.js 20 or newer, and Microsoft Edge (built into Windows; Chrome works too).
+`og-crafts/dispatch` (the repo is public, but the draft release isn't), Node.js 20 or newer, and Microsoft Edge (built into Windows; Chrome works too).
 
 ```powershell
 winget install --id Git.Git -e
@@ -43,16 +43,16 @@ Get the source (for the demo servers, example files and the CLI) and the install
 
 ```powershell
 mkdir $HOME\dispatch-test; cd $HOME\dispatch-test
-gh repo clone ogcrafts/dispatch
+gh repo clone og-crafts/dispatch
 cd dispatch           # stay on main: it has the demo login page and example files used below
 npm ci
 npm run build:cli          # builds dist-cli\dispatch-run.mjs
 mkdir ..\installers
-gh release download v0.5.1 --repo ogcrafts/dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
+gh release download v0.5.1 --repo og-crafts/dispatch -p "*x64-setup.exe" -p "*x64_en-US.msi" -D ..\installers
 ```
 
 The release is a **draft**, so it's only visible to accounts with write access to the repo. If `gh release download`
-says "release not found", run `gh release list --repo ogcrafts/dispatch`: the draft must be listed
+says "release not found", run `gh release list --repo og-crafts/dispatch`: the draft must be listed
 with its installers (the build can take 20+ minutes after the tag). Also check `gh auth status`. If only an older
 draft is there, stop and report that rather than testing a build you made yourself.
 
@@ -383,7 +383,7 @@ Run these from the repo folder in PowerShell.
 ## Report template
 
 Post the report as a comment on the GitHub issue that pointed you here, with screenshots attached to the
-comment (drag them into the comment box, or `gh issue comment <number> --repo ogcrafts/dispatch
+comment (drag them into the comment box, or `gh issue comment <number> --repo og-crafts/dispatch
 --body-file windows-test-report.md` and add the images in the web UI). Open a separate issue for each serious
 failure, titled `[Windows] <problem>`, and link it from the report.
 

@@ -2,8 +2,8 @@
   "version": "0.3.0",
   "date": "2026-11-04",
   "assets": [
-    { "os": "windows", "arch": "x64", "kind": "Installer (.msi)", "url": "https://github.com/ogcrafts/dispatch-site/releases/download/v0.3.0/Dispatch_0.3.0_x64_en-US.msi", "size_mb": 9.1, "sha256": "<64 hex characters>" },
-    { "os": "macos", "arch": "Intel and Apple silicon", "kind": "Disk image (.dmg)", "url": "https://github.com/ogcrafts/dispatch-site/releases/download/v0.3.0/Dispatch_0.3.0_universal.dmg", "size_mb": 18, "sha256": "<64 hex characters>" },
-    { "os": "linux", "arch": "x64", "kind": "AppImage", "url": "https://github.com/ogcrafts/dispatch-site/releases/download/v0.3.0/Dispatch_0.3.0_amd64.AppImage", "size_mb": 80, "sha256": "<64 hex characters>" }
+    { "os": "windows", "arch": "x64", "kind": "Installer (.msi)", "url": "https://github.com/og-crafts/dispatch-site/releases/download/v0.3.0/Dispatch_0.3.0_x64_en-US.msi", "size_mb": 9.1, "sha256": "<64 hex characters>" },
+    { "os": "macos", "arch": "Intel and Apple silicon", "kind": "Disk image (.dmg)", "url": "https://github.com/og-crafts/dispatch-site/releases/download/v0.3.0/Dispatch_0.3.0_universal.dmg", "size_mb": 18, "sha256": "<64 hex characters>" },
+    { "os": "linux", "arch": "x64", "kind": "AppImage", "url": "https://github.com/og-crafts/dispatch-site/releases/download/v0.3.0/Dispatch_0.3.0_amd64.AppImage", "size_mb": 80, "sha256": "<64 hex characters>" }
   ]
 }

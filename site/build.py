@@ -89,7 +89,7 @@ def shell(path, title, desc, body, current="", noindex=False):
 <footer class="site"><div class="wrap">
 <div><a class="brand" href="/"><img src="/assets/icon-32.png" width="32" height="32" alt="">Dispatch</a>
 <p>A local-first API client. No account, no cloud, no telemetry.</p></div>
-<div><h2>Dispatch</h2><ul><li><a href="/#features">Features</a></li><li><a href="/download/">Download</a></li><li><a href="/cli/">Command line</a></li><li>{app or '<a href="/download/">Web app</a>'}</li><li><a href="/changelog/">Changelog</a></li><li><a href="https://github.com/ogcrafts/dispatch">Source code</a></li></ul></div>
+<div><h2>Dispatch</h2><ul><li><a href="/#features">Features</a></li><li><a href="/download/">Download</a></li><li><a href="/cli/">Command line</a></li><li>{app or '<a href="/download/">Web app</a>'}</li><li><a href="/changelog/">Changelog</a></li><li><a href="https://github.com/og-crafts/dispatch">Source code</a></li></ul></div>
 <div><h2>Fine print</h2><ul><li><a href="/privacy/">Privacy policy</a></li><li><a href="/terms/">Terms of use</a></li><li><a href="/support/">Support</a></li><li><a href="mailto:{EMAIL}">{EMAIL}</a></li></ul></div>
 <small>&copy; {DAY[:4]} OGCrafts. Dispatch is made by <a href="https://ogcrafts.cloud">OGCrafts</a>. Other product and format names that appear on this site are used only to say what Dispatch can import or export; they belong to their owners, and Dispatch is independent of and not affiliated with them.</small>
 </div></footer></body></html>"""
@@ -136,7 +136,7 @@ COMPARE = [
 ]
 FAQ = [
  ("Is Dispatch free?", "Yes. There are no accounts, ads or paid tiers."),
- ("Is Dispatch open source?", "Yes, under the MIT licence. The source code is on <a href=\"https://github.com/ogcrafts/dispatch\">GitHub</a>, so you can read it, build it yourself and report issues there."),
+ ("Is Dispatch open source?", "Yes, under the MIT licence. The source code is on <a href=\"https://github.com/og-crafts/dispatch\">GitHub</a>, so you can read it, build it yourself and report issues there."),
  ("Where is my data stored?", "On your device. The desktop app and the web app both keep collections, environments and history in local storage (IndexedDB). If you link a workspace or collection to a folder on desktop, that folder holds them too. We run no server that receives your data."),
  ("Does it send anything besides my requests?", "No. Dispatch has no analytics, no crash reporting, no update check and no fonts or scripts from other sites. The only network traffic is the requests you send."),
  ("What happens to my secrets?", "Secret variables, passwords, tokens, keys and Authorization or Cookie headers are encrypted before they are stored, using a key that stays on the device and cannot be exported. A copy of the database moved to another device cannot read them. Exports and backups leave secrets out."),
@@ -211,7 +211,7 @@ def download():
         for a in RELEASE["assets"]: by.setdefault(a["os"].lower(), []).append(a)
         names = {"windows": "Windows", "macos": "macOS", "linux": "Linux"}
         cards = "".join(dl_card(k, names[k], by[k]) for k in ("windows", "macos", "linux") if k in by)
-        main = f'<p>Version <strong>{e(RELEASE["version"])}</strong>, released {e(RELEASE["date"])}.</p>{cards}<p>The same files are on the <a href="https://github.com/ogcrafts/dispatch/releases">GitHub releases page</a>, with the release notes.</p><p class="note">Check a download against its SHA-256 checksum: <code>sha256sum file</code> on Linux, <code>shasum -a 256 file</code> on macOS, <code>Get-FileHash file</code> in PowerShell.</p>'
+        main = f'<p>Version <strong>{e(RELEASE["version"])}</strong>, released {e(RELEASE["date"])}.</p>{cards}<p>The same files are on the <a href="https://github.com/og-crafts/dispatch/releases">GitHub releases page</a>, with the release notes.</p><p class="note">Check a download against its SHA-256 checksum: <code>sha256sum file</code> on Linux, <code>shasum -a 256 file</code> on macOS, <code>Get-FileHash file</code> in PowerShell.</p>'
     else:
         main = '<div class="panel"><h2>Desktop downloads coming soon</h2><p>The installers are not public yet. Until they are, use the web app in your browser, or the command-line runner.</p></div>'
     web = f'<p><a class="btn primary" href="/app/">Open the web app</a></p>' if WEB else ""

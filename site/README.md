@@ -24,9 +24,9 @@ The source repo is public (since 0.5.0), so `site/release.json` points straight 
 `{version, date, assets:[{os: windows|macos|linux, arch, kind, url, size_mb, sha256}]}`, with each `url` an https link to the attached asset. Compute checksums with `sha256sum`. Without the file the page says "Desktop downloads coming soon" and points to the web app and CLI. The installers are **unsigned** (no certificates yet), so Windows SmartScreen and macOS Gatekeeper warn; the download page says so and explains how to open them. Update `release.json` and rerun the publish script for each version.
 
 ## Publishing (owner steps)
-1. Create the public repo `ogcrafts/dispatch-site`; Settings, Pages, deploy from branch `main`, root.
+1. Create the public repo `og-crafts/dispatch-site`; Settings, Pages, deploy from branch `main`, root.
 2. `scripts/publish-site.sh` (builds, checks, pushes `site/dist` to `main`; commits as Omprakash Gautam).
-3. Cloudflare DNS: CNAME `dispatch` -> `ogcrafts.github.io`, DNS only (grey cloud). The build writes `CNAME` with `dispatch.ogcrafts.cloud`.
+3. Cloudflare DNS: CNAME `dispatch` -> `og-crafts.github.io`, DNS only (grey cloud). The build writes `CNAME` with `dispatch.ogcrafts.cloud`.
 4. When GitHub issues the certificate, tick Enforce HTTPS in the Pages settings.
 5. After each published release: regenerate `site/release.json` from the release (checksums are in the GitHub API `digest` field), republish.
 6. Add Dispatch to the developer site (`~/projects/developer`, "Keep in sync" table).
